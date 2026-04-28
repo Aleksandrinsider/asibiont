@@ -9170,6 +9170,8 @@ class AnchorEngine:
                                 _tg_assign = f"[ASI → {_chosen_name}]\n{_tg_body}"
                                 await _safe_send(self.bot, user.telegram_id, _tg_assign)
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign sent to TG for %s", _chosen_name)
+                            except Exception as _tg_assign_err:
+                                logger.debug("[ANCHOR-AUTOPILOT] coord-assign TG send failed: %s", _tg_assign_err)
                             # Уведомляем пользователя если агент сообщил о недоступном инструменте
                             if _tool_blocked_notify:
                                 try:
@@ -9177,8 +9179,6 @@ class AnchorEngine:
                                     logger.info("[ANCHOR-AUTOPILOT] tool-blocked notify sent to user %d", user.id)
                                 except Exception as _tbn_err:
                                     logger.debug("[ANCHOR-AUTOPILOT] tool-blocked notify failed: %s", _tbn_err)
-                            except Exception as _tg_assign_err:
-                                logger.debug("[ANCHOR-AUTOPILOT] coord-assign TG send failed: %s", _tg_assign_err)
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
