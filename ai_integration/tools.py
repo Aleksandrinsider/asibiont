@@ -548,7 +548,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_post",
-            "description": "📝 Опубликовать пост в блог платформы (не TG-канал). Вызывай когда пользователь просит опубликовать, написать пост, запостить. Если пользователь просит ТОЛЬКО черновик/текст БЕЗ публикации — покажи текст в чате. image_url: используй Unsplash https://source.unsplash.com/featured/?keyword1,keyword2 — НЕ вызывай generate_image перед create_post, иначе картинка уйдёт в личный чат отдельно.",
+            "description": "📝 Опубликовать пост в блог платформы (не TG-канал). Вызывай когда пользователь просит опубликовать, написать пост, запостить. Если пользователь просит ТОЛЬКО черновик/текст БЕЗ публикации — покажи текст в чате. Для картинки: вариант 1 — сначала вызови generate_image(prompt=...), URL подставится автоматически; вариант 2 — передай Unsplash URL: https://source.unsplash.com/featured/?keyword1,keyword2.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -749,7 +749,7 @@ TOOLS = [
                     },
                     "image_url": {
                         "type": "string",
-                        "description": "URL картинки для прикрепления к посту. Используй Unsplash: https://source.unsplash.com/featured/?keyword (тема на английском). НЕ вызывай generate_image перед этой функцией — иначе картинка уйдёт в личный TG-чат отдельно. Если не нужна картинка — не передавай."
+                        "description": "URL картинки для прикрепления к посту. Для AI-картинки: сначала вызови generate_image(prompt=...) — URL подставится автоматически. Для стоковой: https://source.unsplash.com/featured/?keyword (тема на английском). Если картинка не нужна — не передавай."
                     }
                 },
                 "required": ["content"]
@@ -770,7 +770,7 @@ TOOLS = [
                     },
                     "image_url": {
                         "type": "string",
-                        "description": "URL картинки для embed. Используй Unsplash: https://source.unsplash.com/featured/?keyword (тема на английском). НЕ вызывай generate_image перед этой функцией — иначе картинка уйдёт в личный TG-чат отдельно. Если не нужна картинка — не передавай."
+                        "description": "URL картинки для embed. Для AI-картинки: сначала вызови generate_image(prompt=...) — URL подставится автоматически. Для стоковой: https://source.unsplash.com/featured/?keyword (тема на английском). Если картинка не нужна — не передавай."
                     }
                 },
                 "required": ["content"]
