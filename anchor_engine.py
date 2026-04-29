@@ -10187,6 +10187,22 @@ class AnchorEngine:
                                         _autxt = str(_auc)
                                     for _m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _autxt):
                                         _ap_user_fin.add(re.sub(r'\s', '', _m))
+                                # Числа из постоянных правил пользователя
+                                try:
+                                    _raw_mem_ap = getattr(user, 'memory', None) or ''
+                                    if _raw_mem_ap:
+                                        try:
+                                            from ai_integration.memory import decrypt_data as _dec_ap
+                                            _raw_mem_ap = _dec_ap(_raw_mem_ap)
+                                        except Exception:
+                                            pass
+                                        if _raw_mem_ap.strip().startswith('{'):
+                                            _rules_ap = json.loads(_raw_mem_ap).get('rules', [])
+                                            for _rap in _rules_ap:
+                                                for _apm in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', str(_rap)):
+                                                    _ap_user_fin.add(re.sub(r'\s', '', _apm))
+                                except Exception:
+                                    pass
                             except Exception as _apfe:
                                 logger.debug("[ANCHOR-AUTOPILOT] user_fin_amounts error: %s", _apfe)
                             _ap_gen_nums = {re.sub(r'\s', '', m) for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cleaned_result)}
@@ -16183,6 +16199,22 @@ class AnchorEngine:
                         _cutxt = str(_cuc)
                     for _cm in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cutxt):
                         _coord_user_fin_amounts.add(re.sub(r'\s', '', _cm))
+                # Числа из постоянных правил пользователя (user.memory['rules'])
+                try:
+                    _raw_mem_fin = getattr(user, 'memory', None) or ''
+                    if _raw_mem_fin:
+                        try:
+                            from ai_integration.memory import decrypt_data as _dec_fin
+                            _raw_mem_fin = _dec_fin(_raw_mem_fin)
+                        except Exception:
+                            pass
+                        if _raw_mem_fin.strip().startswith('{'):
+                            _rules_fin = json.loads(_raw_mem_fin).get('rules', [])
+                            for _rf in _rules_fin:
+                                for _rm in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', str(_rf)):
+                                    _coord_user_fin_amounts.add(re.sub(r'\s', '', _rm))
+                except Exception:
+                    pass
             except Exception as _cufe:
                 logger.debug("[COORD] coord_user_fin_amounts error: %s", _cufe)
 
