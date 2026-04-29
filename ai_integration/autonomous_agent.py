@@ -4374,7 +4374,8 @@ class HybridAutonomousAgent:
                 if profile_data.get('discord_webhook') or _active_dc:
                     _platform_publish.update({'publish_to_discord', 'create_post'})
                 # create_post всегда доступен (сохранение записи без канала)
-                _platform_publish.add('create_post')
+                # create_post и generate_image всегда доступны (создание контента без канала)
+                _platform_publish.update({'create_post', 'generate_image'})
                 _effective_allowed = _agent_tools_allowed | _platform_publish
                 _forbidden = _all_tool_names - _effective_allowed
                 tools_to_exclude = tools_to_exclude | _forbidden
@@ -5658,7 +5659,7 @@ class HybridAutonomousAgent:
                     'send_outreach_email': 45, 'send_follow_up_email': 45,
                     'check_emails': 45, 'generate_image': 90,
                     'publish_to_telegram': 45, 'publish_to_discord': 45,
-                    'create_post': 60,
+                    'create_post': 45,
                 }
                 async def _sys_exec_one(_tc, _name, _args, _reason):
                     _sys_tto = _SYS_TOOL_TIMEOUT_MAP.get(_name, 60)
