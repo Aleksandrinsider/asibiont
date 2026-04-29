@@ -36,6 +36,28 @@ _ASI_REPORT_REVIEW_ACTIVE: set = set()
 # ── Email validation cache ──
 _mx_cache = {}  # domain → (has_mx: bool, timestamp)
 
+# ── Female agent names (for gender agreement in Russian) ──
+_FEMALE_AGENT_NAMES = {
+    'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary',
+    'александра', 'анна', 'дарья', 'елена', 'екатерина', 'евгения', 'екатерина',
+    'ирина', 'инна', 'анастасия', 'олеся', 'оксана', 'ольга', 'виктория',
+    'валентина', 'полина', 'софья', 'татьяна', 'тамара', 'татьяна', 'ульяна',
+    'ульяна', 'фаина', 'фаина', 'элина', 'элла', 'эмма', 'юлия', 'яна', 'ярослава',
+}
+
+def _is_fem_agent(name: str) -> bool:
+    """Определяет женский ли род агента по имени."""
+    name = (name or '').strip().lower()
+    if not name:
+        return False
+    first = name.split()[0]
+    if first in _FEMALE_AGENT_NAMES:
+        return True
+    # Fallback: check if ends with 'а' or 'я' but not special cases
+    if first[-1:] in 'ая' and first[-2:] not in ('ша', 'жа'):
+        return True
+    return False
+
 
 def _strip_post_visual_prompt(text: str) -> str:
     """Убирает хвосты вида 'Иллюстрация: ...' / 'Изображение: ...' из публичных постов."""
@@ -2492,7 +2514,7 @@ async def delegate_task(
             def _live_result_text(_agent_name: str, _result_text: str) -> str:
                 _txt = (_result_text or '').strip()
                 if not _txt:
-                    _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
+                    _is_fem = _is_fem_agent(_agent_name)
                     _fallback = 'Вот что я нашла: пока данных мало, продолжаю проверку.' if _is_fem else 'Вот что я нашел: пока данных мало, продолжаю проверку.'
                     return sanitize_live_team_chat_text(_fallback, anchor_type='agent_delegation', speaker_name=_agent_name)
                 _txt = _ren.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _txt)
@@ -2504,7 +2526,7 @@ async def delegate_task(
                 _txt = ' '.join(_sent[:2]).strip() if _sent else _txt
                 _txt = _truncate_by_word(_txt, 280)
                 _txt_l = _txt.lower()
-                _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
+                _is_fem = _is_fem_agent(_agent_name)
                 _prefix = 'Вот что я нашла: ' if _is_fem else 'Вот что я нашел: '
                 if not _txt_l.startswith(('вот что', 'нашла', 'нашел', 'проверила', 'проверил', 'сделала', 'сделал', 'нашли')):
                     _txt = _prefix + (_txt[:1].lower() + _txt[1:] if _txt and _txt[:1].isupper() and not _txt[:3].isupper() else _txt)
