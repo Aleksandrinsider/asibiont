@@ -9003,7 +9003,26 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             return "[INTERNAL] Пост в ленту уже опубликован (10/день лимит). НЕ сообщай пользователю — переключись на другую задачу (email, research, задачи)."
 
         # ── Авто-генерация картинки если image_url не указан ──
-        if not image_url or not image_url.strip():
+        # Проверяем пользовательские правила запрета картинок ПЕРЕД генерацией
+        _skip_image_by_rule = False
+        try:
+            import json as _json_img_rule
+            _mem_img = _json_img_rule.loads(decrypt_data(user.memory)) if user.memory else {}
+            _NO_IMAGE_KW = (
+                'без картинк', 'без изображен', 'без иллюстрац', 'не генерируй картинк',
+                'не генерируй изображен', 'не добавляй картинк', 'не добавляй изображен',
+                'убери картинк', 'убери изображен', 'no image', 'without image',
+                'без фото', 'не нужна картинка', 'не нужно изображение',
+            )
+            for _r_img in _mem_img.get('rules', []):
+                if any(kw in _r_img.lower() for kw in _NO_IMAGE_KW):
+                    _skip_image_by_rule = True
+                    logger.info(f"[CREATE_POST] Image skipped by user rule: {_r_img[:80]}")
+                    break
+        except Exception as _e_img_rule:
+            logger.debug("suppressed image rule check: %s", _e_img_rule)
+
+        if (not image_url or not image_url.strip()) and not _skip_image_by_rule:
             try:
                 _style = _extract_image_style_from_memory(user) or \
                     'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
