@@ -17692,7 +17692,7 @@ class AnchorEngine:
                     + _dedup_hint
                     + _intg_live_block
                     + (f"\n👤 Контекст проекта:\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
-                    + (f"\n📋 ПРАВИЛА (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag)) + "\n" if _user_rules_ag else '')
+                    + (f"\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (НАИВЫСШИЙ ПРИОРИТЕТ — переопределяют даже текст задачи выше):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag)) + "\nЕсли задача противоречит правилу — выполни задачу БЕЗ нарушения правила (адаптируй подход).\n" if _user_rules_ag else '')
                     + _runtime_quality_hints
                     + f"\nАктивные цели (сопоставь по теме задачи, уточни у пользователя только если совсем неясно):\n{_agent_goals_block}\n"
                     + (f"\n📋 Контакты уже в системе (ищи НОВЫХ, не повторяй этих):\n{_agent_contacts_block}\n" if _agent_contacts_block else '')
