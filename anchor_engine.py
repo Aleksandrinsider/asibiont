@@ -5997,18 +5997,20 @@ class AnchorEngine:
                         await asyncio.wait_for(
                             self._process_post_anchor(user, pa, session), timeout=60)
 
-            # ── 3d. CHANNEL POSTS — отдельный лимит ──
+            # ── 3d. CHANNEL POSTS — публикуем до остатка дневного лимита за раз ──
             channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
             if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
-                for pa in channel_posts[:1]:
+                _ch_slots = max(1, MAX_CHANNEL_PER_DAY - channel_count)
+                for pa in channel_posts[:_ch_slots]:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
                             self._process_post_anchor(user, pa, session), timeout=60)
 
-            # ── 3e. DISCORD POSTS — автономный постинг в Discord-канал ──
+            # ── 3e. DISCORD POSTS — публикуем до остатка дневного лимита за раз ──
             discord_posts = [a for a in post_anchors if a.anchor_type == 'discord_post']
             if discord_posts and discord_count < MAX_CHANNEL_PER_DAY:
-                for pa in discord_posts[:1]:
+                _dc_slots = max(1, MAX_CHANNEL_PER_DAY - discord_count)
+                for pa in discord_posts[:_dc_slots]:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
                             self._process_post_anchor(user, pa, session), timeout=60)
