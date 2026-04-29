@@ -5157,7 +5157,23 @@ class AnchorEngine:
 
         async with lock:
             try:
-                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
+                # Динамический таймаут: 120s базовый + 120s на каждого реального агента
+                # Каждый пользователь получает ровно столько времени сколько нужно его команде
+                _env_cap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '1800'))
+                try:
+                    from models import UserAgent as _UA_safe, Session as _Sess_safe
+                    _s_dyn = _Sess_safe()
+                    try:
+                        _n_user_agents = _s_dyn.query(_UA_safe).filter(
+                            _UA_safe.user_id == user_id,
+                            _UA_safe.id != 0,
+                        ).count()
+                    finally:
+                        _s_dyn.close()
+                except Exception:
+                    _n_user_agents = 1
+                _process_timeout_sec = min(_env_cap, max(180, 90 + _n_user_agents * 120 + 60))
+                logger.debug("[ANCHOR] User %d: dynamic timeout=%ds (%d agents)", user_id, _process_timeout_sec, _n_user_agents)
                 await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
