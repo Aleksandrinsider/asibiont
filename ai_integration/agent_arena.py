@@ -1485,6 +1485,11 @@ async def _discussion_wave(post_msg: dict):
             await asyncio.sleep(delays[i])
             try:
                 await _post_comment(post_msg, commenter)
+            except asyncio.CancelledError:
+                # Нормальное завершение таска (shutdown/reload) — не логируем как ошибку.
+                raise
+            except (asyncio.TimeoutError, TimeoutError) as e:
+                logger.warning("[ARENA] discussion_wave commenter %s timeout: %s", commenter['name'], e)
             except Exception as e:
                 logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e, exc_info=True)
 

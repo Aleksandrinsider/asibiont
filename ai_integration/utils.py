@@ -1705,39 +1705,52 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
         system = "Ты переводчик. Верни только валидный JSON с переведёнными полями. Не переводи названия компаний и брендов. Без markdown, без пояснений."
 
     import aiohttp as _aio_tr
-    try:
-        timeout = _aio_tr.ClientTimeout(total=70, connect=10)
-        connector = _aio_tr.TCPConnector(force_close=True)
-        async with _safe_http(timeout=timeout, connector=connector) as session_tr:
-            async with session_tr.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 800
-                }
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    content = data['choices'][0]['message']['content'].strip()
-                    start = content.find('{')
-                    end = content.rfind('}') + 1
-                    if start != -1 and end > start:
-                        return json.loads(content[start:end])
+    _last_timeout_err = None
+    for _attempt in (1, 2):
+        try:
+            timeout = _aio_tr.ClientTimeout(total=70, connect=10)
+            connector = _aio_tr.TCPConnector(force_close=True)
+            async with _safe_http(timeout=timeout, connector=connector) as session_tr:
+                async with session_tr.post(
+                    'https://api.deepseek.com/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        "model": DEEPSEEK_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.1,
+                        "max_tokens": 800
+                    }
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        content = data['choices'][0]['message']['content'].strip()
+                        start = content.find('{')
+                        end = content.rfind('}') + 1
+                        if start != -1 and end > start:
+                            return json.loads(content[start:end])
+                        else:
+                            logger.warning(f"[TRANSLATE] No JSON in response for {target_lang}: {content[:200]}")
+                            return None
                     else:
-                        logger.warning(f"[TRANSLATE] No JSON in response for {target_lang}: {content[:200]}")
-                else:
-                    logger.warning(f"[TRANSLATE] API returned {response.status} for {target_lang}")
-    except Exception as e:
-        logger.error(f"[TRANSLATE] Error translating to {target_lang}: {type(e).__name__}: {e!r}")
+                        logger.warning(f"[TRANSLATE] API returned {response.status} for {target_lang}")
+                        return None
+        except (asyncio.TimeoutError, TimeoutError, _aio_tr.ServerTimeoutError) as e:
+            _last_timeout_err = e
+            if _attempt == 1:
+                logger.warning(f"[TRANSLATE] Timeout translating to {target_lang}, retrying once")
+            else:
+                logger.warning(f"[TRANSLATE] Timeout translating to {target_lang} after retry: {type(e).__name__}")
+        except Exception as e:
+            logger.error(f"[TRANSLATE] Error translating to {target_lang}: {type(e).__name__}: {e!r}")
+            return None
+    if _last_timeout_err is not None:
+        return None
     return None
 
 

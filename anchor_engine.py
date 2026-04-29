@@ -6018,14 +6018,17 @@ class AnchorEngine:
                             except Exception:
                                 pass
                 except Exception as _ea_err:
-                    logger.error(f"[ANCHOR] User {user_id}: email anchor #{ea.id} (idx={_ea_idx}) error: {type(_ea_err).__name__}: {_ea_err!r}")
+                    _is_timeout_err = isinstance(_ea_err, (asyncio.TimeoutError, TimeoutError))
+                    if _is_timeout_err:
+                        logger.warning(f"[ANCHOR] User {user_id}: email anchor #{ea.id} (idx={_ea_idx}) timeout: {_ea_err!r}")
+                    else:
+                        logger.error(f"[ANCHOR] User {user_id}: email anchor #{ea.id} (idx={_ea_idx}) error: {type(_ea_err).__name__}: {_ea_err!r}")
                     try:
                         session.rollback()
                     except Exception:
                         pass
                     # При таймауте — снузим на 10 мин для повторной попытки (письмо ещё не отправлено).
                     # При других ошибках — помечаем delivered чтобы не было бесконечного retry.
-                    _is_timeout_err = isinstance(_ea_err, (asyncio.TimeoutError, TimeoutError))
                     try:
                         from models import Session as _S_ea_fix
                         _s_ea_fix = _S_ea_fix()
