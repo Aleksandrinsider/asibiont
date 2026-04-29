@@ -16934,17 +16934,34 @@ class AnchorEngine:
                     continue
                 # sanitize_live_team_chat_text уже обрабатывает обрывы — дублирование удалено
                 try:
+                    _assign_chat_stage1 = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                        _asi_assign_text,
+                        anchor_type='coordinator_assignment',
+                        speaker_name='ASI',
+                        target_name=_ag_name,
+                    )
+                    _assign_chat_text = _sanitize_proactive_text(_assign_chat_stage1)
+                    _assign_sentence_count = len(re.findall(r'[.!?]+', _assign_chat_stage1 or ''))
+                    if (
+                        _assign_chat_stage1
+                        and _assign_chat_text
+                        and len(_assign_chat_stage1) > 120
+                        and _assign_sentence_count >= 2
+                        and len(_assign_chat_text) < max(80, int(len(_assign_chat_stage1) * 0.72))
+                    ):
+                        logger.info(
+                            "[COORD] preserved fuller assignment text for %s after lossy proactive sanitize: %d -> %d chars",
+                            _ag_name,
+                            len(_assign_chat_stage1),
+                            len(_assign_chat_text),
+                        )
+                        _assign_chat_text = _assign_chat_stage1
                     session.add(Interaction(
                         user_id=user.id,
                         message_type='agent_msg',
                         content=json.dumps({
                             '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': _sanitize_proactive_text(__import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
-                                _asi_assign_text,
-                                anchor_type='coordinator_assignment',
-                                speaker_name='ASI',
-                                target_name=_ag_name,
-                            )),
+                            'text': _assign_chat_text,
                             '__to_agent': _ag_name,
                             '__anchor_type': 'coordinator_assignment',
                             '__goal_title': (_ag_goal_title or '')[:200],
