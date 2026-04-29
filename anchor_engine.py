@@ -915,28 +915,6 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     # Restore missing space between sentences if text was glued like "...аналитиков.Дальше"
     # Apply only when punctuation is immediately followed by an uppercase letter.
     t = _re_san.sub(r'([.!?])([A-ZА-ЯЁ])', r'\1 \2', t)
-    # Strip canned opener phrases that sound like templates, not live speech
-    # e.g. "Цепочку завершил. Вот загрузил свежие новости..." → "Загрузил свежие новости..."
-    _canned_openers = (
-        r'Цепочку завершил[аи]?\.\s*', r'Цепочку завершила?\.\s*',
-        r'Цепочку выполнил[аи]?\.\s*', r'Цепочку выполнила?\.\s*',
-        r'Шаг завершён?\.\s*', r'Задача выполнена?\.\s*',
-        r'Готово\.\s*',
-        r'Давай[те]? по фактам?[.!]?\s*', r'По фактам?[.!]?\s*',
-        # LLM artifact: English single-word abbreviation before Russian text
-        # e.g. "Com. Пойду через корп. контакты" → "Пойду через корп. контакты"
-        r'[A-Z][a-z]{1,6}\. (?=[А-ЯЁ])',
-    )
-    for _cop in _canned_openers:
-        t = _re_san.sub(r'(?i)^' + _cop, '', t)
-        t = _re_san.sub(r'(?i)\n' + _cop, '\n', t)
-    # Strip "Вот" at sentence start (sounds like a filler, not natural speech)
-    # "Вот загрузил" → "Загрузил"; "вот что нашёл" stays (it's meaningful)
-    t = _re_san.sub(
-        r'(?im)(^|\.\s+|\n)Вот\s+(?=[А-ЯЁA-Z\w])',
-        lambda m: m.group(1),
-        t,
-    )
     # Sanitize hallucinated token amounts ("1000+500", "бесплатных токенов" etc.)
     try:
         from ai_integration.conversation_history import sanitize_token_hallucinations
