@@ -8835,20 +8835,6 @@ class AnchorEngine:
                                         rf'\g<1>{_imp}',
                                         _coord_text,
                                     )
-                                # ── Guard: координатор назначил start_email_campaign при активной кампании ──
-                                if _active_campaigns_ctx and 'start_email_campaign' in _gen_lower:
-                                    import re as _re_secamp
-                                    _coord_text = _re_secamp.sub(
-                                        r'start_email_campaign',
-                                        'send_outreach_email',
-                                        _coord_text,
-                                    )
-                                    _coord_text = _re_secamp.sub(
-                                        r'[Зз]апусти\s+массовую\s+email[- ]кампанию',
-                                        'Отправь персональное письмо через send_outreach_email',
-                                        _coord_text,
-                                    )
-                                    logger.info("[ANCHOR-AUTOPILOT] COORD-GUARD: replaced start_email_campaign → send_outreach_email")
                                 # ── Обучающий retry: если петля подтверждена — предлагаем другой подход ──
                                 # Не блокируем, а показываем AI что именно повторяется и просим переосмыслить
                                 _loop_retry_needed = False
@@ -8955,6 +8941,23 @@ class AnchorEngine:
                                 logger.debug("[COORD] universal truncation-guard error: %s", _tg_univ_err)
                         _coord_text = _re_ct_parens.sub(r'\s*\(\s*\)\s*', ' ', _coord_text).strip()
                         _coord_text = _re_ct_parens.sub(r'  +', ' ', _coord_text)
+                        # ── Dangling imperative guard: обрезаем «затем подготовь.» без объекта ──
+                        # Срабатывает когда LLM обрывает мысль на голом глаголе-императиве
+                        if _coord_text:
+                            import re as _re_di
+                            _DANGLING_IMP_RE = _re_di.compile(
+                                r'[,;]\s*(?:затем\s+)?(?:'
+                                r'подготовь|отправь|напиши|найди|создай|проверь'
+                                r'|запусти|используй|сохрани|сделай|добавь|составь'
+                                r'|поищи|выбери|свяжись|обнови|получи|помоги'
+                                r'|публикуй|опубликуй|изучи|собери|проведи'
+                                r')\s*[.!]$',
+                                _re_di.IGNORECASE,
+                            )
+                            _di_m = _DANGLING_IMP_RE.search(_coord_text)
+                            if _di_m:
+                                _coord_text = _coord_text[:_di_m.start()].rstrip(' ,;') + '.'
+                                logger.info("[COORD] dangling-imperative guard applied for %s", _chosen_name)
                         # ── Двойное имя агента: «Hugo, Hugo …» → «Hugo, …» ──────────────
                         if _chosen_name:
                             _coord_text = _re_ct_parens.sub(
