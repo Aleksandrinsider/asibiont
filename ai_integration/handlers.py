@@ -19015,9 +19015,9 @@ async def generate_image(
     user_id: int = None,
     session=None,
     close_session: bool = True,
-    send_to_telegram: bool = True,
+    send_to_telegram: bool = False,
 ) -> str:
-    """Генерация изображения через Replicate (Flux). send_to_telegram=False — только URL, без отправки в TG."""
+    """Генерация изображения через Replicate (Flux). send_to_telegram=True — отправить в TG напрямую (только по явному запросу пользователя)."""
     if not session:
         session = Session()
         close_session = True

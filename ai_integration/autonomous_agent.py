@@ -2846,14 +2846,20 @@ class HybridAutonomousAgent:
                             params['close_session'] = False
                         elif 'close_session' in params:
                             del params['close_session']  # ИИ передал, но функция не принимает
-                    # Web-контекст или пост-контекст: не отправляем generate_image в TG отдельно
-                    # Случай 1: web → фото не отправляем вообще
-                    # Случай 2: generate_image вызывается в одном батче с create_post/publish_to_telegram →
-                    #   фото "утечёт" пустым сообщением до того как пост опубликуется
+                    # generate_image: никогда не отправляем в TG автоматически.
+                    # Дефолт send_to_telegram=False в функции, но на случай если AI передаст True явно —
+                    # разрешаем только когда пользователь явно просит отправить картинку (без поста).
                     if tool_name == 'generate_image' and 'send_to_telegram' in sig.parameters:
                         _post_tools_in_batch = {'create_post', 'publish_to_telegram', 'publish_to_discord'}
                         _other_tools_in_batch = {a.get('tool') for a in actions if a.get('tool') != tool_name}
-                        if web_context or (_other_tools_in_batch & _post_tools_in_batch):
+                        _user_wants_image_only = (
+                            not web_context
+                            and not (_other_tools_in_batch & _post_tools_in_batch)
+                            and any(kw in (user_message or '').lower() for kw in
+                                    ('пришли картинку', 'отправь картинку', 'покажи картинку',
+                                     'send me', 'send image', 'пришли изображение', 'отправь изображение'))
+                        )
+                        if not _user_wants_image_only:
                             params['send_to_telegram'] = False
 
                     # === Parameter auto-fix для известных quirks ===
