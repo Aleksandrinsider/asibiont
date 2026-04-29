@@ -8631,6 +8631,22 @@ class AnchorEngine:
                             _gen = _re_post.sub(r'\bу\s+неё\s+есть\b', 'у тебя есть', _gen, flags=_re_post.IGNORECASE)
                             _gen = _re_post.sub(r'\bему\s+нужно\b', 'тебе нужно', _gen, flags=_re_post.IGNORECASE)
                             _gen = _re_post.sub(r'\bей\s+нужно\b', 'тебе нужно', _gen, flags=_re_post.IGNORECASE)
+                            # Частый случай: "У Olivia уже есть ..." → "у тебя уже есть ..."
+                            if _chosen_name:
+                                _name_esc_any = _re_post.escape(_chosen_name)
+                                _gen = _re_post.sub(
+                                    rf'\bу\s+{_name_esc_any}\s+(уже\s+|как\s+раз\s+|теперь\s+)?есть\b',
+                                    lambda m: 'у тебя ' + (m.group(1) or '') + 'есть',
+                                    _gen,
+                                    flags=_re_post.IGNORECASE,
+                                )
+                            # Убираем 3-е лицо в инструкциях: "не давай ему...", "пусть создаст..."
+                            _gen = _re_post.sub(r'\bне\s+давай\s+ему\b', 'не публикуй', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bне\s+давай\s+ей\b', 'не публикуй', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bпусть\s+созда(?:ст|ёт)\b', 'создай', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bпусть\s+проверит\b', 'проверь', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bпусть\s+сделает\b', 'сделай', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bпусть\s+напишет\b', 'напиши', _gen, flags=_re_post.IGNORECASE)
                             # Убираем дубли имени в начале: "Hugo, Hugo ..." / "Hugo Hugo ..."
                             if _chosen_name:
                                 _name_esc = _re_post.escape(_chosen_name)
@@ -8641,9 +8657,14 @@ class AnchorEngine:
                                 # Убираем имя агента в конце текста: "...Ормузского пролива Name." → убираем "Name."
                                 _gen = _re_post.sub(rf'[\s,]+{_name_esc}[.,!?]*\s*$', '', _gen.strip())
                                 _gen = _gen.strip()
-                            # Удаляем обрывки после 3rd→2nd преобразования: "ты зациклился на."
-                            _gen = _re_post.sub(r'\bты\s+зациклил(?:ся|ась)\s+на\s*[.!?]', '', _gen, flags=_re_post.IGNORECASE)
-                            _gen = _re_post.sub(r'\bзациклен(?:а)?\s+на\s*[.!?]', '', _gen, flags=_re_post.IGNORECASE)
+                            # Чиним обрывки после 3rd→2nd преобразования
+                            _gen = _re_post.sub(
+                                r'\bты\s+зациклил(?:ся|ась)\s+на\s*(?:[—-]\s*переключа(?:ю|ем)\s+на\.?|[.!?])',
+                                'ты зациклился на старом подходе. Переключаю тебя на новый.',
+                                _gen,
+                                flags=_re_post.IGNORECASE,
+                            )
+                            _gen = _re_post.sub(r'\bзациклен(?:а)?\s+на\s*[.!?]', 'зациклился на старом подходе.', _gen, flags=_re_post.IGNORECASE)
                             # Если есть оборванные предложения, удаляем только их, сохраняя остальные
                             _parts = [p.strip() for p in _re_post.split(r'(?<=[.!?])\s+', _gen) if p.strip()]
                             _bad_tail = re.compile(r'\b(?:на|в|к|о|об|по|для|через|с|у|от|и|или|что|как)\s*[.!?]$', re.IGNORECASE)
