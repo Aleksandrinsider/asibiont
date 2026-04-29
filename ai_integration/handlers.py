@@ -8989,6 +8989,30 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if not content:
             return "Текст поста не может быть пустым после очистки."
 
+        # Проверяем пользовательские правила запрета картинок ДО сохранения поста.
+        # Если правило есть — отключаем любые картинки, даже если AI передал image_url явно.
+        _skip_image_by_rule = False
+        try:
+            import json as _json_img_rule
+            _mem_img = _json_img_rule.loads(decrypt_data(user.memory)) if user.memory else {}
+            _NO_IMAGE_KW = (
+                'без картинк', 'без изображен', 'без иллюстрац', 'не генерируй картинк',
+                'не генерируй изображен', 'не добавляй картинк', 'не добавляй изображен',
+                'убери картинк', 'убери изображен', 'no image', 'without image',
+                'без фото', 'не нужна картинка', 'не нужно изображение',
+            )
+            for _r_img in _mem_img.get('rules', []):
+                if any(kw in _r_img.lower() for kw in _NO_IMAGE_KW):
+                    _skip_image_by_rule = True
+                    logger.info(f"[CREATE_POST] Image skipped by user rule: {_r_img[:80]}")
+                    break
+        except Exception as _e_img_rule:
+            logger.debug("suppressed image rule check: %s", _e_img_rule)
+
+        if _skip_image_by_rule and image_url and image_url.strip():
+            logger.info("[CREATE_POST] Explicit image_url dropped due to user no-image rule")
+            image_url = None
+
         # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
         import datetime as dt
         import pytz as _pytz_cp
@@ -9023,25 +9047,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         logger.info(f"[CREATE_POST] User {user_id} saved post #{_post_id} (image pending): '{post_preview}'")
 
         # ── Авто-генерация картинки (если нет image_url и правило не запрещает) — в фоне ──
-        _skip_image_by_rule = False
-        try:
-            import json as _json_img_rule
-            _mem_img = _json_img_rule.loads(decrypt_data(user.memory)) if user.memory else {}
-            _NO_IMAGE_KW = (
-                'без картинк', 'без изображен', 'без иллюстрац', 'не генерируй картинк',
-                'не генерируй изображен', 'не добавляй картинк', 'не добавляй изображен',
-                'убери картинк', 'убери изображен', 'no image', 'without image',
-                'без фото', 'не нужна картинка', 'не нужно изображение',
-            )
-            for _r_img in _mem_img.get('rules', []):
-                if any(kw in _r_img.lower() for kw in _NO_IMAGE_KW):
-                    _skip_image_by_rule = True
-                    logger.info(f"[CREATE_POST] Image skipped by user rule: {_r_img[:80]}")
-                    break
-        except Exception as _e_img_rule:
-            logger.debug("suppressed image rule check: %s", _e_img_rule)
-
-        if (not _post_image_url) and not _skip_image_by_rule:
+        _bg_image_pending = (not _post_image_url) and not _skip_image_by_rule
+        if _bg_image_pending:
             async def _bg_generate_image(_post_id_bg: int, _content_bg: str, _explicit_vp_bg, _user_id_bg: int):
                 """Фоновая задача: генерирует картинку и обновляет пост."""
                 try:
@@ -9211,6 +9218,10 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 else:
                     # Fallback: use Replicate URL directly (may expire)
                     _blog_note_content = f"![Иллюстрация к посту]({_post_image_url})\n\n{_blog_note_content}"
+            elif _bg_image_pending:
+                # В фоне картинка будет сгенерирована позже — сразу ставим placeholder,
+                # чтобы _bg_generate_image смог привязать байты к заметке.
+                _blog_note_content = f"![Иллюстрация к посту](/blog/image/PENDING_CP_ID)\n\n{_blog_note_content}"
             _blog_note = _NoteCP(
                 user_id=user.id,
                 title=_blog_title,
