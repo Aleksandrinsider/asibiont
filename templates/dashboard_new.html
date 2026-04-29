@@ -11012,57 +11012,107 @@ except Exception as e:
             }
         }
 
+        const NOTES_PER_PAGE = 20;
+        let _notesAllItems = [];
+        let _notesCurrentPage = 1;
         let _notesLoaded = false;
+
         async function loadNotes() {
             try {
                 const resp = await fetch('/api/notes?t=' + Date.now(), { credentials: 'include' });
                 if (!resp.ok) return;
                 const data = await resp.json();
-                const list = document.getElementById('notes-list');
-                const emptyEl = document.getElementById('notes-empty');
-                if (!list) return;
-                // Clear existing except empty placeholder
-                list.querySelectorAll('.note-card').forEach(el => el.remove());
-                if (!data.notes || data.notes.length === 0) {
-                    if (emptyEl) emptyEl.style.display = '';
-                    return;
-                }
-                if (emptyEl) emptyEl.style.display = 'none';
-                data.notes.forEach(n => {
-                    const card = document.createElement('div');
-                    card.className = 'note-card';
-                    card.setAttribute('data-note-id', n.id);
-                    card.style.cssText = 'display: flex; gap: 14px; margin-bottom: 8px; padding: 8px;';
-                    const noteTime = n.created_at ? new Date(n.created_at) : new Date();
-                    const dateStr = noteTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
-                    const timeStr = noteTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
-                    const src = n.source === 'chat' ? t('from-chat') : t('manual-note');
-                    const displayTitle = n.title ? escapeHtml(n.title) : src;
-                    card.innerHTML = `
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
-                                <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span id="note-title-${n.id}" data-orig-title="${escapeHtml(n.title || '')}" data-src="${src}" style="font-size: 13px; color: #1F2328; font-weight: 600;">${displayTitle}</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8C959F; opacity: 0.7; font-weight: 400;">
-                                        ${dateStr} ${timeStr}
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 4px;">
-                                    <button onclick="translateNote(${n.id})" class="delete-btn" id="translate-btn-note-${n.id}" title="${t('translate')}" style="margin-top: 3px;"><span id="translate-label-note-${n.id}">${TRANSLATE_GLOBE_SVG}</span></button>
-                                    <button onclick="editNote(${n.id})" class="delete-btn" title="${t('edit-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button>
-                                    <button onclick="deleteNote(${n.id}, '${n.source || 'manual'}')" class="delete-btn" title="${t('delete-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>
-                                </div>
-                            </div>
-                            <p id="note-content-${n.id}" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${renderNoteContent(n.content)}</p>
-                        </div>`;
-                    list.appendChild(card);
-                });
+                _notesAllItems = data.notes || [];
+                _notesCurrentPage = 1;
+                notesRenderPage();
                 _notesLoaded = true;
             } catch (e) {
                 console.error('Error loading notes:', e);
             }
+        }
+
+        function notesRenderPage() {
+            const list = document.getElementById('notes-list');
+            const emptyEl = document.getElementById('notes-empty');
+            if (!list) return;
+            list.querySelectorAll('.note-card').forEach(el => el.remove());
+
+            let pag = document.getElementById('notes-pagination');
+            if (_notesAllItems.length === 0) {
+                if (emptyEl) emptyEl.style.display = '';
+                if (pag) pag.style.display = 'none';
+                return;
+            }
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            const totalPages = Math.max(1, Math.ceil(_notesAllItems.length / NOTES_PER_PAGE));
+            if (_notesCurrentPage > totalPages) _notesCurrentPage = totalPages;
+
+            const startIdx = (_notesCurrentPage - 1) * NOTES_PER_PAGE;
+            const pageItems = _notesAllItems.slice(startIdx, startIdx + NOTES_PER_PAGE);
+
+            pageItems.forEach(n => {
+                const card = document.createElement('div');
+                card.className = 'note-card';
+                card.setAttribute('data-note-id', n.id);
+                card.style.cssText = 'display: flex; gap: 14px; margin-bottom: 8px; padding: 8px;';
+                const noteTime = n.created_at ? new Date(n.created_at) : new Date();
+                const dateStr = noteTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+                const timeStr = noteTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
+                const src = n.source === 'chat' ? t('from-chat') : t('manual-note');
+                const displayTitle = n.title ? escapeHtml(n.title) : src;
+                card.innerHTML = `
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
+                            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span id="note-title-${n.id}" data-orig-title="${escapeHtml(n.title || '')}" data-src="${src}" style="font-size: 13px; color: #1F2328; font-weight: 600;">${displayTitle}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8C959F; opacity: 0.7; font-weight: 400;">
+                                    ${dateStr} ${timeStr}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="translateNote(${n.id})" class="delete-btn" id="translate-btn-note-${n.id}" title="${t('translate')}" style="margin-top: 3px;"><span id="translate-label-note-${n.id}">${TRANSLATE_GLOBE_SVG}</span></button>
+                                <button onclick="editNote(${n.id})" class="delete-btn" title="${t('edit-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"></path></svg></button>
+                                <button onclick="deleteNote(${n.id}, '${n.source || 'manual'}')" class="delete-btn" title="${t('delete-note')}" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>
+                            </div>
+                        </div>
+                        <p id="note-content-${n.id}" style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${renderNoteContent(n.content)}</p>
+                    </div>`;
+                list.appendChild(card);
+            });
+            list.scrollTop = 0;
+
+            // Пагинация
+            if (!pag) {
+                pag = document.createElement('div');
+                pag.id = 'notes-pagination';
+                pag.style.cssText = 'display:flex;justify-content:center;align-items:center;gap:16px;padding:8px 12px;border-top:1px solid #F0F3F6;flex-shrink:0;';
+                const notesView = document.getElementById('notes-view');
+                const chatInput = notesView && notesView.querySelector('.chat-input');
+                if (notesView && chatInput) notesView.insertBefore(pag, chatInput);
+                else if (list.parentNode) list.parentNode.insertBefore(pag, list.nextSibling);
+            }
+            if (totalPages <= 1) { pag.style.display = 'none'; return; }
+            pag.style.display = 'flex';
+            const prevDisabled = _notesCurrentPage <= 1;
+            const nextDisabled = _notesCurrentPage >= totalPages;
+            pag.innerHTML = (prevDisabled
+                ? '<span style="color:#D1D9E0;font-size:20px;padding:4px 8px;">&lt;</span>'
+                : '<button onclick="notesPrevPage()" style="background:none;border:none;color:#068487;cursor:pointer;font-size:20px;padding:4px 8px;">&lt;</button>')
+                + '<span style="font-size:13px;color:#374151;">' + _notesCurrentPage + ' / ' + totalPages + '</span>'
+                + (nextDisabled
+                ? '<span style="color:#D1D9E0;font-size:20px;padding:4px 8px;">&gt;</span>'
+                : '<button onclick="notesNextPage()" style="background:none;border:none;color:#068487;cursor:pointer;font-size:20px;padding:4px 8px;">&gt;</button>');
+        }
+
+        function notesPrevPage() {
+            if (_notesCurrentPage > 1) { _notesCurrentPage--; notesRenderPage(); }
+        }
+        function notesNextPage() {
+            const totalPages = Math.ceil(_notesAllItems.length / NOTES_PER_PAGE);
+            if (_notesCurrentPage < totalPages) { _notesCurrentPage++; notesRenderPage(); }
         }
 
         async function addManualNote() {
