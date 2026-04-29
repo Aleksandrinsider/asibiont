@@ -2865,6 +2865,30 @@ class HybridAutonomousAgent:
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
 
+                    # Site-first compatibility: как раньше, посты идут через create_post
+                    # (блог + кросс-пост), а не прямой publish_to_telegram.
+                    if tool_name == 'publish_to_telegram' and params.get('content'):
+                        _um_l = (user_message or '').lower()
+                        _tg_only = any(k in _um_l for k in (
+                            'только в telegram', 'только в тг', 'без блога', 'не в блог',
+                            'only telegram', 'tg only',
+                        ))
+                        if not _tg_only:
+                            logger.info("[EXEC] site-first reroute: publish_to_telegram -> create_post")
+                            tool_name = 'create_post'
+                            handler_func = getattr(handlers, tool_name, None)
+                            if not handler_func:
+                                results.append({"tool": tool_name, "success": False,
+                                                "error": "Handler create_post not found"})
+                                continue
+                            sig = inspect.signature(handler_func)
+                            if 'session' in sig.parameters:
+                                params['session'] = session
+                                if 'close_session' in sig.parameters:
+                                    params['close_session'] = False
+                                elif 'close_session' in params:
+                                    del params['close_session']
+
                     # Если _fix_tool_params заблокировал вызов (нет обязательного контента / фейковый email) — пропускаем
                     if params.pop('__skip__', False):
                         _block_err = params.pop('__block_error__', None)
@@ -7820,8 +7844,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  🔢 ПОРОГ ПОИСКА EMAIL: попробовал 2 разных способа — нет личного email?\n"
             "     → Используй корп. email (если цель B2B) ИЛИ переключись на другого человека/другую задачу.\n"
             "     Не трать 3й, 4й, 5й ход на поиск одного человека — это застой.\n"
-            "  📢 ПУБЛИКАЦИИ — используй только ДОСТУПНЫЕ каналы из твоих интеграций:\n"
-            "     Есть Telegram-канал → publish_to_telegram. Есть Discord → publish_to_discord. Оба недоступны → create_post в ленту.\n"
+            "  📢 ПУБЛИКАЦИИ — site-first режим (как раньше):\n"
+            "     Для поста с публикацией используй create_post — он создаёт запись в блоге и делает кросс-пост в доступные каналы.\n"
+            "     publish_to_telegram используй только когда явно нужно ТОЛЬКО в Telegram без блога.\n"
+            "     Если каналы недоступны — create_post в ленту.\n"
             "     НЕ рассуждай 'есть ли доступ' — смотри список интеграций в карточке и сразу используй что есть.\n"
             "     ⛔ ЗАПРЕЩЕНО писать 'у меня нет publish_to_telegram' и делегировать коллеге — если инструмент в твоём списке, вызывай его сам и смотри что вернёт.\n"
             "     ⛔ ЗАПРЕЩЕНО: 'у меня нет доступа к Telegram, но [Имя] может' — это ошибка делегирования.\n"
