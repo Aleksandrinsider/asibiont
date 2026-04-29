@@ -6252,30 +6252,37 @@ class AnchorEngine:
                 logger.debug("[DISPATCH-THROTTLE] throttle check failed: %s", _throttle_err)
 
             # ── Помечаем якорь доставленным СРАЗУ — защита от бесконечных retry при crash/restart ──
+            # RETRY LOGIC: if main session times out, try fresh sessions with exponential backoff
             _early_del_ok = False
-            try:
-                from sqlalchemy import text as _del_text
-                session.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': anchor.id})
-                session.commit()
-                _early_del_ok = True
-            except Exception as _del_err:
-                logger.warning("[DISPATCH] delivered_at early-set failed (main session): %s — retrying with fresh session", _del_err)
+            import time as _time_mod
+            _del_attempts = 0
+            while _del_attempts < 3:
                 try:
-                    session.rollback()
-                except Exception:
-                    pass
-                try:
-                    from models import Session as _DelSess
-                    from sqlalchemy import text as _del_text2
-                    _s_del = _DelSess()
+                    from sqlalchemy import text as _del_text
+                    _del_stmt = _del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid")
+                    session.execute(_del_stmt, {'aid': anchor.id})
+                    session.commit()
+                    _early_del_ok = True
+                    break
+                except Exception as _del_err:
                     try:
-                        _s_del.execute(_del_text2("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': anchor.id})
-                        _s_del.commit()
-                        _early_del_ok = True
-                    finally:
-                        _s_del.close()
-                except Exception as _del_err2:
-                    logger.warning("[DISPATCH] delivered_at retry also failed: %s — skipping dispatch to prevent stuck anchor", _del_err2)
+                        session.rollback()
+                    except Exception:
+                        pass
+                    _del_attempts += 1
+                    if _del_attempts < 3:
+                        _sleep_s = 1 + (_del_attempts - 1) * 2  # 1s, 3s
+                        _time_mod.sleep(_sleep_s)
+                        logger.debug("[DISPATCH] delivered_at retry %d/3 after %s (sleeping %ds)", _del_attempts, str(_del_err)[:100], _sleep_s)
+                        # Try with fresh session on retry
+                        if _del_attempts > 1:
+                            try:
+                                session.close()
+                                session = None
+                            except Exception:
+                                pass
+                    else:
+                        logger.warning("[DISPATCH] delivered_at failed after %d attempts: %s — skipping to prevent stuck anchor", _del_attempts, str(_del_err)[:150])
             if not _early_del_ok:
                 return  # anchor stays pending, next scan will retry
 

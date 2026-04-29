@@ -7353,25 +7353,33 @@ async def on_startup(app):
         if session_db:
             session_db.close()
 
-    # Set webhook for production mode
+    # Set webhook for production mode (with guard against flood)
     if bot and not LOCAL:
-        webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
-        _set_ok = False
-        for _attempt in range(3):
-            try:
-                await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
-                logger.info(f"✅ Webhook set to: {webhook_url}")
-                _set_ok = True
-                break
-            except Exception as e:
-                if _attempt >= 2:
-                    logger.error(f"❌ Failed to set webhook after retries: {e}")
+        # Не переустанавливаем webhook чаще чем раз в 5 минут (защита от Telegram flood limit)
+        import time as _t_mod
+        _webhook_guard = getattr(globals(), '_webhook_last_attempt', 0)
+        _now = _t_mod.time()
+        if _now - _webhook_guard < 300:  # 5 минут
+            logger.info("[WEBHOOK] Skipped (attempted %d seconds ago); next attempt in %d seconds", int(_now - _webhook_guard), int(300 - (_now - _webhook_guard)))
+        else:
+            webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
+            _set_ok = False
+            for _attempt in range(3):
+                try:
+                    await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
+                    logger.info(f"✅ Webhook set to: {webhook_url}")
+                    _set_ok = True
                     break
-                _sleep = 3 * (_attempt + 1)  # 3s, 6s — give Telegram flood limit time to clear
-                await asyncio.sleep(_sleep)
-                logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/3 after error: {e}")
-        if not _set_ok:
-            logger.warning("[WEBHOOK] Bot starts without confirmed webhook; platform will retry on next restart")
+                except Exception as e:
+                    if _attempt >= 2:
+                        logger.error(f"❌ Failed to set webhook after retries: {e}")
+                        break
+                    _sleep = 3 * (_attempt + 1)  # 3s, 6s — give Telegram flood limit time to clear
+                    await asyncio.sleep(_sleep)
+                    logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/3 after error: {e}")
+            if not _set_ok:
+                logger.warning("[WEBHOOK] Bot starts without confirmed webhook; platform will retry on next restart")
+            globals()['_webhook_last_attempt'] = _t_mod.time()
 
 
 async def on_shutdown(app):
