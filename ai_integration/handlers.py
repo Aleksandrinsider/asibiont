@@ -9002,8 +9002,27 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if posts_today >= 10 and not force:
             return "[INTERNAL] Пост в ленту уже опубликован (10/день лимит). НЕ сообщай пользователю — переключись на другую задачу (email, research, задачи)."
 
-        # ── Авто-генерация картинки если image_url не указан ──
-        # Проверяем пользовательские правила запрета картинок ПЕРЕД генерацией
+        # ── Сразу сохраняем пост в БД (без картинки) — гарантируем что пост создан ──
+        # Картинка генерируется в фоне и добавляется к посту асинхронно
+        post = Post(
+            user_id=user.id,
+            username=user.username or user.first_name or f"user_{user.telegram_id}",
+            content=content.strip(),
+            image_url=(image_url.strip() if image_url and image_url.strip() else None),
+            image_data=None,
+            image_mime=None,
+            created_at=dt.datetime.now(dt.timezone.utc)
+        )
+        session.add(post)
+        session.commit()
+        session.refresh(post)
+        _post_id = post.id
+        _post_image_url = post.image_url
+
+        post_preview = content[:80] + '...' if len(content) > 80 else content
+        logger.info(f"[CREATE_POST] User {user_id} saved post #{_post_id} (image pending): '{post_preview}'")
+
+        # ── Авто-генерация картинки (если нет image_url и правило не запрещает) — в фоне ──
         _skip_image_by_rule = False
         try:
             import json as _json_img_rule
@@ -9022,95 +9041,114 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         except Exception as _e_img_rule:
             logger.debug("suppressed image rule check: %s", _e_img_rule)
 
-        if (not image_url or not image_url.strip()) and not _skip_image_by_rule:
-            try:
-                _style = _extract_image_style_from_memory(user) or \
-                    'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
-            except Exception:
-                _style = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
-            try:
-                import re as _re_img
-                # Всегда генерируем описание сцены из текста поста через AI.
-                # _explicit_visual_prompt и _style используются ТОЛЬКО как style-модификатор,
-                # а не как замена сцены — иначе картинка не будет связана с темой поста.
-                _img_style_final = _explicit_visual_prompt or _style
+        if (not _post_image_url) and not _skip_image_by_rule:
+            async def _bg_generate_image(_post_id_bg: int, _content_bg: str, _explicit_vp_bg, _user_id_bg: int):
+                """Фоновая задача: генерирует картинку и обновляет пост."""
                 try:
-                    from ai_integration.api_client import get_api_client as _get_api_cp
-                    _api_cp = _get_api_cp()
-                    _vis_msgs = [
-                        {"role": "system", "content": (
-                            "Convert the post into a concrete image scene prompt in English. "
-                            "Return ONLY one short prompt (max 40 words), with specific objects, place, and action from the text. "
-                            "Stay faithful to the original topic: do not replace subject matter with decorative nature motifs unless the post explicitly mentions them. "
-                            "No meta-phrases like 'concept of' or 'idea of'."
-                        )},
-                        {"role": "user", "content": f"Текст поста:\n{content[:400]}"},
-                    ]
-                    _vis_resp = await _api_cp.chat(_vis_msgs, max_tokens=80, temperature=0.4)
-                    _img_prompt_final = (_vis_resp or '').strip().strip('"').strip("'") or content[:150]
-                except Exception as _vis_err:
-                    logger.debug(f"[CREATE_POST] Visual prompt AI failed: {_vis_err}")
-                    _img_prompt_final = content[:150].replace('\n', ' ').strip()
-                _img_result = await generate_image(
-                    prompt=_img_prompt_final,
-                    style=_img_style_final,
-                    user_id=user_id,
-                    session=session,
-                    close_session=False,
-                    send_to_telegram=False,
-                )
-                _img_match = _re_img.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result or '')
-                if _img_match:
-                    image_url = _img_match.group(1)
-                    logger.info(f"[CREATE_POST] Auto-generated image: {image_url[:100]}")
-                else:
-                    logger.info(f"[CREATE_POST] Auto image: no URL in result: {(_img_result or '')[:120]}")
-            except Exception as _img_err:
-                logger.warning(f"[CREATE_POST] Auto image generation failed: {_img_err}")
+                    _bg_session = Session()
+                    try:
+                        _style_bg = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+                        try:
+                            _post_user_bg = _bg_session.query(User).filter_by(telegram_id=_user_id_bg).first()
+                            if _post_user_bg:
+                                _style_bg = _extract_image_style_from_memory(_post_user_bg) or _style_bg
+                        except Exception:
+                            pass
+                        _img_style_bg = _explicit_vp_bg or _style_bg
+                        # AI генерирует описание сцены
+                        _img_prompt_bg = _content_bg[:150].replace('\n', ' ').strip()
+                        try:
+                            from ai_integration.api_client import get_api_client as _get_api_bg
+                            _api_bg = _get_api_bg()
+                            _vis_resp_bg = await _api_bg.chat([
+                                {"role": "system", "content": (
+                                    "Convert the post into a concrete image scene prompt in English. "
+                                    "Return ONLY one short prompt (max 40 words). "
+                                    "No meta-phrases like 'concept of'."
+                                )},
+                                {"role": "user", "content": f"Post:\n{_content_bg[:400]}"},
+                            ], max_tokens=80, temperature=0.4)
+                            _img_prompt_bg = (_vis_resp_bg or '').strip().strip('"').strip("'") or _img_prompt_bg
+                        except Exception:
+                            pass
+                        import re as _re_bg
+                        _img_result_bg = await generate_image(
+                            prompt=_img_prompt_bg, style=_img_style_bg,
+                            user_id=_user_id_bg, session=_bg_session,
+                            close_session=False, send_to_telegram=False,
+                        )
+                        _img_match_bg = _re_bg.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result_bg or '')
+                        if _img_match_bg:
+                            _img_url_bg = _img_match_bg.group(1)
+                            # Скачиваем байты
+                            _img_bytes_bg, _img_mime_bg = None, 'image/webp'
+                            try:
+                                import aiohttp as _ah_bg
+                                async with _ah_bg.ClientSession() as _http_bg:
+                                    async with _http_bg.get(_img_url_bg, timeout=_ah_bg.ClientTimeout(total=30)) as _r_bg:
+                                        if _r_bg.status == 200:
+                                            _img_bytes_bg = await _r_bg.read()
+                                            _img_mime_bg = _r_bg.content_type or 'image/webp'
+                            except Exception as _dl_bg_e:
+                                logger.debug("[CREATE_POST_BG] Image download failed: %s", _dl_bg_e)
+                            # Обновляем пост
+                            _post_bg = _bg_session.query(Post).filter_by(id=_post_id_bg).first()
+                            if _post_bg:
+                                _post_bg.image_url = _img_url_bg
+                                if _img_bytes_bg:
+                                    _post_bg.image_data = _img_bytes_bg
+                                    _post_bg.image_mime = _img_mime_bg
+                                _bg_session.commit()
+                                logger.info(f"[CREATE_POST_BG] Image attached to post #{_post_id_bg}: {_img_url_bg[:80]}")
+                                # Обновляем блог-заметку тоже
+                                try:
+                                    from models import Note as _NoteBG
+                                    _note_bg = _bg_session.query(_NoteBG).filter_by(
+                                        user_id=_post_bg.user_id, source='blog'
+                                    ).order_by(_NoteBG.id.desc()).first()
+                                    if _note_bg and _note_bg.content and 'PENDING_CP_ID' in _note_bg.content:
+                                        if _img_bytes_bg:
+                                            _note_bg.image_data = _img_bytes_bg
+                                            _note_bg.image_mime = _img_mime_bg
+                                            _note_bg.content = _note_bg.content.replace('PENDING_CP_ID', str(_note_bg.id))
+                                        else:
+                                            _note_bg.content = _note_bg.content.replace(
+                                                '(/blog/image/PENDING_CP_ID)', f'({_img_url_bg})'
+                                            )
+                                        _bg_session.commit()
+                                except Exception as _note_bg_e:
+                                    logger.debug("[CREATE_POST_BG] Note update failed: %s", _note_bg_e)
+                    finally:
+                        _bg_session.close()
+                except Exception as _bg_e:
+                    logger.warning(f"[CREATE_POST_BG] Background image generation failed: {_bg_e}")
 
-        # Скачиваем байты картинки для постоянного хранения
-        _img_bytes = None
-        _img_mime = None
-        if image_url and image_url.strip():
+            try:
+                import asyncio as _aio_cp_img
+                _aio_cp_img.get_running_loop().create_task(
+                    _bg_generate_image(_post_id, content.strip(), _explicit_visual_prompt, user_id)
+                )
+                logger.info(f"[CREATE_POST] Image generation started in background for post #{_post_id}")
+            except Exception as _task_e:
+                logger.debug("[CREATE_POST] Could not start background image task: %s", _task_e)
+        elif image_url and image_url.strip():
+            # Если image_url уже есть — сохраняем байты синхронно (быстро)
             try:
                 import aiohttp as _aiohttp_dl
                 async with _aiohttp_dl.ClientSession() as _dl_http:
                     async with _dl_http.get(
-                        image_url.strip(),
-                        timeout=_aiohttp_dl.ClientTimeout(total=30),
+                        image_url.strip(), timeout=_aiohttp_dl.ClientTimeout(total=30),
                     ) as _dl_resp:
                         if _dl_resp.status == 200:
                             _img_bytes = await _dl_resp.read()
                             _img_mime = _dl_resp.content_type or 'image/webp'
+                            post.image_data = _img_bytes
+                            post.image_mime = _img_mime
+                            session.commit()
                             logger.info(f"[CREATE_POST] Downloaded image bytes: {len(_img_bytes)} bytes")
-                        else:
-                            logger.warning(f"[CREATE_POST] Image download failed: HTTP {_dl_resp.status}")
             except Exception as _dl_err:
                 logger.warning(f"[CREATE_POST] Image download error: {_dl_err}")
 
-        post = Post(
-            user_id=user.id,
-            username=user.username or user.first_name or f"user_{user.telegram_id}",
-            content=content.strip(),
-            image_url=(image_url.strip() if image_url and image_url.strip() else None),
-            image_data=_img_bytes,
-            image_mime=_img_mime,
-            created_at=dt.datetime.now(dt.timezone.utc)
-        )
-        
-        session.add(post)
-        session.commit()
-        session.refresh(post)
-        # Сохраняем поля до любых await — после publish_to_telegram/publish_to_discord
-        # сессия может сделать commit с expire_on_commit=True, что детачит объект.
-        # Обращение к post.id / post.image_url после этого → DetachedInstanceError.
-        _post_id = post.id
-        # Для кросс-постинга в TG/Discord используем оригинальный Replicate URL (байты уже скачаны)
-        _post_image_url = post.image_url  # ephemeral Replicate URL — для отправки файла в TG
-
-        post_preview = content[:80] + '...' if len(content) > 80 else content
-        has_img = bool(_post_image_url)
-        logger.info(f"[CREATE_POST] User {user_id} published post #{_post_id}: '{post_preview}' image={has_img}")
 
         # ── Кросс-постинг в TG и Discord с той же картинкой ──
         cross_notes = []
@@ -9201,7 +9239,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             logger.warning(f"[CREATE_POST] Blog note creation failed: {_bn_err}")
 
         return (
-            f" Пост #{_post_id} опубликован в блог{cross_line}!{' ' if has_img else ''}\n\n"
+            f" Пост #{_post_id} опубликован в блог{cross_line}!\n\n"
             f"«{post_preview}»\n\nСсылка на блог: {_blog_url}"
         )
         

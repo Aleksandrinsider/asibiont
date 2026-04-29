@@ -4647,9 +4647,9 @@ class HybridAutonomousAgent:
                     'send_outreach_email': 45, 'send_follow_up_email': 45,
                     'reply_to_outreach_email': 45, 'negotiate_by_email': 45,
                     'check_emails': 45,
-                    'generate_image': 90,
+                    'generate_image': 120,
                     'publish_to_telegram': 45, 'publish_to_discord': 45,
-                    'create_post': 60,
+                    'create_post': 45,  # пост сохраняется сразу, картинка — в фоне
                 }
                 _DEFAULT_TOOL_TIMEOUT = 60
 
