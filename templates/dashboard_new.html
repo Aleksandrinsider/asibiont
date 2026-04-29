@@ -10592,7 +10592,7 @@ except Exception as e:
             cards.forEach(card => {
                 const search = card.getAttribute('data-search') || '';
                 const show = !q || search.includes(q);
-                card.style.display = show ? '' : 'none';
+                card.style.display = show ? 'flex' : 'none';
                 if (show) visible++;
             });
             if (emptyEl) emptyEl.style.display = (visible === 0) ? '' : 'none';
