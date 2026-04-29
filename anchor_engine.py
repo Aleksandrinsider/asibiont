@@ -12027,6 +12027,7 @@ class AnchorEngine:
             _no_reply_info_data = data.get('no_reply_info', [])
             _hot_contacts_info_data = data.get('hot_contacts_info', [])
             _corp_new_info_data = data.get('corp_new_info', [])
+            _contacted_info_data = data.get('contacted_info', [])
 
             # Умный аналитический блок по базе контактов — только для целей с outreach-компонентом
             _known_dedup_str = ''
@@ -12072,6 +12073,13 @@ class AnchorEngine:
                     _kd_lines.append(
                         f"  ⏰ Без ответа >3д ({len(_no_reply_info_data)}): "
                         + ', '.join(_no_reply_info_data[:5])
+                    )
+                # Уже написали недавно — ЗАПРЕТ повторной отправки
+                if _contacted_info_data:
+                    _kd_lines.append(
+                        f"  🚫 УЖЕ ПИСАЛИ НЕДАВНО ({len(_contacted_info_data)}) — send_outreach_email им ЗАБЛОКИРОВАН, будет отклонён: "
+                        + ', '.join(_contacted_info_data[:8])
+                        + "\n  → Для них используй ТОЛЬКО send_follow_up_email (если прошло >3д) или ищи НОВЫХ контактов."
                     )
                 # Новые персональные — ещё не писали
                 if _new_contacts_info_data:
@@ -20839,6 +20847,7 @@ class AnchorEngine:
         _no_reply_info: list[str] = []        # contacted >3д без ответа
         _hot_contacts_info: list[str] = []   # replied/interested
         _corp_new_info: list[str] = []        # корп. email, статус new
+        _contacted_info: list[str] = []      # contacted <3д — им уже писали недавно, повтор заблокирован
         _now_for_ec = now_utc
         for _kc in _contacts_raw:
             _st = _kc.status or 'new'
@@ -20858,6 +20867,9 @@ class AnchorEngine:
                     _age_days = 0
                 if _age_days >= 3:
                     _no_reply_info.append(f'{_nm_kc} <{_em_kc}> ({_age_days}д)')
+                else:
+                    # Писали <3 дней назад — НЕ нужен повтор, сообщаем координатору
+                    _contacted_info.append(f'{_nm_kc} <{_em_kc}> (написали {_age_days}д назад)')
             elif _st in ('replied', 'interested'):
                 # Только если реально отправляли письмо — иначе статус проставлен агентом вручную
                 if _em_kc in {_ae.lower() for _ae in (_already_sent_emails_pre or [])}:
@@ -21667,6 +21679,7 @@ class AnchorEngine:
             'no_reply_info': _no_reply_info,
             'hot_contacts_info': _hot_contacts_info,
             'corp_new_info': _corp_new_info,
+            'contacted_info': _contacted_info,
             'integration_snapshots': _integration_data,
         }
 

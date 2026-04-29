@@ -4425,6 +4425,8 @@ class HybridAutonomousAgent:
                     _fc_content, user_message, user_id, [])
 
             _auto_saved_notes = []  # заголовки исследований, сохранённых в заметки в этом turn
+            _tool_name_iter_counts: dict = {}  # имя → кол-во итераций где вызывался
+            _tool_error_counts: dict = {}     # имя → кол-во ошибок/пустых результатов
 
             for iteration in range(MAX_ITERATIONS):
                 # Первая итерация может быть "required", остальные "auto"
@@ -4807,7 +4809,44 @@ class HybridAutonomousAgent:
                             all_execution_results.append(_r)
                             messages.append(_tool_msg)
 
-                # Если в этой итерации был delegate_task — добавляем инструкцию продолжать
+                # ── Цикл-детектор: если один и тот же инструмент вызывается ≥2 итераций
+                # подряд И возвращает ошибку — инжектируем стоп-сигнал для AI ──────────
+                _iter_tool_names = set(c[1] for c in _ready_calls)
+                for _itn in _iter_tool_names:
+                    _tool_name_iter_counts[_itn] = _tool_name_iter_counts.get(_itn, 0) + 1
+                # Проверяем результаты этой итерации на ошибки
+                for _itn in _iter_tool_names:
+                    _iter_errors = sum(
+                        1 for r in all_execution_results[-len(_ready_calls):]
+                        if not r.get('success') or
+                        any(kw in str(r.get('result', '')).lower()
+                            for kw in ('нет активной', 'ошибка', 'error', 'failed', 'недоступн', 'заблокирован', 'skipped'))
+                    )
+                    if _iter_errors > 0:
+                        _tool_error_counts[_itn] = _tool_error_counts.get(_itn, 0) + _iter_errors
+                # Принудительный стоп если инструмент зациклился (≥2 ошибки одного имени)
+                _stuck_tools = [
+                    t for t, ec in _tool_error_counts.items()
+                    if ec >= 2 and _tool_name_iter_counts.get(t, 0) >= 2
+                ]
+                if _stuck_tools:
+                    _stuck_str = ', '.join(_stuck_tools)
+                    logger.warning(f"[CYCLE_DETECT] Tools stuck ≥2 iters: {_stuck_str} — injecting stop")
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            f"⚠️ СТОП-СИГНАЛ СИСТЕМЫ: инструменты [{_stuck_str}] вызывались 2+ раза "
+                            f"и возвращали ошибки. "
+                            f"ОБЯЗАТЕЛЬНО: 1) если send_outreach_email — сначала вызови start_email_campaign "
+                            f"чтобы создать кампанию. 2) если publish_to_telegram — лимит исчерпан, используй "
+                            f"save_note и скажи пользователю что публикация запланирована на завтра. "
+                            f"3) В любом другом случае — опиши что сделал и что не получилось, "
+                            f"предложи альтернативный инструмент или подход. НЕ повторяй неудачный вызов."
+                        )
+                    })
+                    # Сбрасываем счётчики чтобы не спамить каждую итерацию
+                    for t in _stuck_tools:
+                        _tool_error_counts[t] = 0
                 # Но НЕ для вопросов — вопросы не требуют цепочки действий
                 _had_delegate = any(c[1] == 'delegate_task' for c in _ready_calls)
                 if _had_delegate and not _is_question_message(user_message):

@@ -1311,6 +1311,73 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "start_email_campaign",
+            "description": "📧 Создать email outreach-кампанию. Агент будет автономно искать контакты, генерировать персонализированные письма и отправлять их. Используй ПЕРЕД send_outreach_email если нет активной кампании, ИЛИ когда нужна новая кампания с другой целью/аудиторией. sender_name должен быть именем твоего агента (напр. 'Beatrice', 'Mark').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Короткое название кампании (2-5 слов). Пример: 'Outreach телеком-CEO', 'Привлечение AI-стартапов'"
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Цель кампании — что хотим получить от рассылки"
+                    },
+                    "target_audience": {
+                        "type": "string",
+                        "description": "Кто получатели писем: ниша, роль, индустрия. Пример: 'CEO телеком-операторов США', 'AI-стартапы Series A'"
+                    },
+                    "offer": {
+                        "type": "string",
+                        "description": "Что предлагаем: продукт, сервис, идея"
+                    },
+                    "sender_name": {
+                        "type": "string",
+                        "description": "Имя отправителя — используй СВОЁ ИМЯ АГЕНТА (например 'Beatrice', 'Mark'). Не оставляй пустым."
+                    },
+                    "tone": {
+                        "type": "string",
+                        "description": "Тон писем: professional, casual, friendly, motivational",
+                        "enum": ["professional", "casual", "friendly", "motivational"]
+                    },
+                    "daily_limit": {
+                        "type": "integer",
+                        "description": "Макс. писем в день (обычно 100)"
+                    },
+                    "landing_url": {
+                        "type": "string",
+                        "description": "Ссылка на сайт/лендинг — добавляется как CTA в конец каждого письма"
+                    }
+                },
+                "required": ["name", "goal", "target_audience", "offer"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_email_leads",
+            "description": "➕ Добавить email-адреса (лиды) в активную email-кампанию. Используй после web_search когда нашёл контакты — передай их в кампанию для отправки писем. leads — JSON-массив: [{\"email\": \"a@b.com\", \"name\": \"Имя\", \"company\": \"Компания\", \"context\": \"почему релевантен\"}]",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "leads": {
+                        "type": "string",
+                        "description": "JSON-массив контактов: [{\"email\": \"...\", \"name\": \"...\", \"company\": \"...\", \"context\": \"...\"}] или список email через запятую"
+                    },
+                    "campaign_id": {
+                        "type": "integer",
+                        "description": "ID кампании (если не указан — берётся последняя активная)"
+                    }
+                },
+                "required": ["leads"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "start_content_campaign",
             "description": "📝 Запустить автономную контент-кампанию: агент генерирует и публикует посты по расписанию. КРИТИЧНО: обязательно уточни время публикации у пользователя перед запуском.",
             "parameters": {
