@@ -619,13 +619,28 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         except Exception as _e_aps:
             logger.debug("[AUTO_POST] Could not load user rules for image: %s", _e_aps)
 
+        # Проверяем правила пользователя на запрет картинок ПЕРЕД генерацией
+        _NO_IMAGE_KW = (
+            'без картинк', 'без изображен', 'без иллюстрац', 'не генерируй картинк',
+            'не генерируй изображен', 'не добавляй картинк', 'не добавляй изображен',
+            'убери картинк', 'убери изображен', 'no image', 'without image',
+            'без фото', 'не нужна картинка', 'не нужно изображение',
+        )
+        _skip_image_by_rule = any(
+            any(kw in r.lower() for kw in _NO_IMAGE_KW)
+            for r in _user_rules_for_img
+        )
+        if _skip_image_by_rule:
+            logger.info("[AUTO_POST] Image generation skipped by user rule")
+
         image_url = ""
         try:
-            image_url = await _generate_image_for_post(
-                content,
-                style=_priority_img_style,
-                user_rules=_user_rules_for_img,
-            )
+            if not _skip_image_by_rule:
+                image_url = await _generate_image_for_post(
+                    content,
+                    style=_priority_img_style,
+                    user_rules=_user_rules_for_img,
+                )
             if image_url:
                 post.image_url = image_url
                 # Скачиваем байты для постоянного хранения
