@@ -8525,6 +8525,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Генерация изображений — если есть Replicate ключ
             if any(w in _lbl_ap for w in ('replicate', 'генерация изображен')):
                 _autopilot_tools.add('generate_image')
+            # ── Task-keyword override для автопилота: прямое поручение на публикацию ──
+            _task_l_ap = (task or '').lower()
+            if any(w in _task_l_ap for w in ('опублик', 'publish', 'разместить', 'пост', 'create_post', 'publish_to_telegram', 'в telegram', 'в канал', 'в тг', 'картинк', 'изображен', 'generate_image')):
+                _autopilot_tools.update({'create_post', 'publish_to_telegram', 'generate_image'})
             logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
             try:
                 from .tools import get_available_tools as _gat_ap
@@ -8619,6 +8623,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _inferred_tools.add('generate_image')
             # Задачи всегда доступны
             _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
+            # ── Task-keyword override: если задача явно требует публикации → всегда добавляем инструменты ──
+            _task_l_inf = (task or '').lower()
+            if any(w in _task_l_inf for w in ('опублик', 'publish', 'разместить', 'разместить пост', 'пост', 'create_post', 'publish_to_telegram', 'в telegram', 'в канал', 'в тг', 'generate_image', 'картинк', 'изображен')):
+                _inferred_tools.update({'create_post', 'publish_to_telegram', 'generate_image'})
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
             _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
             if _inferred_tools and not _base_only:
