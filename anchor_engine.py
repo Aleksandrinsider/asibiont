@@ -10159,6 +10159,20 @@ class AnchorEngine:
                                 "[ANCHOR-AUTOPILOT] HALLUCINATION detected user=%d agent=%s claims=%s tools=%s",
                                 user.id, _chosen_name, _halluc_warns, _tools_used,
                             )
+                        # ── Финансовый фильтр: агент не имеет права принимать денежные обязательства ──
+                        _fin_halluc_re = re.compile(
+                            r'(\d[\s\d]*(?:руб|р\.|$|€|usd|eur)[^\а-яА-Я]|'
+                            r'за\s+\d[\d\s]*(?:руб|р\.|тыс|тысяч|млн)|'
+                            r'(?:подтвердил[аи]?|согласовал[аи]?|договорил[аи]?(?:ся)?|оплатил[аи]?|выставил[аи]?\s+счёт|'
+                            r'счёт\s+(?:на|выставлен)|стоимость\s+\d|\d.*?(?:тыс|млн).*?руб))',
+                            re.IGNORECASE,
+                        )
+                        if _fin_halluc_re.search(_cleaned_result):
+                            logger.warning(
+                                "[ANCHOR-AUTOPILOT] FINANCIAL HALLUCINATION blocked user=%d agent=%s text=%r",
+                                user.id, _chosen_name, _cleaned_result[:200],
+                            )
+                            _cleaned_result = ''  # обнуляем — ниже будет skip empty
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
                         await asyncio.sleep(2)
                         try:
@@ -18078,6 +18092,20 @@ class AnchorEngine:
                 if _is_minor_update:
                     _minor_updates_summary.append(f"{_ag_name}: {_cleaned[:120]}")
 
+                # ── Финансовый фильтр coordinator step ──
+                _fin_coord_re = re.compile(
+                    r'(\d[\s\d]*(?:руб|р\.|млн|тыс)[^а-яА-Я]|'
+                    r'за\s+\d[\d\s]*(?:руб|р\.|тыс|млн)|'
+                    r'(?:подтвердил[аи]?|согласовал[аи]?|договорил[аи]?(?:ся)?|оплатил[аи]?|выставил[аи]?\s+счёт))',
+                    re.IGNORECASE,
+                )
+                if _cleaned and _fin_coord_re.search(_cleaned):
+                    logger.warning(
+                        "[COORD] FINANCIAL HALLUCINATION blocked step user=%d agent=%s text=%r",
+                        user.id, _ag_name, _cleaned[:200],
+                    )
+                    _cleaned = ''
+
                 # ── Сохраняем результат каждого шага отдельно — пользователь видит весь прогресс ──
                 try:
                     _skip_step_cap = (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name))
@@ -18726,6 +18754,7 @@ class AnchorEngine:
                         f"Автопилот должен ДЕЙСТВОВАТЬ и ИНФОРМИРОВАТЬ. Если данных не хватает — сам прими решение и сообщи что сделал.\n"
                         f"- Если агент не привёл конкретного результата — не упоминай его.\n"
                         f"- НЕ ВЫДУМЫВАЙ: если в данных нет передачи задачи другому агенту — НЕ ПИШИ 'передала Марку' или 'поручила коллеге'. Только реальные факты из отчёта.\n"
+                        f"- ❌ ФИНАНСОВЫЙ ЗАПРЕТ: НЕ УПОМИНАЙ конкретные суммы в рублях/долларах/евро (ни 'за 150 000 руб.', ни 'бюджет 50$'), НЕ ПИШИ о подтверждении оплаты, выставлении счётов, согласовании стоимости — агент не имеет полномочий на финансовые обязательства. Только информационные действия: нашёл, написал, предложил.\n"
                         + _note_hint
                         + f"- АНТИПОВТОР: меняй структуру и порядок — не начинай каждый раз одинаково.\n"
                         f"- ЗАВЕРШЁННОСТЬ: каждое предложение ОБЯЗАНО быть закончено — подлежащее, сказуемое, точка. "
@@ -18742,6 +18771,22 @@ class AnchorEngine:
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:
                         _report_text = _report_gen.strip()
+                        # ── Финансовый фильтр: блокируем отчёты с незапрошенными суммами ──
+                        # Агент не имеет права принимать финансовые обязательства от имени пользователя.
+                        # Если AI всё равно сгенерировал сумму — обнуляем отчёт (лучше ничего, чем ложь).
+                        _fin_re = re.compile(
+                            r'(\d[\s\d]*(?:руб|р\.|\$|€|usd|eur)[^а-яА-Я]|'
+                            r'за\s+\d[\d\s]*(?:руб|р\.|тыс|тысяч|млн)|'
+                            r'(?:подтвердил[аи]?|согласовал[аи]?|договорил[аи]?(?:сь)?|оплатил[аи]?|выставил[аи]?\s+счёт|'
+                            r'счёт\s+(?:на|выставлен)|стоимость\s+\d|\d.*?(?:тыс|млн).*?руб))',
+                            re.IGNORECASE,
+                        )
+                        if _fin_re.search(_report_text):
+                            logger.warning(
+                                "[COORD] FINANCIAL HALLUCINATION blocked in coordinator_summary user=%d: %r",
+                                user.id, _report_text[:200],
+                            )
+                            _report_text = ''
                     else:
                         # AI вернул пустую строку — всё равно сохраняем минимальный coordinator_summary в AAL
                         try:
