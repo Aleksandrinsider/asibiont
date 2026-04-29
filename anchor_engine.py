@@ -8636,6 +8636,20 @@ class AnchorEngine:
                             # Частый случай: "У Olivia уже есть ..." → "у тебя уже есть ..."
                             if _chosen_name:
                                 _name_esc_any = _re_post.escape(_chosen_name)
+                                # Частый кейс: "Hugo, У Hugo ..." → "Hugo, у тебя ..."
+                                _gen = _re_post.sub(
+                                    rf'^(\s*{_name_esc_any}\s*,\s*)у\s+{_name_esc_any}\b',
+                                    r'\1у тебя',
+                                    _gen,
+                                    flags=_re_post.IGNORECASE,
+                                )
+                                # Общий кейс: "У Hugo ..." (без слова "есть") → "у тебя ..."
+                                _gen = _re_post.sub(
+                                    rf'\bу\s+{_name_esc_any}\b',
+                                    'у тебя',
+                                    _gen,
+                                    flags=_re_post.IGNORECASE,
+                                )
                                 _gen = _re_post.sub(
                                     rf'\bу\s+{_name_esc_any}\s+(уже\s+|как\s+раз\s+|теперь\s+)?есть\b',
                                     lambda m: 'у тебя ' + (m.group(1) or '') + 'есть',
