@@ -528,6 +528,20 @@
             });
         }
 
+        function _expandProfileSection() {
+            const content = document.getElementById('profile-content');
+            const button = document.getElementById('profile-toggle-btn');
+            const svg = button ? button.querySelector('svg') : null;
+            const profileSection = document.querySelector('.context-section');
+            const indicator = document.getElementById('profile-update-indicator');
+            if (!content || content.style.display !== 'none') return;
+            content.style.display = 'block';
+            if (svg) svg.style.transform = 'rotate(0deg)';
+            if (profileSection) profileSection.classList.remove('collapsed');
+            if (indicator) indicator.style.display = 'none';
+            localStorage.setItem('profileCollapsed', 'false');
+        }
+
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
             const button = document.getElementById('profile-toggle-btn');
@@ -1043,6 +1057,7 @@
                         content.style.display = 'none';
                         if (svg) svg.style.transform = 'rotate(-90deg)';
                         if (section) section.classList.add('collapsed');
+                        _expandProfileSection();
                     }
                 }
 
@@ -1062,6 +1077,7 @@
                         content.style.display = 'none';
                         if (svg) svg.style.transform = 'rotate(-90deg)';
                         if (section) section.classList.add('collapsed');
+                        _expandProfileSection();
                     }
                 }
 
