@@ -1012,6 +1012,11 @@
                                 <span data-i18n="delete-all-email-contacts">Удалить все контакты</span>
                             </button>
                         </div>
+                        <!-- Поиск по контактам -->
+                        <div style="position: relative; margin-bottom: 10px;">
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="#9CA3AF" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+                            <input type="text" id="email-contacts-search" placeholder="Поиск контактов..." oninput="filterEmailContacts(this.value)" style="width: 100%; box-sizing: border-box; padding: 7px 10px 7px 30px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s; background: #F6F8FA;" onfocus="this.style.borderColor='#068487'; this.style.background='#fff'" onblur="this.style.borderColor='#D1D9E0'; this.style.background='#F6F8FA'">
+                        </div>
                         <!-- Список email-контактов -->
                         <div class="people-list" id="contacts-list">
                             <div id="contacts-empty" style="padding: 20px; text-align: center; color: #6C727F; font-size: 12px;" data-i18n="contacts-empty-short">Нет контактов</div>
@@ -10552,6 +10557,7 @@ except Exception as e:
                     const card = document.createElement('div');
                     card.className = 'contact-card';
                     card.setAttribute('data-contact-id', c.id);
+                    card.setAttribute('data-search', [c.email, c.name, c.company, c.notes].filter(Boolean).join(' ').toLowerCase());
                     card.style.cssText = 'display: flex; gap: 8px; padding: 0 0 8px 0; margin-bottom: 8px; font-size: 12px; align-items: center; border-bottom: 1px solid #F0F0F0;';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
@@ -10576,6 +10582,20 @@ except Exception as e:
             } catch (err) {
                 console.error('Failed to load contacts:', err);
             }
+        }
+
+        function filterEmailContacts(query) {
+            const q = (query || '').toLowerCase().trim();
+            const cards = document.querySelectorAll('#contacts-list .contact-card');
+            const emptyEl = document.getElementById('contacts-empty');
+            let visible = 0;
+            cards.forEach(card => {
+                const search = card.getAttribute('data-search') || '';
+                const show = !q || search.includes(q);
+                card.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+            if (emptyEl) emptyEl.style.display = (visible === 0) ? '' : 'none';
         }
 
         async function addManualContact() {
