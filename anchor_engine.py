@@ -10160,6 +10160,7 @@ class AnchorEngine:
                                 user.id, _chosen_name, _halluc_warns, _tools_used,
                             )
                         # ── Финансовый фильтр: агент не имеет права принимать денежные обязательства ──
+                        # НО: если юзер сам назвал сумму в последних сообщениях → разрешаем повтор.
                         _fin_halluc_re = re.compile(
                             r'(\d[\s\d]*(?:руб|р\.|$|€|usd|eur)[^\а-яА-Я]|'
                             r'за\s+\d[\d\s]*(?:руб|р\.|тыс|тысяч|млн)|'
@@ -10168,11 +10169,34 @@ class AnchorEngine:
                             re.IGNORECASE,
                         )
                         if _fin_halluc_re.search(_cleaned_result):
-                            logger.warning(
-                                "[ANCHOR-AUTOPILOT] FINANCIAL HALLUCINATION blocked user=%d agent=%s text=%r",
-                                user.id, _chosen_name, _cleaned_result[:200],
-                            )
-                            _cleaned_result = ''  # обнуляем — ниже будет skip empty
+                            _ap_user_fin: set[str] = set()
+                            try:
+                                from models import Interaction as _InterAP
+                                _ap_usr_msgs = session.query(_InterAP.content).filter(
+                                    _InterAP.user_id == user.id,
+                                    _InterAP.message_type == 'user',
+                                    _InterAP.created_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                                ).order_by(_InterAP.created_at.desc()).limit(10).all()
+                                for (_auc,) in _ap_usr_msgs:
+                                    if not _auc:
+                                        continue
+                                    try:
+                                        _auj = json.loads(_auc)
+                                        _autxt = _auj.get('text', _auj.get('message', str(_auj)))
+                                    except Exception:
+                                        _autxt = str(_auc)
+                                    for _m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _autxt):
+                                        _ap_user_fin.add(re.sub(r'\s', '', _m))
+                            except Exception as _apfe:
+                                logger.debug("[ANCHOR-AUTOPILOT] user_fin_amounts error: %s", _apfe)
+                            _ap_gen_nums = {re.sub(r'\s', '', m) for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cleaned_result)}
+                            _ap_halluc_nums = _ap_gen_nums - _ap_user_fin
+                            if _ap_halluc_nums:
+                                logger.warning(
+                                    "[ANCHOR-AUTOPILOT] FINANCIAL HALLUCINATION blocked user=%d agent=%s halluc_nums=%s text=%r",
+                                    user.id, _chosen_name, _ap_halluc_nums, _cleaned_result[:200],
+                                )
+                                _cleaned_result = ''  # обнуляем — ниже будет skip empty
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
                         await asyncio.sleep(2)
                         try:
@@ -16140,6 +16164,28 @@ class AnchorEngine:
             # максимум 20 чтобы цикл не затягивался при большой команде.
             _MAX_DYNAMIC_STEPS = max(len(real_agents), 6, min(len(real_agents) + len(_goals), 20))
 
+            # ── Числа из сообщений пользователя (разрешены в финансовом фильтре) ──
+            _coord_user_fin_amounts: set[str] = set()
+            try:
+                from models import Interaction as _InterCoord
+                _coord_usr_msgs = session.query(_InterCoord.content).filter(
+                    _InterCoord.user_id == user.id,
+                    _InterCoord.message_type == 'user',
+                    _InterCoord.created_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                ).order_by(_InterCoord.created_at.desc()).limit(10).all()
+                for (_cuc,) in _coord_usr_msgs:
+                    if not _cuc:
+                        continue
+                    try:
+                        _cuj = json.loads(_cuc)
+                        _cutxt = _cuj.get('text', _cuj.get('message', str(_cuj)))
+                    except Exception:
+                        _cutxt = str(_cuc)
+                    for _cm in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cutxt):
+                        _coord_user_fin_amounts.add(re.sub(r'\s', '', _cm))
+            except Exception as _cufe:
+                logger.debug("[COORD] coord_user_fin_amounts error: %s", _cufe)
+
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
             _retry_done: dict = {}  # retry-флаги локальны для цикла (не persist между циклами)
@@ -18093,6 +18139,7 @@ class AnchorEngine:
                     _minor_updates_summary.append(f"{_ag_name}: {_cleaned[:120]}")
 
                 # ── Финансовый фильтр coordinator step ──
+                # Разрешены числа, которые пользователь сам упомянул. Остальные — галлюцинация.
                 _fin_coord_re = re.compile(
                     r'(\d[\s\d]*(?:руб|р\.|млн|тыс)[^а-яА-Я]|'
                     r'за\s+\d[\d\s]*(?:руб|р\.|тыс|млн)|'
@@ -18100,11 +18147,14 @@ class AnchorEngine:
                     re.IGNORECASE,
                 )
                 if _cleaned and _fin_coord_re.search(_cleaned):
-                    logger.warning(
-                        "[COORD] FINANCIAL HALLUCINATION blocked step user=%d agent=%s text=%r",
-                        user.id, _ag_name, _cleaned[:200],
-                    )
-                    _cleaned = ''
+                    _cs_gen_nums = {re.sub(r'\s', '', m) for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cleaned)}
+                    _cs_halluc_nums = _cs_gen_nums - _coord_user_fin_amounts
+                    if _cs_halluc_nums:
+                        logger.warning(
+                            "[COORD] FINANCIAL HALLUCINATION blocked step user=%d agent=%s halluc_nums=%s text=%r",
+                            user.id, _ag_name, _cs_halluc_nums, _cleaned[:200],
+                        )
+                        _cleaned = ''
 
                 # ── Сохраняем результат каждого шага отдельно — пользователь видит весь прогресс ──
                 try:
@@ -18573,6 +18623,15 @@ class AnchorEngine:
             if _results_for_report:
                 try:
                     _report_items = '\n'.join(f"• {r}" for r in _results_for_report[:5])
+
+                    # ── Суммы, которые ПОЛЬЗОВАТЕЛЬ сам упомянул (разрешены в отчёте) ──
+                    # _coord_user_fin_amounts уже вычислен в начале coordinator loop.
+                    # Здесь добавляем числа из самих report_items (результаты реальных инструментов).
+                    _items_fin_amounts = {
+                        re.sub(r'\s', '', m)
+                        for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _report_items)
+                    }
+                    _allowed_fin_amounts = _coord_user_fin_amounts | _items_fin_amounts
                     # Перезагружаем актуальный прогресс целей (агенты могли обновить за время цикла)
                     try:
                         from models import Goal as _Goal_fresh
@@ -18773,7 +18832,7 @@ class AnchorEngine:
                         _report_text = _report_gen.strip()
                         # ── Финансовый фильтр: блокируем отчёты с незапрошенными суммами ──
                         # Агент не имеет права принимать финансовые обязательства от имени пользователя.
-                        # Если AI всё равно сгенерировал сумму — обнуляем отчёт (лучше ничего, чем ложь).
+                        # НО: если юзер сам назвал сумму ИЛИ она есть в report_items (реальный инструмент) → пропускаем.
                         _fin_re = re.compile(
                             r'(\d[\s\d]*(?:руб|р\.|\$|€|usd|eur)[^а-яА-Я]|'
                             r'за\s+\d[\d\s]*(?:руб|р\.|тыс|тысяч|млн)|'
@@ -18782,11 +18841,17 @@ class AnchorEngine:
                             re.IGNORECASE,
                         )
                         if _fin_re.search(_report_text):
-                            logger.warning(
-                                "[COORD] FINANCIAL HALLUCINATION blocked in coordinator_summary user=%d: %r",
-                                user.id, _report_text[:200],
-                            )
-                            _report_text = ''
+                            # Извлечь числа из сгенерированного текста
+                            _gen_nums = {re.sub(r'\s', '', m) for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _report_text)}
+                            # Числа не из user-сообщений и не из реальных результатов — галлюцинация
+                            _halluc_nums = _gen_nums - _allowed_fin_amounts
+                            if _halluc_nums:
+                                logger.warning(
+                                    "[COORD] FINANCIAL HALLUCINATION blocked in coordinator_summary user=%d halluc_nums=%s: %r",
+                                    user.id, _halluc_nums, _report_text[:200],
+                                )
+                                _report_text = ''
+                            # Иначе: числа пришли от пользователя или из инструментов → отчёт валиден
                     else:
                         # AI вернул пустую строку — всё равно сохраняем минимальный coordinator_summary в AAL
                         try:
