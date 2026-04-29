@@ -5157,7 +5157,7 @@ class AnchorEngine:
 
         async with lock:
             try:
-                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
                 await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
@@ -5242,7 +5242,7 @@ class AnchorEngine:
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
         # чтобы НЕ допускать CancelledError от asyncio.wait_for.
         import time as _time_inner
-        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
         _inner_budget_sec = max(30, _outer_timeout_sec - 30)
         _deadline = _time_inner.monotonic() + _inner_budget_sec
 
@@ -6731,10 +6731,14 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
-                            # timeout = coordinator plan (~60s) + N agents × 90-120s
-                            # Должен быть МЕНЬШЕ _process_user wrapper (default 300s)
-                            _outer_wrap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
-                            _coord_timeout = max(120, _outer_wrap - 60)
+                            # timeout = coordinator plan (~90s) + N agents × 120s + buffer
+                            # Масштабируется по числу агентов, но не превышает _process_user wrapper
+                            _outer_wrap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
+                            _n_coord_agents = len(_coord_real)
+                            _coord_timeout = min(
+                                max(300, 90 + _n_coord_agents * 120 + 60),
+                                _outer_wrap - 30,
+                            )
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
