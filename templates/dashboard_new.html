@@ -998,6 +998,11 @@
                         </button>
                     </div>
                     <div id="email-contacts-content" style="display: flex; flex-direction: column; padding: 0 4px;">
+                        <!-- Поиск по контактам -->
+                        <div style="position: relative; margin-bottom: 10px;">
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="#9CA3AF" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+                            <input type="text" id="email-contacts-search" placeholder="Поиск контактов..." oninput="filterEmailContacts(this.value)" style="width: 100%; box-sizing: border-box; padding: 7px 10px 7px 30px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s; background: #F6F8FA;" onfocus="this.style.borderColor='#068487'; this.style.background='#fff'" onblur="this.style.borderColor='#D1D9E0'; this.style.background='#F6F8FA'">
+                        </div>
                         <div id="email-filter-content" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; flex-shrink: 0;">
                             <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                             <div style="display: flex; gap: 6px;">
@@ -1011,11 +1016,6 @@
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
                                 <span data-i18n="delete-all-email-contacts">Удалить все контакты</span>
                             </button>
-                        </div>
-                        <!-- Поиск по контактам -->
-                        <div style="position: relative; margin-bottom: 10px;">
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="#9CA3AF" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
-                            <input type="text" id="email-contacts-search" placeholder="Поиск контактов..." oninput="filterEmailContacts(this.value)" style="width: 100%; box-sizing: border-box; padding: 7px 10px 7px 30px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s; background: #F6F8FA;" onfocus="this.style.borderColor='#068487'; this.style.background='#fff'" onblur="this.style.borderColor='#D1D9E0'; this.style.background='#F6F8FA'">
                         </div>
                         <!-- Список email-контактов -->
                         <div class="people-list" id="contacts-list">
