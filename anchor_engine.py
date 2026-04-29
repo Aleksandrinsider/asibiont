@@ -5126,18 +5126,19 @@ class AnchorEngine:
             session.close()
 
         # ── PHASE 1+2: Параллельная обработка eligible пользователей ──
-        # DB-scan безопасен при высоком параллелизме, AI ограничен семафором
-        BATCH_CONCURRENCY = 15  # ≤ DB pool total (30) — each user needs 1-2 connections
-        for i in range(0, len(eligible), BATCH_CONCURRENCY):
-            batch = eligible[i:i + BATCH_CONCURRENCY]
-            tasks = []
-            for uid in batch:
-                lock = self._scan_locks[uid]
-                if lock.locked():
-                    continue
-                tasks.append(self._process_user_safe(uid, lock))
-            if tasks:
-                await asyncio.gather(*tasks)
+        # Семафор вместо батчей: max 15 одновременно, но каждый независим.
+        # При батчах один медленный пользователь блокировал всю группу из 15.
+        # С семафором медленный пользователь держит 1 слот — остальные 14 работают.
+        _AI_SEM = asyncio.Semaphore(15)  # ≤ DB pool total (30) — each user needs 1-2 connections
+
+        async def _run_with_sem(uid: int):
+            lock = self._scan_locks[uid]
+            if lock.locked():
+                return
+            async with _AI_SEM:
+                await self._process_user_safe(uid, lock)
+
+        await asyncio.gather(*[_run_with_sem(uid) for uid in eligible])
 
     # Circuit breaker: пропускаем пользователей которые постоянно таймаутятся
     _timeout_counts: dict  # user_id -> consecutive timeout count
