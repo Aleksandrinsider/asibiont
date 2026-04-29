@@ -8925,6 +8925,17 @@ class AnchorEngine:
                     # Пример артефакта: "следующий шаг () по цели" → "следующий шаг по цели"
                     if _coord_text:
                         import re as _re_ct_parens
+                        # ── Универсальный truncation guard (все пути: vague-retry, fallback, normal) ──
+                        # Если текст не заканчивается на знак конца предложения — обрезаем на последнем полном
+                        if _coord_text[-1] not in '.!?»")\n':
+                            try:
+                                from ai_integration.utils import _rfind_sentence_end as _rfse_univ
+                                _lse_univ = _rfse_univ(_coord_text)
+                                if _lse_univ > len(_coord_text) * 0.35:
+                                    _coord_text = _coord_text[:_lse_univ + 1].strip()
+                                    logger.info("[COORD] universal truncation-guard applied for %s", _chosen_name)
+                            except Exception as _tg_univ_err:
+                                logger.debug("[COORD] universal truncation-guard error: %s", _tg_univ_err)
                         _coord_text = _re_ct_parens.sub(r'\s*\(\s*\)\s*', ' ', _coord_text).strip()
                         _coord_text = _re_ct_parens.sub(r'  +', ' ', _coord_text)
                         # ── Двойное имя агента: «Hugo, Hugo …» → «Hugo, …» ──────────────
