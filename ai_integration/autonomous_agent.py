@@ -8676,6 +8676,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _runtime_banned -= {
                     'update_goal_progress', 'add_task', 'complete_task',
                     'edit_task', 'delegate_task',
+                    # Публикационные инструменты не должны исчезать "в этом цикле"
+                    # из-за повторов за 24ч: это ломает контентные цепочки.
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'generate_image',
                     # Поисковые/базовые — каждый раз новый запрос, бан бессмысленен
                     'web_search', 'research_topic', 'quick_topic_search',
                     'check_emails', 'run_agent_action',
