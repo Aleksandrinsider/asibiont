@@ -3264,6 +3264,23 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 + '\n'.join(f"  • {t}" for t in _searched_topics[:5])
                 + "\n→ Попробуй: другую площадку, другую аудиторию, другой формат поиска или создай контент/письмо.\n"
             )
+        # ── Web search hard ban: 3+ поисков → принудительный пивот на действие ──
+        _web_search_hist_count = sum(
+            1 for _h in (agent_history or [])[:20]
+            if 'web_search' in _h.lower() or 'research_topic' in _h.lower()
+        )
+        if _web_search_hist_count >= 3:
+            _memory_block += (
+                f"\n⛔ ОБЯЗАТЕЛЬНЫЙ ПИВОТ — web_search/research_topic использован {_web_search_hist_count} раз!\n"
+                "СЛЕДУЮЩИЙ ШАГ ДОЛЖЕН БЫТЬ ДЕЙСТВИЕМ, а не поиском:\n"
+                "  → send_outreach_email (написать найденным контактам)\n"
+                "  → save_email_contact (сохранить найденные данные)\n"
+                "  → create_post / publish_to_telegram (опубликовать контент)\n"
+                "  → update_goal_progress (зафиксировать достигнутый результат)\n"
+                "  → delegate_task (делегировать коллеге с найденными данными)\n"
+                "Если данных нет — ВСЕГДА есть что делегировать или опубликовать.\n"
+                "Повторный поиск без действия = нарушение протокола автопилота.\n"
+            )
         _memory_block += _untried_block
         _memory_block += _check_emails_overuse
     elif team_history:
@@ -14413,7 +14430,10 @@ class AnchorEngine:
                 }
                 for _cs_strat, (_cs_ban_tools, _cs_alts) in _STRAT_CUMBAN_MAP.items():
                     _cs_count = _strategy_usage.get(_cs_strat, 0)
-                    if _cs_count < 4:
+                    # Research/direct_search стагнирует быстрее других стратегий:
+                    # предупреждаем уже после 2 циклов (не 4 как для остальных)
+                    _cs_threshold = 2 if _cs_strat in ('research', 'direct_search') else 4
+                    if _cs_count < _cs_threshold:
                         continue
                     # Только если есть альтернативные стратегии в команде
                     _cs_alt_avail = [

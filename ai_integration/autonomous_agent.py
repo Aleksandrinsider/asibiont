@@ -2995,14 +2995,44 @@ class HybridAutonomousAgent:
                                 _dl_user = _dl_sess.query(_DLUser).filter_by(telegram_id=user_id).first()
                                 if _dl_user:
                                     _dl_result_str = str(result)[:500] if result else ''
+                                    _dl_result_low = _dl_result_str.lower()
+                                    _dl_has_error = (
+                                        not result
+                                        or 'ошибка' in _dl_result_low
+                                        or 'error' in _dl_result_low
+                                        or 'failed' in _dl_result_low
+                                    )
+                                    # Нюансированный outcome_score: web_search получает
+                                    # пониженный базовый балл (0.5) — не должен доминировать
+                                    # в эмпирической памяти как "самый эффективный инструмент".
+                                    # Дополнительный бонус (+0.3) если нашёл контакт/email.
+                                    if _dl_has_error:
+                                        _dl_score = 0.2
+                                    elif tool_name in ('web_search', 'research_topic'):
+                                        _has_actionable = any(kw in _dl_result_low for kw in (
+                                            '@', 'email', 'contact', 'linkedin', 'github',
+                                            'контакт', 'почт', 'телефон',
+                                        ))
+                                        _dl_score = 0.75 if _has_actionable else 0.45
+                                    else:
+                                        _dl_score = 0.85
+                                    # Добавляем имя агента в context_summary для точной
+                                    # per-agent агрегации в эмпирической памяти
+                                    _dl_agent_data = self._active_agent_data.get(user_id)
+                                    _dl_agent_name = (
+                                        (_dl_agent_data.get('name', '') or '')
+                                        if isinstance(_dl_agent_data, dict) else ''
+                                    )
+                                    _dl_ctx_prefix = f"{_dl_agent_name}: " if _dl_agent_name else ''
+                                    _dl_ctx = (_dl_ctx_prefix + (str(reason) or ''))[:400]
                                     _dl = _DL(
                                         user_id=_dl_user.id,
                                         decision_type='tool_selection',
-                                        context_summary=(str(reason) or '')[:400],
+                                        context_summary=_dl_ctx,
                                         chosen_action=tool_name,
-                                        rationale=(str(reason) or '')[:400],
+                                        rationale=_dl_ctx,
                                         actual_outcome=_dl_result_str,
-                                        outcome_score=0.8 if (result and 'ошибка' not in _dl_result_str.lower() and 'error' not in _dl_result_str.lower()) else 0.2,
+                                        outcome_score=_dl_score,
                                     )
                                     _dl_sess.add(_dl)
                                     _dl_sess.commit()
