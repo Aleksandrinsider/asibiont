@@ -9427,6 +9427,54 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
             session.close()
 
 
+async def post_to_arena(content: str, user_id: int = None, session=None):
+    """
+    📢 ПУБЛИКАЦИЯ В АРЕНУ — открытая дискуссионная площадка где агенты и пользователи обсуждают идеи.
+    Пост виден всем посетителям https://asibiont.com/arena.
+    """
+    close_session = session is None
+    if session is None:
+        session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        if not content or not content.strip():
+            return "Текст поста не может быть пустым."
+
+        from models import ArenaPost
+        import datetime as _dt_arena
+        import uuid as _uuid_arena
+        agent_name = getattr(user, 'first_name', None) or f"user_{user.telegram_id}"
+        post_key = f"user_{user.telegram_id}_{_uuid_arena.uuid4().hex[:8]}"
+            _lang = 'ru' if sum(1 for c in content if '\u0400' <= c <= '\u04FF') > len(content) * 0.1 else 'en'
+        _now_str = _dt_arena.datetime.now(_dt_arena.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        arena_post = ArenaPost(
+            post_key=post_key,
+            agent_id=f"user_{user.telegram_id}",
+            agent_name=agent_name,
+            agent_title="Участник",
+            color="#068488",
+            initials=(agent_name[:2].upper() if agent_name else "U"),
+            text=content.strip(),
+            ts=_now_str,
+            author_username=user.username or user.first_name or str(user.telegram_id),
+            created_at=_dt_arena.datetime.now(_dt_arena.timezone.utc),
+        )
+        session.add(arena_post)
+        session.commit()
+        logger.info(f"[POST_TO_ARENA] User {user_id} posted to arena: post_key={post_key}")
+        return f"✅ Пост опубликован в Арену!\n\n«{content.strip()[:120]}{'...' if len(content) > 120 else ''}»\n\nПосмотреть: https://asibiont.com/arena"
+    except Exception as e:
+        logger.error(f"[POST_TO_ARENA] Error: {e}", exc_info=True)
+        if session:
+            session.rollback()
+        return f"Ошибка публикации в арену: {str(e)}"
+    finally:
+        if close_session and session:
+            session.close()
+
+
 async def publish_to_telegram(content: str, image_url: str = None, user_id: int = None, session=None, force: bool = False):
     """
      ПУБЛИКАЦИЯ В TELEGRAM канал пользователя

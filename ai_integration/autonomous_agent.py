@@ -1301,7 +1301,7 @@ class HybridAutonomousAgent:
         'save_email_contact', 'list_email_contacts',
         # Content creation
         'create_post', 'generate_image',
-        'publish_to_telegram', 'publish_to_discord',
+        'publish_to_telegram', 'publish_to_discord', 'post_to_arena',
         # Email (commonly requested even without keyword)
         'send_email', 'check_emails',
         # Delegation & agents
@@ -4342,7 +4342,7 @@ class HybridAutonomousAgent:
             seen_tools = set()  # Для предотвращения дублей
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
-            once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз; start_email_campaign разрешён повторно
+            once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'post_to_arena', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз; start_email_campaign разрешён повторно
             multi_limit_tools = {'add_task': 5, 'update_profile': 2, 'create_goal': 3, 'run_agent_action': 8, 'send_email': 5, 'delegate_task': 5}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
@@ -4382,6 +4382,8 @@ class HybridAutonomousAgent:
                 # create_post всегда доступен (сохранение записи без канала)
                 # create_post и generate_image всегда доступны (создание контента без канала)
                 _platform_publish.update({'create_post', 'generate_image'})
+                                # post_to_arena тоже всегда доступен — арена открыта для всех
+                                _platform_publish.add('post_to_arena')
                 _effective_allowed = _agent_tools_allowed | _platform_publish
                 _forbidden = _all_tool_names - _effective_allowed
                 tools_to_exclude = tools_to_exclude | _forbidden
