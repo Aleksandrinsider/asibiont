@@ -847,6 +847,7 @@ def run_migrations():
         _cleanup_junk_agent_tasks(session)
         _migrate_intelligence_tables(session, inspector)
         _backfill_posts_to_blog_notes(session, inspector)
+        _backfill_blog_note_images(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")
@@ -928,6 +929,82 @@ def _backfill_posts_to_blog_notes(session, inspector):
             logger.info(f"[MIGRATION] Backfilled {count} posts as blog Notes")
     except Exception as _e:
         logger.warning(f"[MIGRATION] Post->blog Note backfill failed: {_e}")
+        session.rollback()
+
+
+def _backfill_blog_note_images(session, inspector):
+    """Подтягивает постоянные картинки для blog Notes без image_data.
+    Приоритет источников:
+    1) posts.image_data (по slug ap-{post_id}-...)
+    2) скачивание из внешнего URL в первом markdown image
+    После сохранения байтов переписывает первую картинку на /blog/image/{note_id}.
+    """
+    if not (inspector.has_table('notes') and inspector.has_table('posts')):
+        return
+
+    try:
+        import re as _re_bni
+        import urllib.request as _urlreq
+        from models import Note as _NoteBni, Post as _PostBni
+
+        _slug_re = _re_bni.compile(r'^ap-(\d+)-')
+        _img_md_re = _re_bni.compile(r'^!\[[^\]]*\]\(([^)]+)\)', _re_bni.IGNORECASE)
+
+        notes = session.query(_NoteBni).filter_by(source='blog').all()
+        fixed = 0
+
+        for note in notes:
+            if getattr(note, 'image_data', None):
+                continue
+
+            image_bytes = None
+            image_mime = None
+
+            slug = (note.slug or '').strip()
+            m = _slug_re.match(slug)
+            if m:
+                try:
+                    post_id = int(m.group(1))
+                    post = session.query(_PostBni).filter_by(id=post_id).first()
+                    if post and getattr(post, 'image_data', None):
+                        image_bytes = post.image_data
+                        image_mime = post.image_mime or 'image/webp'
+                except Exception:
+                    pass
+
+            if not image_bytes:
+                content = note.content or ''
+                mdm = _img_md_re.search(content)
+                if mdm:
+                    img_url = (mdm.group(1) or '').strip()
+                    if img_url.startswith('http://') or img_url.startswith('https://'):
+                        try:
+                            req = _urlreq.Request(img_url, headers={'User-Agent': 'Mozilla/5.0'})
+                            with _urlreq.urlopen(req, timeout=15) as resp:
+                                image_bytes = resp.read()
+                                image_mime = (resp.headers.get('Content-Type') or 'image/webp').split(';')[0].strip()
+                        except Exception:
+                            image_bytes = None
+                            image_mime = None
+
+            if image_bytes:
+                note.image_data = image_bytes
+                note.image_mime = image_mime or 'image/webp'
+
+                # Переписываем только первую markdown-картинку на постоянный endpoint
+                local_tag = f"![Иллюстрация](/blog/image/{note.id})"
+                if _img_md_re.search(note.content or ''):
+                    note.content = _img_md_re.sub(local_tag, note.content or '', count=1)
+                else:
+                    note.content = f"{local_tag}\n\n{note.content or ''}".strip()
+
+                fixed += 1
+
+        if fixed:
+            session.commit()
+            logger.info(f"[MIGRATION] Backfilled permanent images for {fixed} blog Notes")
+    except Exception as _e:
+        logger.warning(f"[MIGRATION] Blog image backfill failed: {_e}")
         session.rollback()
 
 
