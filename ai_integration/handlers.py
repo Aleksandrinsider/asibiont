@@ -15638,8 +15638,30 @@ async def send_follow_up_email(
         # Подпись отправителя (если ИИ не добавил сам)
         _sig_name_fu = sender_name.strip()
         _body_signed_fu = body
-        if _sig_name_fu and _sig_name_fu.lower() not in body.lower()[-200:]:
+        _last_lines_fu = _body_signed_fu.lower()[-300:]
+        _has_sig_markers_fu = any(marker in _last_lines_fu for marker in [
+            'с уважением', 'regards', 'sincerely', 'yours truly',
+            'best regards', 'спасибо', 'thanks', '—', '– '
+        ])
+        if _sig_name_fu and not _has_sig_markers_fu and _sig_name_fu.lower() not in _last_lines_fu:
             _body_signed_fu = body.rstrip() + f"\n\n— {_sig_name_fu}"
+        # Сайт и Telegram — только если нет готовой подписи в теле
+        if not _has_sig_markers_fu:
+            _cta_url_fu = (campaign.landing_url or '').strip()
+            if not _cta_url_fu:
+                try:
+                    from models import UserProfile as _UP_fu
+                    _up_fu_obj = session.query(_UP_fu).filter_by(user_id=user.id).first()
+                    _cta_url_fu = (_up_fu_obj.website if _up_fu_obj else '') or ''
+                except Exception:
+                    _cta_url_fu = ''
+            if _cta_url_fu:
+                _plain_domain_fu = _cta_url_fu.replace('https://', '').replace('http://', '').split('/')[0]
+                if _plain_domain_fu and _plain_domain_fu.lower() not in _body_signed_fu.lower():
+                    _body_signed_fu = _body_signed_fu.rstrip() + f"\n{_plain_domain_fu}"
+            _tg_link_fu = _get_email_tg_link(user)
+            if _tg_link_fu and _tg_link_fu not in _body_signed_fu:
+                _body_signed_fu = _body_signed_fu.rstrip() + f'\n{_tg_link_fu}'
 
         _integrations = _get_user_email_integrations(user, session)
         _matched = None
