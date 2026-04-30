@@ -11032,7 +11032,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _pay_guard_text, _pay_guard_changed = _guard_unverified_payment_details(
             _final_text,
             _tool_blob,
-            user_message or '',
+            task or '',
         )
         if _pay_guard_changed:
             _final_text = _pay_guard_text
