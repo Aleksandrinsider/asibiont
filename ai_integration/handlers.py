@@ -9303,6 +9303,19 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
 
 
         # ── Кросс-постинг в TG и Discord с той же картинкой ──
+        def _is_publish_success(_result) -> bool:
+            _txt = str(_result or '').strip().lower()
+            if not _txt:
+                return False
+            _ok_markers = ('✅', 'успешно опублик', 'post successfully published', 'пост успешно опубликован')
+            _err_markers = (
+                'не удалось', 'не получилось', 'ошибка', 'не могу опубликовать',
+                'не настроен', 'недоступна', 'not configured', 'chat not found', 'нет доступа',
+            )
+            _has_ok = any(m in _txt for m in _ok_markers)
+            _has_err = any(m in _txt for m in _err_markers)
+            return _has_ok and not _has_err
+
         cross_notes = []
         try:
             if getattr(user, 'telegram_channel', None):
@@ -9313,7 +9326,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     session=session,
                     force=True,
                 )
-                if '✅' in str(_tg_result):
+                if _is_publish_success(_tg_result):
                     cross_notes.append(" TG-канал")
                 else:
                     cross_notes.append(f" TG: {str(_tg_result)[:80]}")
@@ -9328,7 +9341,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     session=session,
                     force=True,
                 )
-                if '✅' in str(_dc_result):
+                if _is_publish_success(_dc_result):
                     cross_notes.append(" Discord")
                 else:
                     cross_notes.append(f" Discord: {str(_dc_result)[:80]}")

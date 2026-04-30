@@ -252,6 +252,255 @@ def _extract_intg_hints(messages: list) -> list[str]:
     return hints
 
 
+def _guard_unverified_payment_details(final_text: str, tool_blob: str, user_message: str = "") -> tuple[str, bool]:
+    """Удаляет из ответа непроверенные реквизиты/платёжные детали.
+
+    Логика:
+    - если в тексте есть признаки реквизитов (карта/счёт/IBAN + длинные номера),
+      но в tool-данных нет подтверждения платёжного инструмента — вырезаем такие фрагменты;
+    - если пользователь явно просил "не давать реквизиты", убираем их всегда.
+    """
+    if not final_text:
+        return final_text, False
+
+    _text = str(final_text)
+    _tool_low = (tool_blob or "").lower()
+    _msg_low = (user_message or "").lower()
+
+    _payment_kw = (
+        'реквизит', 'карта', 'номер карты', 'card number', 'iban',
+        'swift', 'расчетный счет', 'расчётный счёт', 'счет', 'счёт',
+        'wallet', 'кошелек', 'кошелёк',
+    )
+    _tool_payment_markers = (
+        'yookassa', 'stripe', 'payment_link', 'invoice', 'checkout',
+        'transaction_id', 'shop_id', 'payment_url', 'invoice_url',
+    )
+    _user_no_payment_markers = (
+        'не надо реквизит', 'не отправляй реквизит', 'без реквизит',
+        'не присылай реквизит', 'do not send payment details',
+    )
+
+    _has_payment_words = any(k in _text.lower() for k in _payment_kw)
+    _has_long_digits = bool(re.search(r'\b(?:\d[\s-]?){12,22}\b', _text))
+    _has_iban = bool(re.search(r'\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b', _text))
+    _has_sensitive = _has_payment_words and (_has_long_digits or _has_iban)
+
+    _payment_verified = any(m in _tool_low for m in _tool_payment_markers)
+    _user_forbids_payment = any(m in _msg_low for m in _user_no_payment_markers)
+
+    if not _user_forbids_payment and (not _has_sensitive or _payment_verified):
+        return _text, False
+
+    _parts = re.split(r'(?<=[.!?])\s+|\n+', _text)
+    _filtered = []
+    _removed = False
+    for _p in _parts:
+        _pl = _p.lower()
+        _match_kw = any(k in _pl for k in _payment_kw)
+        _match_digits = bool(re.search(r'\b(?:\d[\s-]?){12,22}\b', _p))
+        _match_iban = bool(re.search(r'\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b', _p))
+        if _match_kw and (_match_digits or _match_iban or _user_forbids_payment):
+            _removed = True
+            continue
+        _filtered.append(_p)
+
+    _new_text = ' '.join(x.strip() for x in _filtered if x and x.strip()).strip()
+    _note = (
+        'Платёжные реквизиты не отправляю без подтверждённых данных из платёжной интеграции.'
+        if not _user_forbids_payment
+        else 'Реквизиты убрал: ты просил их не отправлять.'
+    )
+    if not _new_text:
+        _new_text = _note
+    elif _note.lower() not in _new_text.lower():
+        _new_text = f"{_new_text}\n{_note}".strip()
+
+    return _new_text, _removed
+
+
+def _guard_publish_consistency(final_text: str, tool_blob: str) -> tuple[str, bool]:
+    """Снимает противоречия в тексте про Telegram-публикацию.
+
+    Если инструменты вернули ошибку публикации (и нет подтверждённого success),
+    убираем ложные фразы "опубликовано". И наоборот.
+    """
+    if not final_text:
+        return final_text, False
+
+    _text = str(final_text)
+    _tool_low = (tool_blob or '').lower()
+
+    _err_markers = (
+        'telegram-канал не настроен', 'telegram channel not configured',
+        'bot не добавлен', 'нет доступа к telegram-каналу', 'chat not found',
+        'bot was kicked from the channel chat', 'не получилось опубликовать',
+        'не могу опубликовать', '"success": false',
+    )
+    _ok_markers = (
+        '"success": true', 'пост успешно опубликован', 'message_id',
+        'successfully published',
+    )
+
+    _has_err = any(m in _tool_low for m in _err_markers)
+    _has_ok = any(m in _tool_low for m in _ok_markers)
+    _before = _text
+
+    if _has_err and not _has_ok:
+        _text = re.sub(
+            r'[^.!?\n]*(?:опублик\w*|размещ\w*|posted|published)[^.!?\n]*(?:telegram|тг|tg|канал)[^.!?\n]*[.!?]?',
+            '',
+            _text,
+            flags=re.IGNORECASE,
+        )
+        _text = re.sub(r'\n{2,}', '\n', _text).strip(' \n.,;:-')
+        _fallback = 'В Telegram пока не опубликовано: канал не настроен или у бота нет доступа.'
+        if not _text:
+            _text = _fallback
+        elif _fallback.lower() not in _text.lower():
+            _text = f"{_text}\n{_fallback}".strip()
+    elif _has_ok and not _has_err:
+        _text = re.sub(
+            r'[^.!?\n]*(?:нет доступа|не настроен\w*|не могу опубликовать|не получилось опубликовать)[^.!?\n]*[.!?]?',
+            '',
+            _text,
+            flags=re.IGNORECASE,
+        )
+        _text = re.sub(r'\n{2,}', '\n', _text).strip(' \n.,;:-')
+
+    return _text, _text != _before
+
+
+def _collect_user_rules_text(user_obj) -> list[str]:
+    """Собирает пользовательские правила/предпочтения в виде списка строк."""
+    _rules: list[str] = []
+    if not user_obj:
+        return _rules
+
+    for _field in ('memory', 'long_term_memory'):
+        _raw = getattr(user_obj, _field, None)
+        if not _raw or not isinstance(_raw, str):
+            continue
+        _txt = _raw.strip()
+        if not _txt:
+            continue
+        try:
+            _obj = json.loads(_txt)
+            if isinstance(_obj, dict):
+                for _k in ('rules', 'preferences'):
+                    _vals = _obj.get(_k, [])
+                    if isinstance(_vals, list):
+                        _rules.extend([str(v).strip() for v in _vals if str(v).strip()])
+        except Exception:
+            # Legacy/plain-text memory fallback
+            _rules.append(_txt[:1000])
+
+    return _rules
+
+
+def _resolve_forbidden_tools(user_rules: list[str], user_message: str = '') -> dict[str, str]:
+    """Возвращает {tool_name: reason} по универсальным запретам пользователя.
+
+    Приоритет: явный запрет пользователя > поведение агента по умолчанию.
+    """
+    _domains = [
+        {
+            'name': 'publish',
+            'tools': {
+                'create_post', 'publish_to_telegram', 'publish_to_discord',
+                'publish_to_vk', 'publish_to_twitter', 'publish_to_linkedin',
+                'start_content_campaign',
+            },
+            'deny': (
+                r'не\s+(?:публикуй|выкладывай|размещай|пость|пости)',
+                r'без\s+публикац',
+                r'не\s+надо\s+пост',
+                r"don't\s+publish",
+                r'no\s+publish',
+            ),
+            'allow': (
+                r'можно\s+публиковать',
+                r'публикуй',
+                r"publish\s+it",
+            ),
+            'reason': 'Запрет пользователя: не публиковать контент.',
+        },
+        {
+            'name': 'email',
+            'tools': {
+                'send_outreach_email', 'send_email', 'reply_to_outreach_email',
+                'send_follow_up_email', 'negotiate_by_email', 'start_email_campaign',
+            },
+            'deny': (
+                r'не\s+(?:пиши|отправляй)\s+(?:письм|email|имейл|почт)',
+                r'без\s+(?:email|почт|рассыл)',
+                r'запрет\s+email',
+                r"don't\s+send\s+email",
+                r'no\s+email',
+            ),
+            'allow': (
+                r'можно\s+писать\s+(?:на\s+)?почт',
+                r'отправь\s+письмо',
+                r"send\s+email",
+            ),
+            'reason': 'Запрет пользователя: не отправлять email.',
+        },
+        {
+            'name': 'images',
+            'tools': {'generate_image'},
+            'deny': (
+                r'без\s+картин',
+                r'не\s+(?:генерируй|делай|добавляй)\s+(?:картин|изображен)',
+                r'без\s+изображени',
+                r"don't\s+generate\s+image",
+                r'no\s+image',
+            ),
+            'allow': (
+                r'можно\s+картин',
+                r'сделай\s+картин',
+                r"generate\s+image",
+            ),
+            'reason': 'Запрет пользователя: не генерировать изображения.',
+        },
+        {
+            'name': 'payments',
+            'tools': {'create_payment_link', 'process_yookassa_payment', 'send_payment_invoice'},
+            'deny': (
+                r'не\s+(?:нужно|надо)\s+реквизит',
+                r'не\s+отправляй\s+реквизит',
+                r'без\s+оплат',
+                r"don't\s+send\s+payment",
+                r'no\s+payment',
+            ),
+            'allow': (
+                r'можно\s+реквизит',
+                r'пришли\s+ссылк\w*\s+на\s+оплат',
+                r"send\s+payment\s+link",
+            ),
+            'reason': 'Запрет пользователя: не инициировать оплату/реквизиты.',
+        },
+    ]
+
+    _blocked: dict[str, str] = {}
+    _all_rules = [r for r in (user_rules or []) if isinstance(r, str) and r.strip()]
+    _msg = (user_message or '').strip()
+    _rules_blob = '\n'.join(_all_rules).lower()
+    _msg_low = _msg.lower()
+
+    for _d in _domains:
+        _allow_now = any(re.search(_p, _msg_low, flags=re.IGNORECASE) for _p in _d['allow'])
+        if _allow_now:
+            continue
+
+        _denied_by_mem = any(re.search(_p, _rules_blob, flags=re.IGNORECASE) for _p in _d['deny'])
+        _denied_by_msg = any(re.search(_p, _msg_low, flags=re.IGNORECASE) for _p in _d['deny'])
+        if _denied_by_mem or _denied_by_msg:
+            for _t in _d['tools']:
+                _blocked[_t] = _d['reason']
+
+    return _blocked
+
+
 def _get_active_agent_integration_snapshot(user_id: int) -> dict:
     """Возвращает срез интеграций ВСЕХ активных агентов для проверки доступности сервисов."""
     try:
@@ -2814,6 +3063,14 @@ class HybridAutonomousAgent:
 
         results = []
         try:
+            _user_obj_exec = None
+            try:
+                _user_obj_exec = session.query(User).filter_by(telegram_id=user_id).first()
+            except Exception as _ue:
+                logger.debug('[EXEC] user load for policy failed: %s', _ue)
+            _user_rules_exec = _collect_user_rules_text(_user_obj_exec)
+            _blocked_tools_exec = _resolve_forbidden_tools(_user_rules_exec, user_message or '')
+
             for action in actions:
                 tool_name = action.get('tool')
                 raw_params = action.get('params', {})
@@ -2823,6 +3080,18 @@ class HybridAutonomousAgent:
                     raw_params = {}
                 params = dict(raw_params)
                 reason = action.get('reason', '')
+
+                # Universal user-policy enforcement: запрещённые пользователем действия не выполняем.
+                _block_reason = _blocked_tools_exec.get(tool_name)
+                if _block_reason:
+                    logger.warning('[EXEC] %s BLOCKED by user policy: %s', tool_name, _block_reason)
+                    results.append({
+                        'tool': tool_name,
+                        'success': False,
+                        'error': _block_reason,
+                        'reason': reason,
+                    })
+                    continue
 
                 # Специальный обработчик: запуск скрипта агента с параметрами действия
                 if tool_name == 'run_agent_action':
@@ -10738,6 +11007,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _final_text = f"{_final_text}\n{_safe_note}".strip()
             if _before_text != _final_text:
                 logger.info('[DIRECTOR-EXEC] consistency guard adjusted final text after email send error')
+
+        # Publication consistency: не допускаем "опубликовано" при фактической ошибке публикации
+        _pub_guard_text, _pub_guard_changed = _guard_publish_consistency(_final_text, _tool_blob)
+        if _pub_guard_changed:
+            _final_text = _pub_guard_text
+            logger.info('[DIRECTOR-EXEC] publication consistency guard adjusted final text')
+
+        # Payment safety: убираем неподтверждённые реквизиты/платёжные детали
+        _pay_guard_text, _pay_guard_changed = _guard_unverified_payment_details(
+            _final_text,
+            _tool_blob,
+            user_message or '',
+        )
+        if _pay_guard_changed:
+            _final_text = _pay_guard_text
+            logger.info('[DIRECTOR-EXEC] payment details guard removed unverified data from final text')
 
     # Для автопилота без инструментов: если текст содержательный (>100 символов) — пропускаем как аналитику,
     # если короткий/шаблонный — noise-фильтр в _dispatch_agent_for_anchor отсечёт
