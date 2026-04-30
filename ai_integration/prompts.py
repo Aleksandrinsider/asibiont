@@ -13,6 +13,65 @@ from .system_prompt import select_prompt_version
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_rules_from_memory(user_memory) -> list:
+    """Extract user rules from encrypted/decrypted memory JSON when possible."""
+    if not user_memory:
+        return []
+    try:
+        _raw = str(user_memory).strip()
+        if not _raw.startswith('{'):
+            return []
+        _obj = json.loads(_raw)
+        _rules = _obj.get('rules', []) if isinstance(_obj, dict) else []
+        return [str(r).strip() for r in _rules if str(r).strip()]
+    except Exception:
+        return []
+
+
+def _build_universal_execution_contract(lang: str, profile_data: dict | None, user_memory: str, proactive_context) -> str:
+    """Builds a compact, machine-readable policy layer for any goal and integration set."""
+    _rules = _extract_rules_from_memory(user_memory)
+    _rules_l = ' | '.join(r.lower() for r in _rules)
+    _goal_text = (profile_data or {}).get('goals') if isinstance(profile_data, dict) else ''
+    _goal_text = str(_goal_text or '').strip()
+
+    _acq_priority = any(k in _rules_l for k in (
+        'новых пользователей', 'новые пользователи', 'new users', 'acquisition', 'привлечение'
+    ))
+    _no_calls = any(k in _rules_l for k in (
+        'не предлагать созвон', 'без созвонов', 'email only', 'no calls', 'no meetings'
+    ))
+
+    _integration_state = 'available' if str(proactive_context or '').strip() else 'unknown'
+
+    if lang == 'en':
+        _goal_line = _goal_text or 'not explicitly specified'
+        return (
+            "\nUNIVERSAL EXECUTION CONTRACT (for any user goals/integrations):\n"
+            f"- Primary goal focus: {_goal_line}\n"
+            f"- Acquisition priority mode: {'on' if _acq_priority else 'off'}\n"
+            f"- Email-only outreach mode (no calls/meetings): {'on' if _no_calls else 'off'}\n"
+            f"- Integration context state: {_integration_state}\n"
+            "- Decision loop for each step: choose the action with highest expected progress to user's current goal,\n"
+            "  while strictly honoring user rules and using connected integrations first.\n"
+            "- If required integration is missing: ask for one concrete connection step and provide fallback action now.\n"
+            "- Never apply defaults that contradict user rules; user rules always override heuristics."
+        )
+
+    _goal_line = _goal_text or 'явно не указана'
+    return (
+        "\nУНИВЕРСАЛЬНЫЙ КОНТРАКТ ИСПОЛНЕНИЯ (для любых целей/интеграций пользователя):\n"
+        f"- Фокус главной цели: {_goal_line}\n"
+        f"- Режим приоритета привлечения новых пользователей: {'вкл' if _acq_priority else 'выкл'}\n"
+        f"- Режим email-only (без звонков/встреч): {'вкл' if _no_calls else 'выкл'}\n"
+        f"- Состояние интеграционного контекста: {_integration_state}\n"
+        "- Цикл выбора каждого шага: выбирать действие с максимальным ожидаемым прогрессом к текущей цели пользователя,\n"
+        "  при этом строго соблюдая правила пользователя и используя сначала подключённые интеграции.\n"
+        "- Если нужная интеграция не подключена: запросить один конкретный шаг подключения и дать рабочий fallback уже сейчас.\n"
+        "- Никогда не применять дефолты, которые противоречат правилам пользователя; правила всегда выше эвристик."
+    )
+
 def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None, user_id_param=None, lang='ru', return_dynamic_separately=False):
     """Упрощенный промпт - использует отдельные модули.
     Если return_dynamic_separately=True, возвращает (static_prompt, dynamic_context_str).
@@ -345,6 +404,16 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
         _dyn_parts.append(str(proactive_context).strip())
     if task_section:
         _dyn_parts.append(task_section.strip())
+
+    # Универсальный policy-слой: делает автопилот устойчивым к разным целям/интеграциям.
+    _universal_contract = _build_universal_execution_contract(
+        lang=lang,
+        profile_data=profile_data if isinstance(profile_data, dict) else {},
+        user_memory=user_memory or '',
+        proactive_context=proactive_context,
+    )
+    if _universal_contract:
+        _dyn_parts.append(_universal_contract.strip())
 
     # Агенты уже видны через context_builder.build_proactive_context() → "КОМАНДА АГЕНТОВ"
     # delegate_task используется только для ДЕЙСТВИЙ с интеграциями, не для вопросов
