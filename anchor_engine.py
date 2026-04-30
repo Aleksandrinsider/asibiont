@@ -18043,7 +18043,8 @@ class AnchorEngine:
                     continue
                 except Exception as _ae:
                     _raw = None  # FIX: define _raw to prevent UnboundLocalError
-                    logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
+                    import traceback as _tb_ae
+                    logger.warning("[COORD] agent %s exec failed: %s\n%s", _ag_name, _ae, _tb_ae.format_exc())
                     _ae_detail = str(_ae)[:200].strip() or type(_ae).__name__
                     self._cancel_agent_task(
                         session,
@@ -18057,8 +18058,10 @@ class AnchorEngine:
                     try:
                         _err_task_raw = (_task_brief_raw or '').strip() or (_ag_task.split(chr(10))[0]).strip()
                         _err_task_brief = (_err_task_raw[:120].rsplit(' ', 1)[0].rstrip('.,;:-') if len(_err_task_raw) > 120 else _err_task_raw)
+                        _err_ag_gender = _ag_data.get('gender', 'neutral')
+                        _err_verb = 'Не смогла' if _err_ag_gender == 'female' else 'Не смог'
                         _err_text = (
-                            f"Не смог выполнить задачу «{_err_task_brief}» "
+                            f"{_err_verb} выполнить задачу «{_err_task_brief}» "
                             f"— техническая ошибка. Попробую другой подход в следующем цикле."
                         )
                         session.add(Interaction(
