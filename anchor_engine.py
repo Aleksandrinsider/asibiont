@@ -18012,7 +18012,8 @@ class AnchorEngine:
                     )
                     # Сохраняем видимое сообщение в чат — пользователь должен видеть что агент работал
                     try:
-                        _tmo_task_oneline = (_ag_task.split('\n')[0])[:100].strip()
+                        _tmo_raw = (_task_brief_raw or '').strip() or (_ag_task.split('\n')[0]).strip()
+                        _tmo_task_oneline = (_tmo_raw[:120].rsplit(' ', 1)[0].rstrip('.,;:-') if len(_tmo_raw) > 120 else _tmo_raw)
                         _ag_gender = _ag_data.get('gender', 'neutral')
                         _verb_work = 'Работала' if _ag_gender == 'female' else 'Работал'
                         _verb_fit = 'уложилась' if _ag_gender == 'female' else 'уложился'
@@ -18054,8 +18055,10 @@ class AnchorEngine:
                     _prev_steps_context += f"• {_ag_name}: ОШИБКА — {str(_ae)[:100]}\n"
                     # Сохраняем видимое сообщение в чат — пользователь видит что агент пробовал
                     try:
+                        _err_task_raw = (_task_brief_raw or '').strip() or (_ag_task.split(chr(10))[0]).strip()
+                        _err_task_brief = (_err_task_raw[:120].rsplit(' ', 1)[0].rstrip('.,;:-') if len(_err_task_raw) > 120 else _err_task_raw)
                         _err_text = (
-                            f"Не смог выполнить задачу «{(_ag_task.split(chr(10))[0])[:100].strip()}» "
+                            f"Не смог выполнить задачу «{_err_task_brief}» "
                             f"— техническая ошибка. Попробую другой подход в следующем цикле."
                         )
                         session.add(Interaction(
