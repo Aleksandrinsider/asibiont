@@ -16777,12 +16777,20 @@ class AnchorEngine:
                     ).strip(' ,.-')
                     # Ограничиваем reason — обрезаем по последнему полному слову
                     _step_reason = (_step.get('reason') or '').strip()
-                    # Фильтруем внутренние технические метки — не должны попасть в текст сообщения
+                    # Фильтруем внутренние технические метки и аналитические наблюдения
+                    # — не должны попасть в текст сообщения
                     _INTERNAL_REASON_KEYWORDS = (
                         'fair_assignment', 'diversification', 'backfill',
                         'fallback', 'exec_error', 'retry', 'forced',
                     )
                     if any(_k in _step_reason.lower() for _k in _INTERNAL_REASON_KEYWORDS):
+                        _step_reason = ''
+                    # Фраза "Агент давно не [делал что-то]" — внутренняя аналитика, скрываем
+                    import re as _re_obs_filter
+                    if _re_obs_filter.search(
+                        r'давно\s+не\s+|не\s+публиковал|не\s+выполнял|не\s+делал|долго\s+не\s+|простаивает|незадейств',
+                        _step_reason, _re_obs_filter.IGNORECASE,
+                    ):
                         _step_reason = ''
                     if _step_reason and len(_step_reason) > 150:
                         _step_reason = _step_reason[:150].rsplit(' ', 1)[0]
@@ -16958,22 +16966,23 @@ class AnchorEngine:
                             if _step_reason_show and _step_reason_show[-1] not in '.!?':
                                 _step_reason_show = _step_reason_show.rstrip(',;:—- ')
 
+                        def _cap(s): return (s[0].upper() + s[1:]) if s else s
                         if _eff_goal_title and len(_eff_goal_title.strip()) > 5:
                             if _step_reason_show:
                                 _reason_part = _step_reason_show
                                 if not _reason_part.endswith(('.', '!', '?')):
                                     _reason_part = _reason_part + '.'
-                                _asi_assign_text = f'{_ag_name}, {_reason_part} {_task_brief_lower}.'
+                                _asi_assign_text = f'{_ag_name}, {_reason_part} {_cap(_task_brief_lower)}.'
                             else:
-                                _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
+                                _asi_assign_text = f'{_ag_name}, {_cap(_task_brief_lower)}.'
                         else:
                             if _step_reason_show:
                                 _reason_part = _step_reason_show
                                 if not _reason_part.endswith(('.', '!', '?')):
                                     _reason_part = _reason_part + '.'
-                                _asi_assign_text = f'{_ag_name}, {_reason_part} {_task_brief_lower}.'
+                                _asi_assign_text = f'{_ag_name}, {_reason_part} {_cap(_task_brief_lower)}.'
                             else:
-                                _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
+                                _asi_assign_text = f'{_ag_name}, {_cap(_task_brief_lower)}.'
                     # УДАЛЕНА: вся логика инфинитив→императив трансформации (L15523-15660)
                     # Теперь LLM генерирует task_brief уже в правильной форме через self-check в промпте.
                 except Exception as _aac_err:
