@@ -1071,7 +1071,6 @@ def _user_prefers_no_images(user: User, session=None) -> tuple[bool, str]:
     )
     try:
         import json as _json_img_pref
-        import re as _re_img_pref
 
         _rules: list[str] = []
 
@@ -1083,7 +1082,7 @@ def _user_prefers_no_images(user: User, session=None) -> tuple[bool, str]:
         except Exception:
             pass
 
-        # user.long_term_memory: rules/preferences/preferences.content
+        # user.long_term_memory: rules/preferences
         try:
             _ltm_raw = decrypt_data(user.long_term_memory) if user.long_term_memory else '{}'
             _ltm = _json_img_pref.loads(_ltm_raw) if _ltm_raw else {}
@@ -1098,24 +1097,9 @@ def _user_prefers_no_images(user: User, session=None) -> tuple[bool, str]:
         except Exception:
             pass
 
-        # UserProfile.content_strategy
-        try:
-            if session is not None:
-                _profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-                _cs = (_profile.content_strategy or '').strip() if _profile else ''
-                if _cs:
-                    _rules.append(_cs)
-        except Exception:
-            pass
-
         for _r in _rules:
             _rl = _r.lower()
             if any(kw in _rl for kw in _NO_IMAGE_KW):
-                return True, _r
-            # Доп. шаблон: «в блоге/постах без картинок»
-            if _re_img_pref.search(r'(блог|пост|контент).{0,40}(без|не).{0,20}(картин|изображ|иллюстрац|фото)', _rl):
-                return True, _r
-            if _re_img_pref.search(r'(без|не).{0,20}(картин|изображ|иллюстрац|фото)', _rl):
                 return True, _r
 
         return False, ''
