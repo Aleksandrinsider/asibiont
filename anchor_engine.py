@@ -16912,14 +16912,23 @@ class AnchorEngine:
                     
                     # Специальный шаблон для send_message_to_user
                     if _tool_hint == 'send_message_to_user':
+                        _is_en_assign = ((getattr(user, 'language', 'ru') or 'ru') == 'en')
                         _smu_goal_ref = (
-                            f' по цели «{_eff_goal_title.strip()[:50].rstrip(".,;")}»'
+                            (f' for goal "{_eff_goal_title.strip()[:50].rstrip(".,;")}"' if _is_en_assign else
+                             f' по цели «{_eff_goal_title.strip()[:50].rstrip(".,;")}»')
                             if _eff_goal_title and len(_eff_goal_title.strip()) > 5 else ''
                         )
-                        _asi_assign_text = (
-                            f'{_ag_name}, напиши пользователю живым языком о текущем статусе{_smu_goal_ref}. '
-                            f'{_task_brief_lower[0].upper() + _task_brief_lower[1:] if _task_brief_lower else ""}.'
-                        )
+                        _brief_cap = _task_brief_lower[0].upper() + _task_brief_lower[1:] if _task_brief_lower else ''
+                        if _is_en_assign:
+                            _asi_assign_text = (
+                                f'{_ag_name}, write to the user in natural language about the current status{_smu_goal_ref}. '
+                                f'{_brief_cap}.'
+                            )
+                        else:
+                            _asi_assign_text = (
+                                f'{_ag_name}, напиши пользователю живым языком о текущем статусе{_smu_goal_ref}. '
+                                f'{_brief_cap}.'
+                            )
                     else:
                         # По запросу пользователя не отсекаем reason: используем как сгенерировал ИИ.
                         _step_reason_show = (_step_reason or '').strip()
@@ -16968,6 +16977,23 @@ class AnchorEngine:
                             return _t.rstrip(' .!?,;:')
 
                         _task_brief_sentence = _task_for_sentence(_task_brief_lower)
+                        # Если task_brief слишком короткий/пустой, добираем конкретику из полного task,
+                        # чтобы поручение не заканчивалось на одном "смени тактику".
+                        if len(_task_brief_sentence) < 60:
+                            _task_src = (_task_clean or _ag_task or '').strip()
+                            if _task_src:
+                                from ai_integration.utils import _rfind_sentence_end as _find_sentence_end_fb2
+                                _s1_end = _find_sentence_end_fb2(_task_src)
+                                _s1 = _task_src[:_s1_end + 1].strip() if _s1_end >= 0 else _task_src
+                                _rest = _task_src[_s1_end + 1:].strip() if _s1_end >= 0 and _s1_end + 1 < len(_task_src) else ''
+                                _s2 = ''
+                                if _rest:
+                                    _s2_end = _find_sentence_end_fb2(_rest)
+                                    _s2 = _rest[:_s2_end + 1].strip() if _s2_end >= 0 else _rest
+                                _enriched = f"{_s1} {_s2}".strip() if _s2 else _s1
+                                _enriched = _enriched[:420].strip()
+                                if len(_enriched) > len(_task_brief_sentence):
+                                    _task_brief_sentence = _task_for_sentence(_enriched)
                         # task_brief теперь содержит и контекст, и поручение (2–4 предл.) →
                         # используем его напрямую без склейки с reason (иначе дублирование контекста).
                         # Fallback на reason+task_brief только если task_brief совсем короткий (< 60 символов)

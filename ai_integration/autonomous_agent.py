@@ -5080,6 +5080,18 @@ class HybridAutonomousAgent:
         if issues:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
 
+        # Safety-net по роду агента (актуально для RU):
+        # если модель случайно дала неверную форму, выравниваем под имя активного агента.
+        try:
+            _ag_name_final = ''
+            _ag_ctx = self._active_agent_data.get(user_id)
+            if isinstance(_ag_ctx, dict):
+                _ag_name_final = (_ag_ctx.get('name') or '').strip()
+            if _ag_name_final:
+                final = _normalize_agent_gender_grammar(final, _ag_name_final)
+        except Exception as _gfix_err:
+            logger.debug("[GENDER_FIX] skipped: %s", _gfix_err)
+
         # Встраиваем картинку в ответ если generate_image отработал успешно
         # (как прямой вызов, так и через delegate_task — когда агент делает generate_image внутри)
         import re as _re
@@ -7347,6 +7359,34 @@ def _detect_agent_is_female(name: str) -> bool:
     if first_lower[-1] in 'ая' and first_lower[-2:] not in ('ша', 'жа'):
         return True
     return False
+
+
+def _normalize_agent_gender_grammar(text: str, agent_name: str) -> str:
+    """Safety-net: выравнивает базовые русские формы прошедшего времени под род агента.
+    Для EN-текста ничего не меняет.
+    """
+    t = (text or '').strip()
+    if not t:
+        return t
+    import re as _re_g
+    # Если кириллицы нет — не трогаем (EN и др. языки)
+    if not _re_g.search(r'[А-Яа-яЁё]', t):
+        return t
+
+    _is_fem = _detect_agent_is_female(agent_name)
+    _pairs = [
+        ('нашёл', 'нашла'), ('нашел', 'нашла'), ('сделал', 'сделала'),
+        ('подготовил', 'подготовила'), ('проверил', 'проверила'), ('отправил', 'отправила'),
+        ('написал', 'написала'), ('запустил', 'запустила'), ('создал', 'создала'),
+        ('изучил', 'изучила'), ('заметил', 'заметила'), ('связался', 'связалась'),
+        ('договорился', 'договорилась'), ('получил', 'получила'), ('собрал', 'собрала'),
+        ('проанализировал', 'проанализировала'), ('попробовал', 'попробовала'),
+    ]
+    for _m, _f in _pairs:
+        _src = _m if _is_fem else _f
+        _dst = _f if _is_fem else _m
+        t = _re_g.sub(r'\b' + _re_g.escape(_src) + r'\b', _dst, t, flags=_re_g.IGNORECASE)
+    return t
 
 
 async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_context: str = "", _depth: int = 0) -> tuple:
