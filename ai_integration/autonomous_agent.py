@@ -8668,64 +8668,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if _teammates:
                     _team_lines = []
                     for _tm in _teammates:
-                        _role = _tm.job_title or _tm.specialization or ''
-                        # Инferируем возможности коллеги из его конфигурации
-                        _caps: list[str] = []
-                        # 1. Явные разрешённые инструменты
-                        try:
-                            _tm_tools_raw = _tm.tools_allowed or '[]'
-                            _tm_tools = json.loads(_tm_tools_raw) if isinstance(_tm_tools_raw, str) else (_tm_tools_raw or [])
-                        except Exception:
-                            _tm_tools = []
-                        # Метки для инструментов
-                        _TOOL_CAP = {
-                            'send_email': 'пишет email', 'send_outreach_email': 'email-аутрич',
-                            'reply_to_outreach_email': 'отвечает на email',
-                            'start_email_campaign': 'email-кампании', 'negotiate_by_email': 'email-переговоры',
-                            'list_email_contacts': 'читает контакты', 'save_email_contact': 'сохраняет контакты',
-                            'find_relevant_contacts_for_task': 'ищет контакты',
-                            'research_topic': 'исследования', 'web_search': 'веб-поиск',
-                            'create_post': 'создаёт посты', 'publish_to_telegram': 'публикует в TG',
-                            'generate_image': 'генерирует картинки',
-                            'add_task': 'управляет задачами', 'delegate_task': 'делегирует',
-                            'run_agent_action': 'внешние API',
-                        }
-                        if _tm_tools:
-                            _caps += [_TOOL_CAP[t] for t in _tm_tools if t in _TOOL_CAP]
-                        # 2. Инferируем из специализации/роли если инструментов нет
-                        if not _caps:
-                            _tm_spec = ((_tm.specialization or '') + ' ' + (_tm.job_title or '') + ' ' + (_tm.description or '')).lower()
-                            if any(w in _tm_spec for w in ('email', 'почт', 'рассылк', 'outreach', 'smtp', 'imap')):
-                                _caps.append('email')
-                            if any(w in _tm_spec for w in ('контент', 'пост', 'smm', 'marketing', 'маркет', 'pr', 'пиар')):
-                                _caps.append('контент/посты')
-                            if any(w in _tm_spec for w in ('аналит', 'исслед', 'research', 'поиск')):
-                                _caps.append('исследования')
-                            if any(w in _tm_spec for w in ('dev', 'код', 'разраб', 'python', 'script')):
-                                _caps.append('скрипты/интеграции')
-                        # 3. Инferируем из api_keys (наличие ключей = доступ к сервису)
-                        _tm_keys = _decrypt_keys(_tm.user_api_keys or '').lower()
-                        if any(w in _tm_keys for w in ('gmail', 'imap', 'smtp', 'mail')):
-                            if 'email' not in ' '.join(_caps):
-                                _caps.append('email (ключи)')
-                        if any(w in _tm_keys for w in ('openai', 'anthropic', 'deepseek')):
-                            _caps.append('AI')
-                        # 4. Наличие python_code = интеграции/скрипты
-                        if (_tm.python_code or '').strip():
-                            _pc_lower = _tm.python_code.lower()
-                            if any(w in _pc_lower for w in ('imap', 'imaplib', 'email.mime', 'smtplib')):
-                                if 'читает email' not in _caps:
-                                    _caps.append('читает входящие email')
-                            if any(w in _pc_lower for w in ('requests', 'aiohttp', 'httpx')):
-                                if 'скрипты/интеграции' not in _caps:
-                                    _caps.append('внешние интеграции')
-                        # Формируем строку
-                        _cap_str = ', '.join(_caps[:4]) if _caps else ''
+                        _role = (_tm.job_title or _tm.specialization or _tm.description or '').strip()
                         _line = f"  • {_tm.name}"
                         if _role:
-                            _line += f" — {_role}"
-                        if _cap_str:
-                            _line += f" [умеет: {_cap_str}]"
+                            _line += f" — {_role[:120]}"
                         _team_lines.append(_line)
                     system_prompt += (
                         "\n\nКОМАНДА КОЛЛЕГ (делегируй ТОЛЬКО если у тебя нет нужного инструмента — иначе делай сам):\n"
@@ -8737,11 +8683,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         logger.debug('[DIRECTOR-EXEC] team load for agent: %s', _te_team)
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
-    # Пропускаем для автопилота: экономит 35с + предотвращает hang от IMAP/RSS subprocess.
-    # В автопилоте агент использует платформенные инструменты (check_emails, run_agent_action и т.д.)
-    # напрямую через tool-calling — это быстрее и безопаснее чем subprocess в executor.
+    # В автопилоте пропускаем блокирующие скрипты (IMAP/RSS/selenium) — они зависают.
+    # Но если скрипт «лёгкий» (API-запросы без IMAP) — запускаем с коротким таймаутом 25s.
+    _AUTOPILOT_BLOCK_PATTERNS = ('imaplib', 'imap4', 'feedparser', 'selenium', 'playwright',
+                                  'subprocess.run', 'subprocess.call', 'os.system')
     script_context = ""
-    if not _is_autopilot_task and (agent.get('python_code') or '').strip():
+    _py_code_raw = (agent.get('python_code') or '').strip()
+    _py_code_lc = _py_code_raw.lower()
+    _skip_in_autopilot = _is_autopilot_task and any(p in _py_code_lc for p in _AUTOPILOT_BLOCK_PATTERNS)
+    if _py_code_raw and not _skip_in_autopilot:
         try:
             _wrapped = _wrap_agent_code(agent['python_code'].strip())
             _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os2.environ.get('PATH', '/usr/bin:/bin')}
@@ -8776,8 +8726,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
                 try:
+                    # В автопилоте — короткий таймаут 25s чтобы не блокировать pipeline
+                    _sc_timeout = 25 if _is_autopilot_task else API_TIMEOUT_SCRIPT
                     _kwargs_sc = dict(
-                        capture_output=True, text=True, timeout=API_TIMEOUT_SCRIPT, env=_exec_env,
+                        capture_output=True, text=True, timeout=_sc_timeout, env=_exec_env,
                         encoding='utf-8', errors='replace',
                     )
                     if _sys2.platform != 'win32':

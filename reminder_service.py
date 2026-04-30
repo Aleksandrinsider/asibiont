@@ -794,9 +794,10 @@ class ReminderService:
                 all_tasks = all_active_tasks + overdue_tasks
                 
                 # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 30 минут)
+                # Включаем agent_msg — AnchorEngine только что мог отправить сообщение агента
                 last_proactive = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type.in_(["proactive", "reminder"]),
+                    Interaction.message_type.in_(["proactive", "reminder", "agent_msg"]),
                     Interaction.created_at > now_utc - timedelta(minutes=30)
                 ).order_by(Interaction.created_at.desc()).first()
                 
@@ -1104,9 +1105,10 @@ class ReminderService:
                 
                 # Проверить, когда было последнее проактивное сообщение (не чаще чем раз в 2 часа)
                 # Проверяем ТОЛЬКО proactive/reminder, НЕ обычные ai-ответы на диалог
+                # Включаем agent_msg — AnchorEngine недавно мог отправить что-то агент
                 last_proactive = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type.in_(["proactive", "reminder"]),
+                    Interaction.message_type.in_(["proactive", "reminder", "agent_msg"]),
                     Interaction.created_at > now_utc - timedelta(hours=2)
                 ).order_by(Interaction.created_at.desc()).first()
                 
