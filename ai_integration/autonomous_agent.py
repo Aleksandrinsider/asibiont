@@ -4868,10 +4868,9 @@ class HybridAutonomousAgent:
                         "content": (
                             f"⚠️ СТОП-СИГНАЛ СИСТЕМЫ: инструменты [{_stuck_str}] вызывались 2+ раза "
                             f"и возвращали ошибки. "
-                            f"ОБЯЗАТЕЛЬНО: 1) если send_outreach_email — сначала вызови start_email_campaign "
-                            f"чтобы создать кампанию. 2) если publish_to_telegram — лимит исчерпан, используй "
+                            f"ОБЯЗАТЕЛЬНО: 1) если publish_to_telegram — лимит исчерпан, используй "
                             f"save_note и скажи пользователю что публикация запланирована на завтра. "
-                            f"3) В любом другом случае — опиши что сделал и что не получилось, "
+                            f"2) В любом другом случае — опиши что сделал и что не получилось, "
                             f"предложи альтернативный инструмент или подход. НЕ повторяй неудачный вызов."
                         )
                     })
@@ -8422,6 +8421,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _lbl_ext = ' '.join(h.lower() for h in _intg_hint)
             _tools_str_ext = (agent.get('tools_allowed') or '').lower()
             _has_email_tools = (
+                _is_outreach_goal or
                 any(w in _spec_ext for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'sales', 'crm')) or
                 any(w in _lbl_ext for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'outreach', 'письм')) or
                 any(w in _tools_str_ext for w in ('check_emails', 'send_outreach_email', 'send_email', 'start_email_campaign'))
@@ -8757,7 +8757,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         else:
             _my_tools = [t['function']['name'] for t in _all_tools_info]
         if _my_tools:
-            _labeled = [f"{n} ({_TOOL_LABELS[n]})" if n in _TOOL_LABELS else n for n in _my_tools[:15]]
+            # Показываем весь эффективный набор, иначе важные инструменты (например email)
+            # могут не попасть в первые N и агент ошибочно решит, что они недоступны.
+            _labeled = [f"{n} ({_TOOL_LABELS[n]})" if n in _TOOL_LABELS else n for n in _my_tools]
             system_prompt = system_prompt.replace(
                 "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
                 "исследования, заметки, email, публикации, напоминания, делегирование и многое другое. ",
