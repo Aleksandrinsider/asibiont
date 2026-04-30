@@ -585,6 +585,10 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             session.commit()
         except Exception as log_err:
             logger.warning(f"[AUTO_POST] Failed to log activity: {log_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
         
         logger.info(f"Auto-post created for user {user_id}")
 
@@ -665,6 +669,8 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
 
         # === Создаём blog Note (source='blog') чтобы пост отображался на сайте ===
         try:
+            # Защита: если предыдущий commit/log упал, очищаем failed transaction state.
+            session.rollback()
             from models import Note as _NoteAP
             from ai_integration.handlers import _make_blog_slug as _make_slug_ap
             _blog_title_ap = content.strip().split('\n')[0][:120].strip()
@@ -702,6 +708,10 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                 pass
         except Exception as _bn_ap_err:
             logger.warning(f"[AUTO_POST] Blog note creation failed: {_bn_ap_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
 
         # === Публикация в Telegram канал (если настроен) ===
         channel_published = False
@@ -725,6 +735,10 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                         session.commit()
                     except Exception as _tl:
                         logger.warning(f"[AUTO_POST] Failed to log telegram channel activity: {_tl}")
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
             except Exception as ch_err:
                 logger.warning(f"[AUTO_POST] Channel publish failed for {user_id}: {ch_err}")
 
@@ -758,6 +772,10 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                                 session.commit()
                             except Exception as _le:
                                 logger.warning(f"[DISCORD] Failed to log activity: {_le}")
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
                         else:
                             err_text = await dc_resp.text()
                             logger.warning(f"[DISCORD] Webhook returned {dc_resp.status} for user {user_id}: {err_text[:200]}")

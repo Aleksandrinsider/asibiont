@@ -9397,6 +9397,9 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         # Создаём блог-пост (Note source='blog') с прямой ссылкой /blog/{slug}
         _blog_url = 'https://asibiont.com/dashboard'
         try:
+            # Если ранее в цепочке был DB-error, очищаем failed transaction state
+            # чтобы создание blog Note не падало с "current transaction is aborted".
+            session.rollback()
             from models import Note as _NoteCP
             _blog_title = content.strip().split('\n')[0][:120].strip()
             if not _blog_title or len(_blog_title) < 5:
@@ -9450,6 +9453,10 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 pass
         except Exception as _bn_err:
             logger.warning(f"[CREATE_POST] Blog note creation failed: {_bn_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
 
         return (
             f" Пост #{_post_id} опубликован в блог{cross_line}!\n\n"
