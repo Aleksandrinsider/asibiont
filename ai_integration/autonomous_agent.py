@@ -3740,12 +3740,15 @@ class HybridAutonomousAgent:
                 _active = _intg_snap.get('labels', [])
                 _agent_map = _intg_snap.get('agent_map', [])
                 if _active:
-                    dynamic_context += f"\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ]: {', '.join(_active[:15])}"
+                    _active_cap = min(max(len(_active), 20), 80)
+                    dynamic_context += f"\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ]: {', '.join(_active[:_active_cap])}"
                     # Карта "агент → интеграции" — AI знает через какого агента работать
                     if _agent_map:
                         _map_lines = []
-                        for _am in _agent_map[:10]:
-                            _am_intgs = ', '.join(_am['integrations'][:6])
+                        _agent_cap = min(max(len(_agent_map), 12), 40)
+                        _intg_per_agent_cap = 10
+                        for _am in _agent_map[:_agent_cap]:
+                            _am_intgs = ', '.join((_am.get('integrations') or [])[:_intg_per_agent_cap])
                             _map_lines.append(f"  @{_am['name']}: {_am_intgs}")
                         dynamic_context += "\n[АГЕНТЫ И ИХ ИНТЕГРАЦИИ]:\n" + '\n'.join(_map_lines)
                         dynamic_context += "\n  → Для работы с интеграцией используй run_agent_action(agent_name=\"ИМЯ\", action=...) или напиши @ИМЯ в сообщении."
@@ -3758,7 +3761,7 @@ class HybridAutonomousAgent:
                             if _hint and _cat != 'email':  # email tools already documented in prompt
                                 _tool_hints_parts.append(f"  {_cat}: {_hint}")
                         if _tool_hints_parts:
-                            dynamic_context += "\n[КАК ИСПОЛЬЗОВАТЬ ИНТЕГРАЦИИ]:\n" + '\n'.join(_tool_hints_parts[:12])
+                            dynamic_context += "\n[КАК ИСПОЛЬЗОВАТЬ ИНТЕГРАЦИИ]:\n" + '\n'.join(_tool_hints_parts[:24])
                     except Exception:
                         pass
                 else:
@@ -6389,7 +6392,7 @@ def _agent_tools_from_intg(agent: dict, intg_labels: list) -> str:
         _explicit = []
 
     if _explicit:
-        return ', '.join(_explicit[:10])
+        return ', '.join(_explicit)
 
     # Динамически через anchor_engine capability system
     try:
@@ -6407,7 +6410,7 @@ def _agent_tools_from_intg(agent: dict, intg_labels: list) -> str:
                     recommended.append(t)
         if not recommended:
             recommended = ['web_search', 'research_topic', 'add_task', 'update_goal_progress']
-        return ', '.join(recommended[:10])
+        return ', '.join(recommended)
     except Exception:
         return 'web_search, research_topic, add_task, update_goal_progress'
 
