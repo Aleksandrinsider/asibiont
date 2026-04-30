@@ -14224,8 +14224,7 @@ async def send_outreach_email(
         _has_sig_markers = any(marker in _last_lines for marker in [
             'с уважением', 'regards', 'sincerely', 'yours truly',
             'best regards', 'спасибо', 'thanks', '– '
-        ]) or '
-—' in _body_signed[-300:]
+        ]) or '\n—' in _body_signed[-300:]
         # Если нет признаков подписи И нет имён в конце → добавляем только если нужно
         if _sig_name and not _has_sig_markers and _sig_name.lower() not in _last_lines:
             # Должность и компания из профиля — дополняют имя агента
@@ -15699,8 +15698,7 @@ async def send_follow_up_email(
         _has_sig_markers_fu = any(marker in _last_lines_fu for marker in [
             'с уважением', 'regards', 'sincerely', 'yours truly',
             'best regards', 'спасибо', 'thanks', '– '
-        ]) or '
-—' in _body_signed_fu[-300:]
+        ]) or '\n—' in _body_signed_fu[-300:]
         if _sig_name_fu and not _has_sig_markers_fu and _sig_name_fu.lower() not in _last_lines_fu:
             _sig_position_fu = ''
             try:
