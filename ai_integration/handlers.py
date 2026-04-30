@@ -283,6 +283,50 @@ def _get_email_tg_link(user) -> str:
     return f't.me/{tg}' if tg else ''
 
 
+def _has_existing_email_signature(text: str, sender_name: str = '') -> bool:
+    """Best-effort detection of an already present email signature in tail lines.
+
+    We inspect only the tail to avoid false positives from quoted history.
+    """
+    if not text:
+        return False
+
+    import re as _re_sig
+
+    _tail = (text or '').strip()[-900:]
+    _tail_l = _tail.lower()
+
+    # Common sign-off phrases, including short form "Best,"
+    _signoff_markers = (
+        'best,', 'best regards', 'kind regards', 'regards,', 'regards',
+        'sincerely', 'yours truly', 'thanks,', 'thank you,', 'cheers,',
+        'с уважением', 'спасибо,', 'спасибо!'
+    )
+    if any(m in _tail_l for m in _signoff_markers):
+        return True
+
+    # Dash-style signature blocks: "— Olivia" / "- Olivia"
+    if '\n—' in _tail or '\n- ' in _tail:
+        return True
+
+    # Already contains brand/footer lines that usually belong to signature
+    if any(m in _tail_l for m in ('asibiont.com', 't.me/asibiont', 'автор проекта, asi biont')):
+        return True
+
+    # Last-line patterns: sign-off line + name line
+    if _re_sig.search(
+        r'(?is)(?:^|\n)\s*(best|regards|kind regards|sincerely|thanks|thank you|с уважением|спасибо)\s*,?\s*\n\s*[^\n]{2,80}\s*$',
+        _tail,
+    ):
+        return True
+
+    # Sender name near the end is often enough to treat as existing signature
+    if sender_name and sender_name.strip() and sender_name.strip().lower() in _tail_l:
+        return True
+
+    return False
+
+
 def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '', unsub_url: str = '') -> str:
     """Общий HTML-шаблон для email с unsubscribe footer.
 
@@ -14220,13 +14264,9 @@ async def send_outreach_email(
         # 3. Любое имя (собственное) в последних 3 строках (признак готовой подписи)
         _sig_name = (campaign.sender_name or '').strip()
         _body_signed = body
-        _last_lines = _body_signed.lower()[-300:]  # последние ~300 символов
-        _has_sig_markers = any(marker in _last_lines for marker in [
-            'с уважением', 'regards', 'sincerely', 'yours truly',
-            'best regards', 'спасибо', 'thanks', '– '
-        ]) or '\n—' in _body_signed[-300:]
+        _has_sig_markers = _has_existing_email_signature(_body_signed, sender_name=_sig_name)
         # Если нет признаков подписи И нет имён в конце → добавляем только если нужно
-        if _sig_name and not _has_sig_markers and _sig_name.lower() not in _last_lines:
+        if _sig_name and not _has_sig_markers:
             # Должность и компания из профиля — дополняют имя агента
             _sig_position = ''
             try:
@@ -15694,12 +15734,8 @@ async def send_follow_up_email(
         # Подпись отправителя (если ИИ не добавил сам)
         _sig_name_fu = sender_name.strip()
         _body_signed_fu = body
-        _last_lines_fu = _body_signed_fu.lower()[-300:]
-        _has_sig_markers_fu = any(marker in _last_lines_fu for marker in [
-            'с уважением', 'regards', 'sincerely', 'yours truly',
-            'best regards', 'спасибо', 'thanks', '– '
-        ]) or '\n—' in _body_signed_fu[-300:]
-        if _sig_name_fu and not _has_sig_markers_fu and _sig_name_fu.lower() not in _last_lines_fu:
+        _has_sig_markers_fu = _has_existing_email_signature(_body_signed_fu, sender_name=_sig_name_fu)
+        if _sig_name_fu and not _has_sig_markers_fu:
             _sig_position_fu = ''
             try:
                 from models import UserProfile as _UP_sig_fu
