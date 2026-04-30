@@ -9538,6 +9538,10 @@ class AnchorEngine:
                                     'окей, сейчас', 'ок, сейчас', 'ок! сейчас',
                                     'щас разберусь', 'щас гляну', 'сейчас гляну',
                                     'дай минуту', 'сделаю, начну',
+                                    # Ложные ограничения инструментов (агент должен либо вызвать tool, либо молчать)
+                                    'нет доступа к telegram', 'нет доступа к телеграм',
+                                    'нет доступа к публикации', 'не могу публиковать в telegram',
+                                    'у меня нет publish_to_telegram', 'канал не подключён',
                                 )
                                 _is_hollow_ack = any(h in _ack_lower for h in _HOLLOW_ACK)
                                 # Блокируем «email-письма» в чат-ACK (вежливые шаблоны для внешних контактов)
@@ -9785,6 +9789,17 @@ class AnchorEngine:
                     and len(_result_clean) < 60
                     and any(_result_lower.startswith(p) for p in _PLANNING_WITHOUT_FACTS)
                 )
+                _PUBLISH_TOOLS = ('publish_to_telegram', 'create_post', 'publish_to_discord')
+                _has_publish_tool_calls = any(t in (_tools_used or []) for t in _PUBLISH_TOOLS)
+                _claims_no_publish_access = any(w in _result_lower for w in (
+                    'нет доступа к telegram', 'нет доступа к телеграм',
+                    'нет доступа к публикации', 'не могу публиковать в telegram',
+                    'не могу публиковать в телеграм', 'у меня нет publish_to_telegram',
+                    'telegram-канал не настроен', 'канал не подключ',
+                ))
+                _claims_publish_limit = any(w in _result_lower for w in (
+                    'лимит постов', 'дневной лимит постов', 'сегодня уже лимит',
+                ))
                 _is_noise_result = (
                     # Hollow acks — noise только БЕЗ реальных инструментов
                     (_result_lower.rstrip('.!') in _EMPTY_RESPONSES and not _has_real_actions)
@@ -9815,6 +9830,8 @@ class AnchorEngine:
                         'попробуй завтра', 'продолжим завтра',
                         'дневной лимит', '[internal]',
                     ))
+                    # Галлюцинации про недоступный publish/лимиты без реального publish tool-call
+                    or ((_claims_no_publish_access or _claims_publish_limit) and not _has_publish_tool_calls)
                     # Raw data dump: агент просто пересылает список контактов (8+ email)
                     or (len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _result_clean)) >= 8)
                 )
@@ -26719,6 +26736,15 @@ class AnchorEngine:
                         message,
                         flags=_re_agent_fix.IGNORECASE,
                     ).strip()
+                    # Убираем ложные дисклеймеры про «нет доступа к Telegram/каналу»,
+                    # если канал пользователя реально подключен.
+                    if getattr(user, 'telegram_channel', None):
+                        message = _re_agent_fix.sub(
+                            r'(?is)\b(?:у\s+меня\s+)?(?:нет\s+доступа|не\s+могу)\s+[^.!?\n]{0,120}'
+                            r'(?:telegram|телеграм|тг|канал)[^.!?\n]{0,120}[.!?]?\s*',
+                            '',
+                            message,
+                        ).strip()
                     # Гендерная коррекция: is_fem=False для мужских агентов
                     _is_fem_agent = _detect_agent_is_female(_agent_name)
                     message = _sanitize_proactive_text(message, is_fem=_is_fem_agent)
