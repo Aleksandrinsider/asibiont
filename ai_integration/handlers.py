@@ -19322,11 +19322,16 @@ async def generate_image(
         if not REPLICATE_API_TOKEN:
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
-        # Пользовательское правило стиля полностью заменяет стиль от агента
+        # Пользовательское правило стиля полностью заменяет стиль от агента;
+        # если правила нет — платформенный дефолт (watercolor)
+        _PLATFORM_DEFAULT_STYLE = 'watercolor painting, soft wet washes, paper grain texture, painterly'
         _user_style = _extract_image_style_from_memory(user) or None
         if _user_style:
             # Правило пользователя абсолютный приоритет — стиль агента игнорируется
             style = _user_style
+        else:
+            # Нет правила пользователя — платформенный дефолт, стиль агента игнорируется
+            style = _PLATFORM_DEFAULT_STYLE
 
         full_prompt = f"{prompt}, {style} style" if style else prompt
 
