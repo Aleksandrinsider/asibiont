@@ -1061,6 +1061,68 @@ def _make_blog_slug(title: str, note_id: int) -> str:
     return f"{note_id}-{result}"
 
 
+def _user_prefers_no_images(user: User, session=None) -> tuple[bool, str]:
+    """Возвращает (skip_images, matched_rule) по пользовательским правилам из memory/LTM/profile."""
+    _NO_IMAGE_KW = (
+        'без картинк', 'без изображен', 'без иллюстрац', 'не генерируй картинк',
+        'не генерируй изображен', 'не добавляй картинк', 'не добавляй изображен',
+        'убери картинк', 'убери изображен', 'no image', 'without image',
+        'без фото', 'не нужна картинка', 'не нужно изображение',
+    )
+    try:
+        import json as _json_img_pref
+        import re as _re_img_pref
+
+        _rules: list[str] = []
+
+        # user.memory.rules
+        try:
+            _mem_raw = decrypt_data(user.memory) if user.memory else '{}'
+            _mem = _json_img_pref.loads(_mem_raw) if _mem_raw else {}
+            _rules.extend([r for r in _mem.get('rules', []) if isinstance(r, str) and r.strip()])
+        except Exception:
+            pass
+
+        # user.long_term_memory: rules/preferences/preferences.content
+        try:
+            _ltm_raw = decrypt_data(user.long_term_memory) if user.long_term_memory else '{}'
+            _ltm = _json_img_pref.loads(_ltm_raw) if _ltm_raw else {}
+            _rules.extend([r for r in _ltm.get('rules', []) if isinstance(r, str) and r.strip()])
+            _prefs = _ltm.get('preferences', [])
+            if isinstance(_prefs, list):
+                _rules.extend([p for p in _prefs if isinstance(p, str) and p.strip()])
+            elif isinstance(_prefs, dict):
+                for _pv in _prefs.values():
+                    if isinstance(_pv, str) and _pv.strip():
+                        _rules.append(_pv)
+        except Exception:
+            pass
+
+        # UserProfile.content_strategy
+        try:
+            if session is not None:
+                _profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                _cs = (_profile.content_strategy or '').strip() if _profile else ''
+                if _cs:
+                    _rules.append(_cs)
+        except Exception:
+            pass
+
+        for _r in _rules:
+            _rl = _r.lower()
+            if any(kw in _rl for kw in _NO_IMAGE_KW):
+                return True, _r
+            # Доп. шаблон: «в блоге/постах без картинок»
+            if _re_img_pref.search(r'(блог|пост|контент).{0,40}(без|не).{0,20}(картин|изображ|иллюстрац|фото)', _rl):
+                return True, _r
+            if _re_img_pref.search(r'(без|не).{0,20}(картин|изображ|иллюстрац|фото)', _rl):
+                return True, _r
+
+        return False, ''
+    except Exception:
+        return False, ''
+
+
 async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> None:
     """Переводит блог-пост: RU→EN или EN→RU (автоопределение языка оригинала)."""
     try:
@@ -1440,14 +1502,21 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         _source_val = source if source in ('chat', 'blog') else 'chat'
         _pending_image = None  # (bytes, mime) for blog cover image
 
-        # Для blog-заметок: убираем декоративные эмодзи и, при наличии правила, добавляем иллюстрацию
+        # Для blog-заметок: убираем декоративные эмодзи и соблюдаем пользовательское правило картинок
         if _source_val == 'blog':
             content = _strip_public_emojis(content)
+            _skip_image_by_rule, _matched_img_rule = _user_prefers_no_images(user, session)
+            if _skip_image_by_rule:
+                import re as _re_img_rule
+                # Удаляем любые image-маркеры, чтобы правило нельзя было обойти через контент.
+                content = _re_img_rule.sub(r'^\s*!\[[^\]]*\]\([^\)]+\)\s*\n*', '', content, flags=_re_img_rule.IGNORECASE)
+                content = _re_img_rule.sub(r'\[IMAGE:[^\]]+\]', '', content, flags=_re_img_rule.IGNORECASE).strip()
+                logger.info(f"[SAVE_NOTE] Blog image skipped by user rule: {_matched_img_rule[:80]}")
             if content:
                 _style = _extract_image_style_from_memory(user) or \
                     'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
-                if not _has_image_marker:
+                if not _has_image_marker and not _skip_image_by_rule:
                     try:
                         # Всегда генерируем описание сцены из контента через AI — стиль как модификатор
                         _img_style_sn = _explicit_visual_prompt or _style
@@ -8992,22 +9061,18 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         # Проверяем пользовательские правила запрета картинок ДО сохранения поста.
         # Если правило есть — отключаем любые картинки, даже если AI передал image_url явно.
         _skip_image_by_rule = False
+        _matched_img_rule = ''
         try:
-            import json as _json_img_rule
-            _mem_img = _json_img_rule.loads(decrypt_data(user.memory)) if user.memory else {}
-            _NO_IMAGE_KW = (
-                'без картинк', 'без изображен', 'без иллюстрац', 'не генерируй картинк',
-                'не генерируй изображен', 'не добавляй картинк', 'не добавляй изображен',
-                'убери картинк', 'убери изображен', 'no image', 'without image',
-                'без фото', 'не нужна картинка', 'не нужно изображение',
-            )
-            for _r_img in _mem_img.get('rules', []):
-                if any(kw in _r_img.lower() for kw in _NO_IMAGE_KW):
-                    _skip_image_by_rule = True
-                    logger.info(f"[CREATE_POST] Image skipped by user rule: {_r_img[:80]}")
-                    break
+            _skip_image_by_rule, _matched_img_rule = _user_prefers_no_images(user, session)
+            if _skip_image_by_rule:
+                logger.info(f"[CREATE_POST] Image skipped by user rule: {_matched_img_rule[:80]}")
         except Exception as _e_img_rule:
             logger.debug("suppressed image rule check: %s", _e_img_rule)
+
+        if _skip_image_by_rule:
+            # Защита от обхода правила через markdown image marker в тексте.
+            content = re.sub(r'^\s*!\[[^\]]*\]\([^\)]+\)\s*\n*', '', content, flags=re.IGNORECASE)
+            content = re.sub(r'\[IMAGE:[^\]]+\]', '', content, flags=re.IGNORECASE).strip()
 
         if _skip_image_by_rule and image_url and image_url.strip():
             logger.info("[CREATE_POST] Explicit image_url dropped due to user no-image rule")
