@@ -9540,6 +9540,14 @@ class AnchorEngine:
                                     'дай минуту', 'сделаю, начну',
                                 )
                                 _is_hollow_ack = any(h in _ack_lower for h in _HOLLOW_ACK)
+                                # Блокируем «email-письма» в чат-ACK (вежливые шаблоны для внешних контактов)
+                                _EMAIL_STYLE_ACK = (
+                                    'с уважением', 'pr служба', 'форматы участия', 'стенд',
+                                    'подскажите,', 'спасибо за приглашение', 'буду благодарен',
+                                )
+                                if not _is_hollow_ack and any(h in _ack_lower for h in _EMAIL_STYLE_ACK):
+                                    _is_hollow_ack = True
+                                    logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS email-style ack: %s", _ack_text[:80])
                                 # Также блокируем слишком короткие ACK (< 80 символов = ~2 предложения)
                                 if not _is_hollow_ack and len(_ack_text) < 80:
                                     _is_hollow_ack = True
@@ -9600,18 +9608,39 @@ class AnchorEngine:
                     # Ограничиваем task_text — оставляем достаточно для контекста
                     # 8000 вместо 4000: coord inject ~850 симв. + нужен полный autopilot prompt
                     _task_trimmed = task_text[:8000] if len(task_text) > 8000 else task_text
-                    _raw = await asyncio.wait_for(
-                        _exec_agent_for_director(
-                            agent_data, _task_trimmed, user.telegram_id,
-                        ),
-                        timeout=180,
-                    )
-                except asyncio.TimeoutError as _ai_err:
-                    logger.warning("[ANCHOR-AUTOPILOT] AI call TIMEOUT (>180s) for user %d agent=%s", user.id, agent_name)
-                    _raw = None  # FIX: define _raw to prevent UnboundLocalError
+
+                    _raw = None
+                    _ai_err = None
+                    for _try_idx in (1, 2):
+                        try:
+                            _raw = await asyncio.wait_for(
+                                _exec_agent_for_director(
+                                    agent_data, _task_trimmed, user.telegram_id,
+                                ),
+                                timeout=180,
+                            )
+                            _ai_err = None
+                            break
+                        except asyncio.TimeoutError as _te:
+                            _ai_err = _te
+                            logger.warning(
+                                "[ANCHOR-AUTOPILOT] AI timeout try %d/2 for user %d agent=%s",
+                                _try_idx, user.id, agent_name,
+                            )
+                        except Exception as _ex:
+                            _ai_err = _ex
+                            logger.warning(
+                                "[ANCHOR-AUTOPILOT] AI error try %d/2 for user %d agent=%s: %s",
+                                _try_idx, user.id, agent_name, _ex,
+                            )
+                        if _try_idx == 1:
+                            await asyncio.sleep(1.5)
+
+                    if _ai_err is not None:
+                        raise _ai_err
                 except Exception as _ai_err:
-                    _raw = None  # FIX: define _raw to prevent UnboundLocalError
-                    logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
+                    _raw = None
+                    logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d after retry: %s", user.id, _ai_err)
                     # Вместо полной тишины — отправляем краткий статус-отчёт
                     _goals_summary = data.get('goals', [])
                     if _goals_summary and self.bot:
@@ -9621,6 +9650,14 @@ class AnchorEngine:
                             "[ANCHOR-AUTOPILOT] user %d: AI call failed, suppressing hollow fallback for %s",
                             user.id, agent_name,
                         )
+                        try:
+                            await _safe_send(
+                                self.bot,
+                                user.telegram_id,
+                                f"ASI:\nВременный сбой автопилота у агента {agent_name}. Повторю задачу автоматически через ~15 минут.",
+                            )
+                        except Exception as _tg_fail_notice:
+                            logger.debug("[ANCHOR-AUTOPILOT] fail notice send: %s", _tg_fail_notice)
                     # Помечаем AAL как failed — чтобы guard не блокировал следующие dispatches
                     if _aal_id:
                         try:
