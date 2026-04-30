@@ -5919,6 +5919,51 @@ def _has_explicit_mention(message: str) -> bool:
     return False
 
 
+def _universal_user_intent_ack(message: str, lang: str = 'ru') -> str:
+    """Короткое универсальное подтверждение пользовательского намерения.
+    Используется как safety-net, чтобы не оставлять сообщение без реакции.
+    """
+    m = (message or '').strip()
+    if not m:
+        return ''
+    ml = m.lower()
+
+    _no_paid = (
+        'не будем размещаться за деньги', 'не размещаться за деньги', 'без платного размещения',
+        'не будем платить за размещение', 'не платим за размещение',
+        "won't do paid placement", 'no paid placement', 'no sponsored placement',
+        "don't pay for placement", 'we will not pay for placement',
+    )
+    if any(p in ml for p in _no_paid):
+        return (
+            'Принял. Платные размещения исключаем, работаю только по бесплатным каналам и новым контактам.'
+            if lang != 'en' else
+            'Got it. We exclude paid placements and proceed only with organic channels and new contacts.'
+        )
+
+    # Универсальный fallback для утверждений/ограничений/решений
+    if any(w in ml for w in ('не ', 'без ', 'только ', 'нельзя', 'запрещ', 'stop ', 'don\'t ', 'no ')):
+        return (
+            'Принял ограничение. Учту это в следующих действиях и скорректирую план.'
+            if lang != 'en' else
+            'Constraint accepted. I will apply it in the next actions and adjust the plan.'
+        )
+
+    # Если сообщение вопросительное — явно отвечаем, что продолжаем с ответом
+    if '?' in m:
+        return (
+            'Принял вопрос. Сейчас дам конкретный ответ и следующий шаг.'
+            if lang != 'en' else
+            'Got your question. I will give a specific answer and the next step now.'
+        )
+
+    return (
+        'Принял. Продолжаю и учитываю это в работе.'
+        if lang != 'en' else
+        'Got it. Continuing with this applied.'
+    )
+
+
 def _is_question_message(msg: str) -> bool:
     """True если сообщение — вопрос, а не запрос на действие."""
     m = (msg or '').strip().lower()
@@ -12086,7 +12131,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         if _director_response is not None:
             # Агент ответил напрямую — ASI молчит (ответ уже в DB)
             if _director_response == "__agent_handled__":
-                return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None, 'agent_handled': True}
+                try:
+                    from i18n import get_user_lang as _gul_ch
+                    _ack_lang = _gul_ch(user_id)
+                except Exception:
+                    _ack_lang = 'ru'
+                _ack_text = _universal_user_intent_ack(message or '', lang=_ack_lang)
+                return {
+                    'response': _ack_text,
+                    'tool_calls': [],
+                    'tools_used': [],
+                    'agent_info': None,
+                    'agent_handled': True,
+                }
 
             # Распаковываем dict → строка
             if isinstance(_director_response, dict):
