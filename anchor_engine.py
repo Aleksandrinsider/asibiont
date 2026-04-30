@@ -5199,7 +5199,9 @@ class AnchorEngine:
                         _s_dyn.close()
                 except Exception:
                     _n_user_agents = 1
-                _process_timeout_sec = min(_env_cap, max(180, 90 + _n_user_agents * 120 + 60))
+                # coordinator (~150s) + N агентов × 200s + буфер 60s
+                # Минимум 420s чтобы один агент успел завершить coordinator+execution
+                _process_timeout_sec = min(_env_cap, max(420, 150 + _n_user_agents * 200 + 60))
                 logger.debug("[ANCHOR] User %d: dynamic timeout=%ds (%d agents)", user_id, _process_timeout_sec, _n_user_agents)
                 await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик

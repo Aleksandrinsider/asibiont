@@ -14223,11 +14223,31 @@ async def send_outreach_email(
         _last_lines = _body_signed.lower()[-300:]  # последние ~300 символов
         _has_sig_markers = any(marker in _last_lines for marker in [
             'с уважением', 'regards', 'sincerely', 'yours truly',
-            'best regards', 'спасибо', 'thanks', '—', '– '
-        ])
+            'best regards', 'спасибо', 'thanks', '– '
+        ]) or '
+—' in _body_signed[-300:]
         # Если нет признаков подписи И нет имён в конце → добавляем только если нужно
         if _sig_name and not _has_sig_markers and _sig_name.lower() not in _last_lines:
-            _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
+            # Должность и компания из профиля — дополняют имя агента
+            _sig_position = ''
+            try:
+                from models import UserProfile as _UP_sig
+                _prof_sig = session.query(_UP_sig).filter_by(user_id=user.id).first()
+                if _prof_sig:
+                    _pos = (getattr(_prof_sig, 'position', '') or '').strip()
+                    _comp = (getattr(_prof_sig, 'company', '') or '').strip()
+                    if _pos and _comp:
+                        _sig_position = f"{_pos}, {_comp}"
+                    elif _pos:
+                        _sig_position = _pos
+                    elif _comp:
+                        _sig_position = _comp
+            except Exception:
+                pass
+            _sig_block = f"\n\n— {_sig_name}"
+            if _sig_position:
+                _sig_block += f"\n{_sig_position}"
+            _body_signed = body.rstrip() + _sig_block
 
         # Сайт и Telegram НЕ добавляем если уже есть подпись в письме
         # (чтобы не создавать пеструю смесь из разных подписей)
@@ -15678,10 +15698,29 @@ async def send_follow_up_email(
         _last_lines_fu = _body_signed_fu.lower()[-300:]
         _has_sig_markers_fu = any(marker in _last_lines_fu for marker in [
             'с уважением', 'regards', 'sincerely', 'yours truly',
-            'best regards', 'спасибо', 'thanks', '—', '– '
-        ])
+            'best regards', 'спасибо', 'thanks', '– '
+        ]) or '
+—' in _body_signed_fu[-300:]
         if _sig_name_fu and not _has_sig_markers_fu and _sig_name_fu.lower() not in _last_lines_fu:
-            _body_signed_fu = body.rstrip() + f"\n\n— {_sig_name_fu}"
+            _sig_position_fu = ''
+            try:
+                from models import UserProfile as _UP_sig_fu
+                _prof_sig_fu = session.query(_UP_sig_fu).filter_by(user_id=user.id).first()
+                if _prof_sig_fu:
+                    _pos_fu = (getattr(_prof_sig_fu, 'position', '') or '').strip()
+                    _comp_fu = (getattr(_prof_sig_fu, 'company', '') or '').strip()
+                    if _pos_fu and _comp_fu:
+                        _sig_position_fu = f"{_pos_fu}, {_comp_fu}"
+                    elif _pos_fu:
+                        _sig_position_fu = _pos_fu
+                    elif _comp_fu:
+                        _sig_position_fu = _comp_fu
+            except Exception:
+                pass
+            _sig_block_fu = f"\n\n— {_sig_name_fu}"
+            if _sig_position_fu:
+                _sig_block_fu += f"\n{_sig_position_fu}"
+            _body_signed_fu = body.rstrip() + _sig_block_fu
         # Сайт и Telegram — только если нет готовой подписи в теле
         if not _has_sig_markers_fu:
             _cta_url_fu = (campaign.landing_url or '').strip()
