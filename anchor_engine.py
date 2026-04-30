@@ -5773,8 +5773,21 @@ class AnchorEngine:
                             and a.anchor_type not in EMAIL_SILENT_TYPES]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post', 'discord_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
-        # email_need_leads первыми — они самые долгие (web search), нужно больше времени
-        email_silent_anchors.sort(key=lambda a: (0 if a.anchor_type == 'email_need_leads' else 1))
+        # Приоритет email-silent: сначала ответы и новые отправки, затем поиск лидов,
+        # follow-up в конце, чтобы не блокировать поток НОВЫХ писем.
+        _EMAIL_SILENT_ORDER = {
+            'email_reply_received': 0,
+            'email_outreach_send': 1,
+            'email_need_leads': 2,
+            'email_follow_up': 3,
+        }
+        email_silent_anchors.sort(
+            key=lambda a: (
+                _EMAIL_SILENT_ORDER.get(a.anchor_type, 9),
+                -(int(a.priority) if a.priority is not None else 0),
+                a.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            )
+        )
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
         autopilot_anchors = [a for a in ready if a.anchor_type in AUTOPILOT_SILENT_TYPES]
@@ -6026,7 +6039,21 @@ class AnchorEngine:
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             _EMAIL_SILENT_MAX_PER_CYCLE = 3
-            for _ea_idx, ea in enumerate(email_silent_anchors[:_EMAIL_SILENT_MAX_PER_CYCLE]):
+            # Fairness: если есть новые отправки/ответы/поиск лидов, ограничиваем follow-up до 1 за цикл,
+            # чтобы follow-up не вытеснял первые письма.
+            _prefer_new_flow = [
+                a for a in email_silent_anchors
+                if a.anchor_type in ('email_reply_received', 'email_outreach_send', 'email_need_leads')
+            ]
+            _follow_ups = [a for a in email_silent_anchors if a.anchor_type == 'email_follow_up']
+            if _prefer_new_flow:
+                _cycle_batch = _prefer_new_flow[:_EMAIL_SILENT_MAX_PER_CYCLE]
+                if len(_cycle_batch) < _EMAIL_SILENT_MAX_PER_CYCLE and _follow_ups:
+                    _cycle_batch.append(_follow_ups[0])
+            else:
+                _cycle_batch = _follow_ups[:_EMAIL_SILENT_MAX_PER_CYCLE]
+
+            for _ea_idx, ea in enumerate(_cycle_batch):
                 _min_time_needed = 120 if ea.anchor_type == 'email_need_leads' else 15
                 if _time_left() < _min_time_needed:
                     logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping {ea.anchor_type} #{ea.id} (only {_time_left():.0f}s left, need {_min_time_needed})")
