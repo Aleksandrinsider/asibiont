@@ -24537,12 +24537,15 @@ class AnchorEngine:
                 # anchor_data может содержать старое имя пользователя вместо имени агента
                 if live_campaign.sender_name:
                     sender_name = live_campaign.sender_name
-                _sent_today_live = session.query(EmailOutreach).filter(
+                _daily_limit_safe = max(1, int(live_campaign.daily_limit or 1))
+                # Не используем COUNT(*) по большой таблице: берём ограниченный срез по лимиту.
+                _sent_today_rows = session.query(EmailOutreach.id).filter(
                     EmailOutreach.campaign_id == campaign_id,
                     EmailOutreach.sent_at >= _today_start_rem,
                     EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-                ).count()
-                remaining = max(0, live_campaign.daily_limit - _sent_today_live)
+                ).order_by(EmailOutreach.sent_at.desc()).limit(_daily_limit_safe + 1).all()
+                _sent_today_live = len(_sent_today_rows)
+                remaining = max(0, _daily_limit_safe - _sent_today_live)
 
                 sent_count = 0
                 _draft_failures = []  # track failure reasons for 0-sent diagnostics
@@ -25111,11 +25114,17 @@ class AnchorEngine:
                 _zero_streak_count = 0
                 try:
                     import re as _re_nl
+                    # Не делаем contains() по текстовому полю anchor_types: это может быть дорого на больших логах.
                     _recent_logs = session.query(AnchorDeliveryLog).filter(
                         AnchorDeliveryLog.user_id == user.id,
-                        AnchorDeliveryLog.anchor_types.contains('email_need_leads'),
-                    ).order_by(AnchorDeliveryLog.created_at.desc()).limit(8).all()
-                    for _nl in _recent_logs:
+                    ).order_by(AnchorDeliveryLog.created_at.desc()).limit(40).all()
+                    _need_leads_logs = []
+                    for _lg in _recent_logs:
+                        if 'email_need_leads' in (_lg.anchor_types or ''):
+                            _need_leads_logs.append(_lg)
+                        if len(_need_leads_logs) >= 8:
+                            break
+                    for _nl in _need_leads_logs:
                         _m_nl = _re_nl.search(r'found (\d+) new leads', _nl.message_text or '')
                         if _m_nl:
                             if int(_m_nl.group(1)) == 0:
@@ -25347,11 +25356,12 @@ class AnchorEngine:
                 _MAX_AI_REPLIES_PRE = 2
                 _pre_email = (recipient_email or '').strip().lower()
                 if _pre_email:
-                    _pre_count = session.query(EmailOutreach).filter(
+                    _pre_rows = session.query(EmailOutreach.id).filter(
                         EmailOutreach.user_id == user.id,
                         EmailOutreach.recipient_email == _pre_email,
                         EmailOutreach.ai_reply_sent_at.isnot(None),
-                    ).count()
+                    ).order_by(EmailOutreach.ai_reply_sent_at.desc()).limit(_MAX_AI_REPLIES_PRE).all()
+                    _pre_count = len(_pre_rows)
                     if _pre_count >= _MAX_AI_REPLIES_PRE:
                         logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: pre-check limit reached ({_pre_count}/{_MAX_AI_REPLIES_PRE}) for {redact_email(_pre_email)}, skip compose")
                         anchor.delivered_at = datetime.now(timezone.utc)
