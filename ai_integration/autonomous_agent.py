@@ -9148,6 +9148,39 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             return 0
 
     # _OUTREACH_KW / _is_outreach_goal уже определены выше (перед Шагом 2)
+    # Универсальный роутер классов инструментов (без жёстких сценариев под конкретного пользователя)
+    _TOOL_CLASS_MAP = {
+        'web_search': 'search', 'research_topic': 'search', 'quick_topic_search': 'search',
+        'run_agent_action': 'execute', 'find_relevant_contacts_for_task': 'contact',
+        'find_and_message_relevant_users': 'contact', 'save_email_contact': 'contact',
+        'send_outreach_email': 'outreach', 'send_follow_up_email': 'outreach',
+        'reply_to_outreach_email': 'outreach', 'send_email': 'outreach', 'negotiate_by_email': 'outreach',
+        'create_post': 'publish', 'publish_to_telegram': 'publish', 'publish_to_discord': 'publish',
+        'generate_image': 'publish',
+        'save_note': 'note', 'search_notes': 'note',
+        'add_task': 'plan', 'edit_task': 'plan', 'complete_task': 'plan', 'delegate_task': 'plan',
+        'update_goal_progress': 'goal', 'create_goal': 'goal', 'list_goals': 'goal',
+    }
+    _CLASS_LABELS = {
+        'search': 'поиск/исследование',
+        'execute': 'внешние действия по интеграциям',
+        'contact': 'контакты/лиды',
+        'outreach': 'коммуникация и outreach',
+        'publish': 'контент и публикации',
+        'note': 'конспект/заметки',
+        'plan': 'планирование/делегирование',
+        'goal': 'обновление прогресса цели',
+    }
+    _available_tools_for_shift = set(locals().get('_my_tools') or [])
+    _available_classes = {}
+    for _t_av in _available_tools_for_shift:
+        _cls_av = _TOOL_CLASS_MAP.get(_t_av)
+        if not _cls_av:
+            continue
+        _available_classes.setdefault(_cls_av, [])
+        if len(_available_classes[_cls_av]) < 3:
+            _available_classes[_cls_av].append(_t_av)
+
     for _iter in range(_max_iters):
         _ev_before_iter = len(_action_evidence)
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
@@ -9960,11 +9993,32 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             if _stagnation_iters >= 2:
                 _recent_tools = ', '.join(_tools_used[-4:]) if _tools_used else 'n/a'
+                _recent_classes = {
+                    _TOOL_CLASS_MAP.get(_t) for _t in _tools_used[-3:]
+                    if _TOOL_CLASS_MAP.get(_t)
+                }
+                _candidate_classes = [
+                    _c for _c in _available_classes.keys()
+                    if _c not in _recent_classes and _available_classes.get(_c)
+                ]
+                if not _candidate_classes:
+                    _candidate_classes = [
+                        _c for _c in _available_classes.keys()
+                        if _available_classes.get(_c)
+                    ]
+
+                _suggest_parts = []
+                for _c in _candidate_classes[:3]:
+                    _label = _CLASS_LABELS.get(_c, _c)
+                    _tools_hint = ', '.join(_available_classes.get(_c, [])[:2])
+                    _suggest_parts.append(f"{_label} ({_tools_hint})")
+                _suggest_line = '; '.join(_suggest_parts) if _suggest_parts else 'выбери любой другой доступный инструмент'
+
                 _messages.append({"role": "user", "content": (
                     "СТОП: последние 2 шага не дали нового результата по цели. "
                     f"Недавние инструменты: {_recent_tools}. "
-                    "Смени подход: выбери ДРУГОЙ класс инструмента (не тот же, что в последних шагах): "
-                    "поиск -> действие, действие -> публикация, публикация -> outreach, outreach -> прогресс/делегирование. "
+                    "Смени подход: выбери ДРУГОЙ класс инструмента из реально доступных тебе сейчас: "
+                    f"{_suggest_line}. "
                     "Не повторяй ту же стратегию без новых данных."
                 )})
                 # Не спамим одинаковой подсказкой каждый цикл
