@@ -8404,6 +8404,16 @@ class AnchorEngine:
                         _coord_is_fem = _detect_agent_is_female(_chosen_name) if _chosen_name else False
                         _coord_zac_ex = 'зациклилась' if _coord_is_fem else 'зациклился'
                         _coord_zac_3p = 'зациклена' if _coord_is_fem else 'зациклен'
+                        # Gender list for other agents (used in coord prompt)
+                        _other_fem_agents = [p['name'] for p in (_profiles or []) if p['name'] != _chosen_name and _detect_agent_is_female(p['name'])]
+                        _other_masc_agents = [p['name'] for p in (_profiles or []) if p['name'] != _chosen_name and not _detect_agent_is_female(p['name'])]
+                        _gender_note_c = ''
+                        if _other_fem_agents or _other_masc_agents:
+                            _gender_note_c = '\nРОД ДРУГИХ АГЕНТОВ (когда упоминаешь их в поручении):\n'
+                            if _other_fem_agents:
+                                _gender_note_c += f'  ЖЕНСКИЙ род (свободна, занята, зациклилась): {", ".join(_other_fem_agents)}\n'
+                            if _other_masc_agents:
+                                _gender_note_c += f'  МУЖСКОЙ род (свободен, занят, зациклился): {", ".join(_other_masc_agents)}\n'
 
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды (МУЖСКОЙ род: я нашёл, я проверил, я сделал)"
@@ -8426,7 +8436,8 @@ class AnchorEngine:
                             f"  ❌ НЕЛЬЗЯ: говорить об агенте в 3-м лице — '{_chosen_name} {_coord_zac_3p}', '{_chosen_name} застрял', '{_chosen_name} не даёт результат'.\n"
                             f"     ✅ ПРАВИЛЬНО: 'ты {_coord_zac_ex}', 'ты застрял', 'прошлый подход не дал результата'.\n"
                             f"     Помни: ты обращаешься НАПРЯМУЮ к {_chosen_name}, а не рассказываешь о нём кому-то.\n\n"
-                            f"🚫 СТОП-ЛИСТ (нарушение = сгоревший цикл без результата):\n"
+                            + (_gender_note_c if _gender_note_c else "")
+                            + f"🚫 СТОП-ЛИСТ (нарушение = сгоревший цикл без результата):\n"
                             f"  ❌ LinkedIn + email/контакты = ЗАПРЕЩЕНО абсолютно. LinkedIn требует авторизации → 100% таймаут.\n"
                             f"     Замени на: web_search site:github.com, Habr-авторы, ProductHunt, Eventbrite, конференции.\n"
                             f"  ❌ save_note как ФИНАЛЬНОЕ действие = ЗАПРЕЩЕНО. Агент сохранит заметку и остановится — цель не продвинется.\n"
@@ -12520,23 +12531,28 @@ class AnchorEngine:
                     _wl_gap = _wl_health.get('gap', 0)
                     _wl_assignments = _wl_health.get('assignments', 0)
                     _wl_results = _wl_health.get('results', 0)
+                    _wl_is_fem = _detect_agent_is_female(_p_wl['name'])
+                    _wl_peregruzen = 'ПЕРЕГРУЖЕНА' if _wl_is_fem else 'ПЕРЕГРУЖЕН'
+                    _wl_zanyat = 'ЗАНЯТА' if _wl_is_fem else 'ЗАНЯТ'
+                    _wl_dostup = 'ДОСТУПНА' if _wl_is_fem else 'ДОСТУПЕН'
+                    _wl_svobod = 'СВОБОДНА' if _wl_is_fem else 'СВОБОДЕН'
                     if _wl_gap >= 3:
                         _wl_lines.append(
-                            f"  ⚠️ {_p_wl['name']}: {_wl_gap} активных задач (назначено {_wl_assignments}, отчитался {_wl_results}) — ПЕРЕГРУЖЕН"
+                            f"  ⚠️ {_p_wl['name']}: {_wl_gap} активных задач (назначено {_wl_assignments}, отчитался {_wl_results}) — {_wl_peregruzen}"
                         )
                         _wl_any = True
                     elif _wl_gap == 2:
                         _wl_lines.append(
-                            f"  🔶 {_p_wl['name']}: {_wl_gap} активные задачи (назначено {_wl_assignments}, отчитался {_wl_results}) — ЗАНЯТ"
+                            f"  🔶 {_p_wl['name']}: {_wl_gap} активные задачи (назначено {_wl_assignments}, отчитался {_wl_results}) — {_wl_zanyat}"
                         )
                         _wl_any = True
                     elif _wl_gap == 1:
                         _wl_lines.append(
-                            f"  ✅ {_p_wl['name']}: {_wl_gap} активная задача (назначено {_wl_assignments}, отчитался {_wl_results}) — ДОСТУПЕН"
+                            f"  ✅ {_p_wl['name']}: {_wl_gap} активная задача (назначено {_wl_assignments}, отчитался {_wl_results}) — {_wl_dostup}"
                         )
                     else:
                         _wl_lines.append(
-                            f"  ✨ {_p_wl['name']}: 0 активных задач — СВОБОДЕН"
+                            f"  ✨ {_p_wl['name']}: 0 активных задач — {_wl_svobod}"
                         )
                 if _wl_any:
                     _wl_lines.append(
