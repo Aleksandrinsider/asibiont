@@ -26059,7 +26059,7 @@ class AnchorEngine:
                 _rules += [
                     "ПРАВИЛА ДЛЯ ИНТЕГРАЦИЙ:",
                     "— integration_alert: прочитай snippet, реши ценность. CRITICAL/HIGH=пиши, MEDIUM=пиши если конкретное событие, LOW=SKIP если рутина.",
-                    "— agent_office_update: НЕ пересылай диалог агентов. Пиши как КРАТКИЙ ИТОГ от ASI Biont: 2-4 предложения, в каждом — кто что сделал и результат. Формат: 'ASI Biont\nИмя сделал ... . Имя сделал ...'.",
+                    "— agent_office_update: НЕ пересылай диалог агентов. Пиши как КРАТКИЙ ИТОГ от ASI Biont: 2-4 предложения, в каждом — кто что сделал и результат. Формат: 'ASI Biont\nИмя + действие + результат'. Глаголы ОБЯЗАТЕЛЬНО согласуй с полом агента (Olivia/Beatrice: 'сделала', Hugo/Leonardo: 'сделал').",
                     "— agent_inbox_reply: КРИТИЧНО — агент нашёл новые письма. Данные писем уже переданы в якоре (inbox_content). НЕ вызывай check_emails снова — это вернёт 'нет новых'. Используй reply_to_outreach_email(outreach_id=...) или save_email_contact. Покажи пользователю краткий preview и спроси про ответ.",
                     "— agent_task_blocked: КРИТИЧНО — агент застрял. Объясни причину, задай конкретный вопрос.",
                     "— agent_delegation: отчёт от имени агента (от первого лица): что именно сделано (tool-вызовы), каков конкретный итог.",
@@ -26375,6 +26375,7 @@ class AnchorEngine:
                 _ai_instruction = (
                     "Напиши КОРОТКИЙ ИТОГ от лица ASI Biont, без пересказа диалога агентов. "
                     "Формат строго: 'ASI Biont' + 2-4 коротких предложения по шаблону 'Имя агента + действие + результат'. "
+                    "Глаголы согласуй с полом агента: Olivia/Beatrice — женский род (сделала/подготовила), Hugo/Leonardo — мужской род (сделал/подготовил). "
                     "Без приветствий, без цитат, без ролеплея от первого лица агента, без markdown и списков. "
                     "Только факты: кто что сделал и чем это полезно пользователю."
                 )
@@ -26650,6 +26651,25 @@ class AnchorEngine:
                     _sentences = [s.strip() for s in _re_sum.split(r'(?<=[.!?])\s+', _flat) if s.strip()]
                     _short = ' '.join(_sentences[:4]).strip()
                     if _short and len(_short) > 20:
+                        # Подстраховка: для mixed-summary по нескольким агентам
+                        # корректируем род глаголов у женских имён, если LLM ошиблась.
+                        try:
+                            from models import UserAgent as _UA_SUM
+                            _ua_names = session.query(_UA_SUM.name, _UA_SUM.gender).filter(
+                                _UA_SUM.author_id == user.id
+                            ).all()
+                            _short_low = _short.lower()
+                            _fem_names = {
+                                (n or '').strip()
+                                for n, g in _ua_names
+                                if (n or '').strip()
+                                and (n or '').strip().lower() in _short_low
+                                and ((g or '').lower() == 'female' or _detect_agent_is_female(n or ''))
+                            }
+                            if _fem_names:
+                                _short = _sanitize_proactive_text(_short, fem_names=_fem_names)
+                        except Exception as _gender_fix_err:
+                            logger.debug("[ANCHOR] office summary gender fix failed: %s", _gender_fix_err)
                         if not _short.lower().startswith('asi biont'):
                             _short = f"ASI Biont\n{_short}"
                         message = _short[:900]
