@@ -765,6 +765,32 @@ def sanitize_live_team_chat_text(
         text = str(text)
 
     import re
+    import os
+
+    _a = (anchor_type or '').lower().strip()
+    _FULL_AI_TEXT_ANCHORS = {
+        'agent_delegation',
+        'coordinator_assignment',
+        'goal_autopilot_assignment',
+        'coordinator_result',
+        'goal_autopilot_result',
+        'agent_chain_continue',
+        'agent_chain_transfer',
+    }
+    _pure_live = os.getenv('PURE_LIVE_AGENT_CHAT', '1') == '1'
+
+    # Режим «живой речи»: сохраняем текст ИИ почти без вмешательства и без обрезаний.
+    if _pure_live and _a in _FULL_AI_TEXT_ANCHORS:
+        cleaned_live = text.replace('\r\n', '\n').replace('\r', '\n').strip()
+        cleaned_live = re.sub(r'\n{3,}', '\n\n', cleaned_live)
+        if speaker_name:
+            cleaned_live = re.sub(
+                rf'^\s*{re.escape(speaker_name)}\s*,?\s*',
+                '',
+                cleaned_live,
+                flags=re.IGNORECASE,
+            ).strip()
+        return cleaned_live
 
     # Для поручений координатора сохраняем имена инструментов — они будут удалены
     # позднее в _sanitize_proactive_text вместе с предлогом (используя/через + tool_name).

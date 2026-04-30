@@ -16982,6 +16982,26 @@ class AnchorEngine:
                     _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
                     logger.debug("[COORD] asi assign text fallback: %s", _aac_err)
 
+                # ── ANTIDUP: убираем подряд идущие дублирующиеся фразы/предложения ──
+                try:
+                    import re as _re_dedup_as
+                    _sent_parts = [
+                        _p.strip() for _p in _re_dedup_as.split(r'(?<=[.!?])\s+', (_asi_assign_text or '').strip())
+                        if _p and _p.strip()
+                    ]
+                    _sent_out = []
+                    _prev_norm = ''
+                    for _sp in _sent_parts:
+                        _norm = _re_dedup_as.sub(r'[^\wа-яА-ЯёЁ ]+', '', _sp).lower().strip()
+                        if _norm and _norm == _prev_norm:
+                            continue
+                        _sent_out.append(_sp)
+                        _prev_norm = _norm
+                    if _sent_out:
+                        _asi_assign_text = ' '.join(_sent_out).strip()
+                except Exception:
+                    pass
+
                 # ── POST-PROCESS: минимальная очистка (narrator voice, evaluation) ──
                 # LLM редко выдаёт "Поручаю агенту X сделать Y" или "X, ты правильно начала..."
                 # Промпт учит через self-check, но если промпт не сработал — чистим вручную как safety net.
