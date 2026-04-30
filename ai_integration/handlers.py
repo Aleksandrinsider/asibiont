@@ -14036,18 +14036,38 @@ async def send_outreach_email(
             return f" {recipient_email} ранее вернул hard bounce. Отправка заблокирована."
 
         if not subject or not body:
-            _miss = []
+            # Универсальный fallback: не блокируем отправку из-за пропущенных полей,
+            # а автозаполняем минимально корректные subject/body.
+            _lang_oe = (getattr(user, 'language', 'ru') or 'ru').lower()
+            _name_hint = (recipient_name or recipient_company or '').strip()
+            if not _name_hint and recipient_email and '@' in recipient_email:
+                _name_hint = recipient_email.split('@', 1)[0].replace('.', ' ').replace('_', ' ').title()
+            if not _name_hint:
+                _name_hint = 'there' if _lang_oe == 'en' else 'коллега'
+
             if not subject:
-                _miss.append('subject (тема письма)')
+                subject = (
+                    f"Quick note for {_name_hint}" if _lang_oe == 'en'
+                    else f"Короткий вопрос по теме сотрудничества, {_name_hint}"
+                )
             if not body:
-                _miss.append('body (текст письма)')
-            return (
-                f"[INTERNAL] ⛔ send_outreach_email вызван без обязательных полей: {', '.join(_miss)}. "
-                f"НЕ повторяй этот вызов с пустыми полями — сначала СОСТАВЬ письмо:\n"
-                f"  subject = конкретная тема (пример: 'Invitation to ASI Biont — AI insights for oil & gas')\n"
-                f"  body = полный текст письма на английском, 3-5 предложений, с приветствием и CTA\n"
-                f"Затем повторно вызови send_outreach_email с заполненными subject и body."
-            )
+                _sender_name = (sent_by_agent or user.first_name or 'ASI Biont Team').strip()
+                if _lang_oe == 'en':
+                    body = (
+                        f"Hi {_name_hint},\n\n"
+                        "I am reaching out with a short practical idea that may be useful for your work. "
+                        "We can share a relevant AI automation case for your domain and adapt it to your context.\n\n"
+                        "If this is relevant, reply with your preferred topic and I will send concise details.\n\n"
+                        f"Best regards,\n{_sender_name}"
+                    )
+                else:
+                    body = (
+                        f"Здравствуйте, {_name_hint}!\n\n"
+                        "Пишу с короткой практической идеей, которая может быть полезна для вашей задачи. "
+                        "Можем показать релевантный кейс AI-автоматизации под ваш контекст.\n\n"
+                        "Если интересно, ответьте, какой именно фокус важен — пришлю детали кратко и по делу.\n\n"
+                        f"С уважением,\n{_sender_name}"
+                    )
 
         # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
         if _has_email_no_calls_rule(user):

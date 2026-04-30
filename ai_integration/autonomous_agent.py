@@ -4947,6 +4947,8 @@ class HybridAutonomousAgent:
         from i18n import get_user_lang
 
         final = clean_technical_details(content or '').strip()
+        _user_msg_lower = (user_message or '').lower()
+        _lang_pref = get_user_lang(user_id)
 
         # ── Пост-обработка: удаляем упоминания неподключённых сервисов ──
         if final:
@@ -4968,8 +4970,7 @@ class HybridAutonomousAgent:
             _lang = get_user_lang(user_id)
             
             # Проверяем — может это стратегическое указание? (изменение целей, аудитории, интеграций)
-            _user_msg_lower = (user_message or '').lower()
-            _strategy_keywords = ['ищем', 'search for', 'ищи', 'искат', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals', 'привлеч', 'поищем', 'поиск', 'подбер']
+            _strategy_keywords = ['ищем', 'search for', 'ищи', 'искат', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals', 'привлеч', 'поищем', 'поиск', 'подбер', 'размещ', 'placement', 'sponsored', 'paid']
             _is_strategy_cmd = any(kw in _user_msg_lower for kw in _strategy_keywords) and any(verb in _user_msg_lower for verb in ['можем', 'можно', 'может', 'should', 'надо', 'нужно', 'need', 'давай'])
 
             if _is_strategy_cmd:
@@ -5060,6 +5061,24 @@ class HybridAutonomousAgent:
                 except Exception as _fb_err:
                     logger.warning(f"[FALLBACK] AI call failed: {_fb_err}")
                     final = 'Не удалось обработать запрос. Попробуй переформулировать.' if _lang != 'en' else 'Could not process your request. Please try rephrasing.'
+
+        # Явное подтверждение политики пользователя: не размещаться за деньги.
+        _no_paid_markers = (
+            'не будем размещаться за деньги', 'не размещаться за деньги', 'без платного размещения',
+            'не будем платить за размещение', 'не платим за размещение',
+            "won't do paid placement", 'no paid placement', 'no sponsored placement',
+            "don't place paid", 'we will not pay for placement',
+        )
+        if any(m in _user_msg_lower for m in _no_paid_markers):
+            _final_l = (final or '').lower()
+            _already_ack = any(k in _final_l for k in ('платн', 'за деньги', 'paid', 'sponsored', 'organic', 'бесплат'))
+            if not _already_ack:
+                _ack = (
+                    'Принял: платные размещения не используем. Иду только по бесплатным каналам и новым контактам.'
+                    if _lang_pref != 'en' else
+                    'Got it: no paid placements. I will use only organic channels and new contacts.'
+                )
+                final = (f"{_ack} {final}" if final else _ack).strip()
 
         # Биллинг кастомного агента
         try:

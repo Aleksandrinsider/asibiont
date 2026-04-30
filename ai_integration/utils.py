@@ -610,6 +610,10 @@ def clean_technical_details(text, preserve_tool_names: bool = False):
     text = re.sub(r"```json[\s\S]*?tool_calls[\s\S]*?```", "", text, flags=re.IGNORECASE)
     # Удаляем любые оставшиеся ```json блоки
     text = re.sub(r"```json[\s\S]*?```", "", text, flags=re.IGNORECASE)
+    # Удаляем мусорные DSML/токены вида </｜｜ ... <｜｜...>, которые иногда протекают в ответ
+    text = re.sub(r'</?\s*[｜|]{2,}[^>\n]*>', '', text)
+    text = re.sub(r'(?m)^\s*[</]*[｜|]{2,}[^\n]*$', '', text)
+    text = re.sub(r'[</]*[｜|]{2,}\s*\d{6,}\s*', ' ', text)
     # Удаляем эмодзи - ТОЛЬКО технические, оставляем подходящие для общения и форматирования
     # Удаляем markdown-форматирование (**жирный**, *курсив*, ### заголовки) — Telegram не рендерит
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold** → bold
