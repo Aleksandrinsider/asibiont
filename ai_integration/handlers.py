@@ -1542,7 +1542,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 logger.info(f"[SAVE_NOTE] Blog image skipped by user rule: {_matched_img_rule[:80]}")
             if content:
                 _style = _extract_image_style_from_memory(user) or \
-                    'watercolor painting, soft wet washes, paper grain'
+                    'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker and not _skip_image_by_rule:
                     try:
@@ -9116,7 +9116,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             if _must_add_image:
                 try:
                     _style_req = _extract_image_style_from_memory(user) or \
-                        'watercolor painting, soft wet washes, paper grain'
+                        'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
                     if _explicit_visual_prompt:
                         _img_style_req = f"{_style_req}, {_explicit_visual_prompt}"
                     else:
@@ -9195,7 +9195,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 try:
                     _bg_session = Session()
                     try:
-                        _style_bg = 'watercolor painting, soft wet washes, paper grain'
+                        _style_bg = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
                         try:
                             _post_user_bg = _bg_session.query(User).filter_by(telegram_id=_user_id_bg).first()
                             if _post_user_bg:
@@ -19344,7 +19344,7 @@ async def generate_image(
 
         # Пользовательское правило стиля полностью заменяет стиль от агента;
         # если правила нет — платформенный дефолт (watercolor)
-        _PLATFORM_DEFAULT_STYLE = 'watercolor painting, soft wet washes, paper grain'
+        _PLATFORM_DEFAULT_STYLE = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
         _user_style = _extract_image_style_from_memory(user) or None
         if _user_style:
             # Правило пользователя абсолютный приоритет — стиль агента игнорируется
