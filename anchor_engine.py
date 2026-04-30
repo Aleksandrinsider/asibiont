@@ -16731,6 +16731,31 @@ class AnchorEngine:
                     logger.info("[COORD] agent '%s' not in team, skip", _ag_name)
                     continue
 
+                # ── CAPABILITY ROUTING GUARD: insider/finance задачи только finance-capable агенту ──
+                try:
+                    _insider_kw = ('инсайдер', 'insider', 'finnhub', 'ir-отдел', 'ir отдел', 'insider transactions')
+                    _task_route_l = f"{(_ag_task_display or '')} {(_ag_task or '')}".lower()
+                    _needs_finance = any(k in _task_route_l for k in _insider_kw)
+                    if _needs_finance and 'finance' not in _tgt_caps:
+                        _finance_backup = next(
+                            (
+                                a for a in real_agents
+                                if a.name.lower() != _ag_name.lower()
+                                and 'finance' in _agent_caps_categories.get(a.name, set())
+                            ),
+                            None,
+                        )
+                        if _finance_backup:
+                            logger.info(
+                                "[COORD] redirect insider-task from %s -> %s (finance guard)",
+                                _ag_name, _finance_backup.name,
+                            )
+                            _ag_name = _finance_backup.name
+                            _target_ag = _finance_backup
+                            _tgt_caps = _agent_caps_categories.get(_ag_name, set())
+                except Exception as _cap_guard_err:
+                    logger.debug("[COORD] capability routing guard skipped: %s", _cap_guard_err)
+
                 # ── Мягкий фильтр: RSS-only агент + email-задание → переназначаем если есть email-агент ──
                 # Если email-агента нет — разрешаем RSS-агенту попробовать (у него web_search/research_topic)
                 if _target_ag:
@@ -17120,6 +17145,19 @@ class AnchorEngine:
                     _asi_assign_text = _re_post_inf.sub(r'([.])\1+', r'\1', _asi_assign_text)
                     _asi_assign_text = _re_post_inf.sub(r'([!?])\1+', r'\1', _asi_assign_text)
                     _asi_assign_text = _re_post_inf.sub(r'([.!?])(?=[^\s])', r'\1 ', _asi_assign_text)
+                    # Удаляем гиперболы навыков в стиле "ты шаришь..." — это вводит пользователя в заблуждение
+                    _asi_assign_text = _re_post_inf.sub(
+                        r'\bты\s+шар(?:ишь|ишься)?\s+в\s+[^,.!?;:]{2,80}[,.;:!?]?\s*',
+                        '',
+                        _asi_assign_text,
+                        flags=_re_post_inf.IGNORECASE,
+                    )
+                    _asi_assign_text = _re_post_inf.sub(
+                        r'\bты\s+эксперт(?:ка)?\s+в\s+[^,.!?;:]{2,80}[,.;:!?]?\s*',
+                        '',
+                        _asi_assign_text,
+                        flags=_re_post_inf.IGNORECASE,
+                    )
                     _asi_assign_text = _asi_assign_text.strip()
                 except Exception:
                     pass
