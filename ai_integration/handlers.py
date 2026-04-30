@@ -15514,6 +15514,7 @@ async def send_follow_up_email(
     subject: str = None,
     body: str = None,
     user_id: int = None,
+    sent_by_agent: str = None,
     session=None,
     close_session: bool = True,
 ):
