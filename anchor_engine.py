@@ -5781,10 +5781,21 @@ class AnchorEngine:
             'email_need_leads': 2,
             'email_follow_up': 3,
         }
+        def _priority_rank(_p):
+            """Normalize AnchorPriority/int/str to comparable numeric rank."""
+            if _p is None:
+                return 0
+            _raw = getattr(_p, 'value', _p)
+            try:
+                return int(_raw)
+            except Exception:
+                _name = str(getattr(_p, 'name', _raw)).upper()
+                _map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 4}
+                return _map.get(_name, 0)
         email_silent_anchors.sort(
             key=lambda a: (
                 _EMAIL_SILENT_ORDER.get(a.anchor_type, 9),
-                -(int(a.priority) if a.priority is not None else 0),
+                -_priority_rank(getattr(a, 'priority', None)),
                 a.created_at or datetime.min.replace(tzinfo=timezone.utc),
             )
         )
