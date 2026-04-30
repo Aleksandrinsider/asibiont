@@ -399,26 +399,27 @@ def _collect_user_rules_text(user_obj) -> list[str]:
 
 
 def _resolve_forbidden_tools(user_rules: list[str], user_message: str = '') -> dict[str, str]:
-    """Возвращает постоянные запреты из памяти пользователя.
+    """Возвращает запреты по явным формулировкам в пользовательских правилах.
 
-    Использует только устойчивые правила (всегда/никогда/запомни/на будущее).
-    Контекстные команды текущего запроса обрабатывает `_should_block_tool_call`.
+    Без деления на типы правил: любые правила учитываются, но блокировки ставятся
+    только если в тексте правила явно есть запретная формулировка.
     """
     _blocked: dict[str, str] = {}
-    _rules = [r for r in (user_rules or []) if isinstance(r, str) and r.strip()]
-
-    def _is_persistent(_txt: str) -> bool:
-        _t = (_txt or '').lower()
-        return any(_m in _t for _m in (
-            'всегда', 'никогда', 'вообще', 'впредь', 'на будущее', 'запомни',
-            'always', 'never', 'from now on',
-        ))
-
-    _persistent_rules = [r.lower() for r in _rules if _is_persistent(r)]
-    if not _persistent_rules:
+    _rules = [str(r).lower() for r in (user_rules or []) if isinstance(r, str) and str(r).strip()]
+    if not _rules:
         return _blocked
 
-    _blob = '\n'.join(_persistent_rules)
+    _blob = '\n'.join(_rules)
+    _msg = (user_message or '').lower()
+
+    def _has_explicit_deny(_text: str) -> bool:
+        return any(_m in _text for _m in (
+            'не ', 'никогда', 'запрет', 'нельзя',
+            "don't", 'do not', 'never', 'forbidden',
+        ))
+
+    if not _has_explicit_deny(_blob):
+        return _blocked
 
     _tool_groups = [
         (
@@ -447,6 +448,30 @@ def _resolve_forbidden_tools(user_rules: list[str], user_message: str = '') -> d
         if any(_m in _blob for _m in _markers):
             for _t in _tools:
                 _blocked[_t] = _reason
+
+    # Временное явное разрешение в текущем сообщении (override только на этот запрос)
+    _allow_overrides = [
+        (
+            {'create_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign'},
+            ('можно публиковать', 'публикуй', 'publish it', 'you can publish'),
+        ),
+        (
+            {'send_outreach_email', 'send_email', 'reply_to_outreach_email', 'send_follow_up_email', 'negotiate_by_email', 'start_email_campaign'},
+            ('можно письма', 'отправь письмо', 'send email', 'you can email'),
+        ),
+        (
+            {'generate_image'},
+            ('можно картинки', 'сделай картинку', 'generate image', 'you can generate image'),
+        ),
+        (
+            {'create_payment_link', 'process_yookassa_payment', 'send_payment_invoice'},
+            ('можно реквизиты', 'пришли ссылку на оплату', 'send payment link', 'you can send payment'),
+        ),
+    ]
+    for _tools, _allow_markers in _allow_overrides:
+        if any(_m in _msg for _m in _allow_markers):
+            for _t in _tools:
+                _blocked.pop(_t, None)
 
     return _blocked
 
@@ -4121,6 +4146,25 @@ class HybridAutonomousAgent:
                     dynamic_context += tool_eff
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
+
+            # ═══ ЯВНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (hard + soft) ═══
+            try:
+                _u_rules_obj = None
+                _s_rules = Session()
+                try:
+                    _u_rules_obj = _s_rules.query(User).filter_by(telegram_id=user_id).first()
+                finally:
+                    _s_rules.close()
+
+                _all_rules = _collect_user_rules_text(_u_rules_obj)
+                if _all_rules:
+                    _lines = [f"- {r}" for r in _all_rules[:20]]
+                    dynamic_context += (
+                        "\n\n[ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — учитывать в каждом действии и ответе]\n"
+                        + "\n".join(_lines)
+                    )
+            except Exception as _rules_inj_err:
+                logger.debug('[RULES] context inject skipped: %s', _rules_inj_err)
 
             if len(full_history) > 14:
                 old_msgs = full_history[:-14]
