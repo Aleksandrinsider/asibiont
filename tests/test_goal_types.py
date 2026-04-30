@@ -807,7 +807,7 @@ def test_g35_coordinator_guard_publish_without_channel_falls_back_to_create_post
         has_user_discord_webhook=False,
     )
     assert tool == "create_post", (tool, task, note)
-    assert "Канал Telegram не подключён" in task, task
+    assert "Telegram-канал не подключён" in task, task
     assert "недоступен" in note.lower(), note
 
 

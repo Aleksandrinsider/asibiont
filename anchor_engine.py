@@ -8401,6 +8401,9 @@ class AnchorEngine:
                         except Exception:
                             pass
 
+                        _coord_is_fem = _detect_agent_is_female(_chosen_name) if _chosen_name else False
+                        _coord_zac_ex = 'зациклилась' if _coord_is_fem else 'зациклился'
+                        _coord_zac_3p = 'зациклена' if _coord_is_fem else 'зациклен'
 
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды (МУЖСКОЙ род: я нашёл, я проверил, я сделал)"
@@ -8420,8 +8423,8 @@ class AnchorEngine:
                             f"  ❌ НЕЛЬЗЯ: 'поищи контактов' (падеж) → ✅ 'найди контакты'\n"
                             f"  ❌ НЕЛЬЗЯ: 'произведи анализ' → ✅ 'проанализируй'\n"
                             f"  ❌ НЕЛЬЗЯ: инфинитив 'найти/создать/отправить' → ✅ повелит. 'найди/создай/отправь'\n"
-                            f"  ❌ НЕЛЬЗЯ: говорить об агенте в 3-м лице — '{_chosen_name} зациклен', '{_chosen_name} застрял', '{_chosen_name} не даёт результат'.\n"
-                            f"     ✅ ПРАВИЛЬНО: 'ты зациклился', 'ты застрял', 'прошлый подход не дал результата'.\n"
+                            f"  ❌ НЕЛЬЗЯ: говорить об агенте в 3-м лице — '{_chosen_name} {_coord_zac_3p}', '{_chosen_name} застрял', '{_chosen_name} не даёт результат'.\n"
+                            f"     ✅ ПРАВИЛЬНО: 'ты {_coord_zac_ex}', 'ты застрял', 'прошлый подход не дал результата'.\n"
                             f"     Помни: ты обращаешься НАПРЯМУЮ к {_chosen_name}, а не рассказываешь о нём кому-то.\n\n"
                             f"🚫 СТОП-ЛИСТ (нарушение = сгоревший цикл без результата):\n"
                             f"  ❌ LinkedIn + email/контакты = ЗАПРЕЩЕНО абсолютно. LinkedIn требует авторизации → 100% таймаут.\n"
@@ -8628,6 +8631,7 @@ class AnchorEngine:
                             )
                             # Convert 3rd-person references to agent → 2nd person (direct address)
                             # e.g. "Lorenzo зациклен" → "ты зациклился", "Lorenzo застрял" → "ты застрял"
+                            _is_fem_gen = _detect_agent_is_female(_chosen_name) if _chosen_name else False
                             if _chosen_name and _chosen_name in _gen:
                                 _is_fem_gen = _detect_agent_is_female(_chosen_name)
                                 _3p_map = [
@@ -8697,13 +8701,14 @@ class AnchorEngine:
                                 _gen = _re_post.sub(rf'[\s,]+{_name_esc}[.,!?]*\s*$', '', _gen.strip())
                                 _gen = _gen.strip()
                             # Чиним обрывки после 3rd→2nd преобразования
+                            _zac_form = 'зациклилась' if _is_fem_gen else 'зациклился'
                             _gen = _re_post.sub(
                                 r'\bты\s+зациклил(?:ся|ась)\s+на\s*(?:[—-]\s*переключа(?:ю|ем)\s+на\.?|[.!?])',
-                                'ты зациклился на старом подходе. Переключаю тебя на новый.',
+                                f'ты {_zac_form} на старом подходе. Переключаю тебя на новый.',
                                 _gen,
                                 flags=_re_post.IGNORECASE,
                             )
-                            _gen = _re_post.sub(r'\bзациклен(?:а)?\s+на\s*[.!?]', 'зациклился на старом подходе.', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bзациклен(?:а)?\s+на\s*[.!?]', f'{_zac_form} на старом подходе.', _gen, flags=_re_post.IGNORECASE)
                             # Если есть оборванные предложения, удаляем только их, сохраняя остальные
                             _parts = [p.strip() for p in _re_post.split(r'(?<=[.!?])\s+', _gen) if p.strip()]
                             _bad_tail = re.compile(r'\b(?:на|в|к|о|об|по|для|через|с|у|от|и|или|что|как)\s*[.!?]$', re.IGNORECASE)
@@ -13403,8 +13408,9 @@ class AnchorEngine:
                     _tool_counts = Counter(_flat_tools)
                     _dominant = _tool_counts.most_common(1)[0] if _tool_counts else None
                     if _dominant and _dominant[1] >= 3 and _dominant[1] / max(len(_flat_tools), 1) > 0.4:
+                        _mono_zac = 'зациклилась' if _detect_agent_is_female(_pn_mono) else 'зациклился'
                         _mono_lines.append(
-                            f"  ⚠️ {_pn_mono} зациклился на {_dominant[0]} ({_dominant[1]}x за 4 цикла) — "
+                            f"  ⚠️ {_pn_mono} {_mono_zac} на {_dominant[0]} ({_dominant[1]}x за 4 цикла) — "
                             f"ОБЯЗАТЕЛЬНО дай другой инструмент/подход в этом цикле!"
                         )
 
