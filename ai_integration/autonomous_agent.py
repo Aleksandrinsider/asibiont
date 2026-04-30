@@ -8830,6 +8830,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _save_note_count = 0  # ограничение: не более 1 save_note за цикл автопилота
     _email_ok_count = 0   # реально отправленные письма (без ⛔-блокировок)
     _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
+    _stagnation_iters = 0  # итерации подряд без новых фактов/результатов
+    _effective_iters = 0   # итерации, где появились новые action-evidence
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
@@ -9147,6 +9149,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     # _OUTREACH_KW / _is_outreach_goal уже определены выше (перед Шагом 2)
     for _iter in range(_max_iters):
+        _ev_before_iter = len(_action_evidence)
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
         _max_tool_calls = min(15 + _intg_count * 3, 30) if _is_autopilot_task else 5
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
@@ -9944,6 +9947,29 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         for _tc_skip in _tool_calls[_tc_limit:]:
             _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
                               "content": '{"status":"skipped"}'})
+
+        # ── Effectiveness loop (мягкий): если 2 итерации подряд без новых фактов,
+        # просим ИИ сменить КЛАСС инструмента, а не повторять тот же подход ─────────
+        if _is_autopilot_task:
+            _ev_gain = len(_action_evidence) - _ev_before_iter
+            if _ev_gain > 0:
+                _effective_iters += 1
+                _stagnation_iters = 0
+            elif _tools_used:
+                _stagnation_iters += 1
+
+            if _stagnation_iters >= 2:
+                _recent_tools = ', '.join(_tools_used[-4:]) if _tools_used else 'n/a'
+                _messages.append({"role": "user", "content": (
+                    "СТОП: последние 2 шага не дали нового результата по цели. "
+                    f"Недавние инструменты: {_recent_tools}. "
+                    "Смени подход: выбери ДРУГОЙ класс инструмента (не тот же, что в последних шагах): "
+                    "поиск -> действие, действие -> публикация, публикация -> outreach, outreach -> прогресс/делегирование. "
+                    "Не повторяй ту же стратегию без новых данных."
+                )})
+                # Не спамим одинаковой подсказкой каждый цикл
+                _stagnation_iters = 1
+
         # Инструкция после tool-call: для автопилота — цепочка действий
         if _is_autopilot_task:
             _last_t_post = _tools_used[-1] if _tools_used else ''
