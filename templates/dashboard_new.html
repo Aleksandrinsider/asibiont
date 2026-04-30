@@ -1865,12 +1865,12 @@
             const file = input.files[0];
             if (!file) return;
             if (file.size > 4 * 1024 * 1024) {
-                alert('Максимальный размер файла: 4 МБ');
+                alert(t('avatar-upload-max-size'));
                 input.value = '';
                 return;
             }
             if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
-                alert('Поддерживаются форматы: JPEG, PNG, GIF, WebP');
+                alert(t('avatar-upload-bad-format'));
                 input.value = '';
                 return;
             }
@@ -1891,7 +1891,7 @@
                         try { errMsg = await resp.text() || errMsg; } catch(_2) {}
                     }
                     console.error('Avatar upload failed:', resp.status, errMsg);
-                    alert('Ошибка загрузки аватара: ' + errMsg);
+                    alert(t('avatar-upload-error') + ' ' + errMsg);
                     input.value = '';
                     return;
                 }
@@ -2749,11 +2749,11 @@
                 } catch(e) {}
                 interactionId = separatorEl.dataset.interactionId;
                 if (!interactionId || interactionId === 'pending') {
-                    showNotification('Контрольная точка ещё не синхронизирована, подождите секунду', 'error');
+                    showNotification(t('n-checkpoint-not-synced'), 'error');
                     return;
                 }
             }
-            if (!confirm('Удалить все сообщения начиная с этой точки? Действие нельзя отменить.')) return;
+            if (!confirm(t('c-delete-from-checkpoint'))) return;
             try {
                 const resp = await fetch('/api/rollback_checkpoint', {
                     method: 'POST',
@@ -10706,7 +10706,7 @@ except Exception as e:
                     showNotification(status === 'active' ? t('camp-launched') : t('camp-on-pause'), 'success');
                     loadReports();
                 } else {
-                    showNotification('Ошибка', 'error');
+                    showNotification(t('n-error'), 'error');
                 }
             } catch (err) {
                 console.error('Failed to update campaign status:', err);
@@ -10741,7 +10741,7 @@ except Exception as e:
             try {
                 const resp = await fetch('/api/content-campaigns/' + id + '/status', { method: 'PATCH', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({status}) });
                 if (resp.ok) { showNotification(status === 'active' ? t('camp-launched') : t('camp-on-pause'), 'success'); loadReports(); }
-                else showNotification('Ошибка', 'error');
+                else showNotification(t('n-error'), 'error');
             } catch (err) { console.error('contentCampaignSetStatus error:', err); }
         }
 
@@ -10753,7 +10753,7 @@ except Exception as e:
             try {
                 const resp = await fetch('/api/content-campaigns/' + id, { method: 'DELETE', credentials: 'include' });
                 if (resp.ok) { showNotification(t('n-campaign-deleted'), 'success'); loadReports(); }
-                else { showNotification('Ошибка', 'error'); loadReports(); }
+                else { showNotification(t('n-error'), 'error'); loadReports(); }
             } catch (err) { console.error('contentCampaignDelete error:', err); loadReports(); }
         }
 
@@ -10762,7 +10762,7 @@ except Exception as e:
             try {
                 const resp = await fetch('/api/delegation-campaigns/' + id + '/status', { method: 'PATCH', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({status}) });
                 if (resp.ok) { showNotification(status === 'active' ? t('camp-launched') : t('camp-on-pause'), 'success'); loadReports(); }
-                else showNotification('Ошибка', 'error');
+                else showNotification(t('n-error'), 'error');
             } catch (err) { console.error('delegCampaignSetStatus error:', err); }
         }
 
@@ -10774,7 +10774,7 @@ except Exception as e:
             try {
                 const resp = await fetch('/api/delegation-campaigns/' + id, { method: 'DELETE', credentials: 'include' });
                 if (resp.ok) { showNotification(t('n-campaign-deleted'), 'success'); loadReports(); }
-                else { showNotification('Ошибка', 'error'); loadReports(); }
+                else { showNotification(t('n-error'), 'error'); loadReports(); }
             } catch (err) { console.error('delegCampaignDelete error:', err); loadReports(); }
         }
 
@@ -11298,15 +11298,15 @@ except Exception as e:
                 });
                 const data = await resp.json();
                 if (resp.ok && data.ok) {
-                    showNotification('Картинка перегенерирована ✓', 'success');
+                    showNotification(t('image-regenerated'), 'success');
                     loadNotes();
                 } else {
-                    showNotification('Ошибка: ' + (data.error || resp.status), 'error');
+                    showNotification(t('err-prefix') + ' ' + (data.error || resp.status), 'error');
                     btn.innerHTML = orig;
                     btn.disabled = false;
                 }
             } catch (e) {
-                showNotification('Ошибка: ' + e.message, 'error');
+                showNotification(t('err-prefix') + ' ' + e.message, 'error');
                 btn.innerHTML = orig;
                 btn.disabled = false;
             }
@@ -12807,7 +12807,7 @@ except Exception as e:
                 });
                 if (resp.ok) {
                     closeSendMessageModal();
-                    showNotification(t('msg-sent-internal') || 'Сообщение отправлено', 'success');
+                    showNotification(t('msg-sent-internal'), 'success');
                     if (currentContactFilter === 'messages') loadInboxMessages();
                 } else {
                     const err = await resp.json();
@@ -12830,7 +12830,7 @@ except Exception as e:
                 });
                 if (resp.ok) {
                     closeSendMessageModal();
-                    showNotification(t('reply-sent') || 'Ответ отправлен', 'success');
+                    showNotification(t('reply-sent'), 'success');
                     loadInboxMessages();
                 } else {
                     showNotification(t('err-send') || t('n-error'), 'error');
@@ -14473,7 +14473,7 @@ except Exception as e:
         }
         
         async function deleteGoal(goalId) {
-            if (!confirm('Удалить цель?')) return;
+            if (!confirm(t('goal-delete-confirm'))) return;
             try {
                 const response = await fetch(`/api/goals/${goalId}`, {
                     method: 'DELETE',
@@ -14484,11 +14484,11 @@ except Exception as e:
                     await loadGoalsProgress();
                 } else {
                     const err = await response.json();
-                    showNotification(err.error || 'Ошибка удаления цели', 'error');
+                    showNotification(err.error || t('goal-delete-error'), 'error');
                 }
             } catch (e) {
                 console.error('Error deleting goal:', e);
-                showNotification('Ошибка удаления цели', 'error');
+                showNotification(t('goal-delete-error'), 'error');
             }
         }
 
@@ -15165,7 +15165,7 @@ except Exception as e:
                     alert(d.error || t('n-error'));
                 }
             } catch (e) {
-                alert('Ошибка сети');
+                alert(t('err-network'));
             }
         }
 
@@ -15180,7 +15180,7 @@ except Exception as e:
                     alert(d.error || t('n-error'));
                 }
             } catch (e) {
-                alert('Ошибка сети');
+                alert(t('err-network'));
             }
         }
 
@@ -15189,8 +15189,8 @@ except Exception as e:
             try {
                 const res = await fetch('/api/oauth/gmail/disconnect', { method: 'POST', credentials: 'include' });
                 if (res.ok) { location.reload(); }
-                else { alert('Ошибка отключения'); }
-            } catch (e) { alert('Ошибка сети'); }
+                else { alert(t('disconnect-error')); }
+            } catch (e) { alert(t('err-network')); }
         }
 
         // Gmail OAuth callback notification
@@ -15337,7 +15337,7 @@ except Exception as e:
             }
             const selectedLang = document.getElementById('quick-language')?.value || '';
             if (!selectedLang) {
-                showNotification('Выберите язык общения AI', 'error');
+                showNotification(t('ai-lang-select-required'), 'error');
                 return;
             }
             if (!interests) {
@@ -17503,9 +17503,9 @@ except Exception as e:
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
             } else if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                alert('Нажмите «Поделиться» → «На экран Домой»');
+                alert(t('pwa-install-ios-hint'));
             } else {
-                alert('Откройте сайт в Chrome или Safari для установки');
+                alert(t('pwa-install-browser-hint'));
             }
         }
 
@@ -18525,7 +18525,18 @@ except Exception as e:
       'c-disconnect-gmail':'Отключить Gmail? Письма будут отправляться через Resend.',
       'n-agent-saved':'Агент сохранён','n-agent-deleted':'Агент удалён','n-agent-not-found':'Агент не найден',
       'n-service-added':'Сервис добавлен','n-add-service-hint':'Добавьте сервис через форму выше',
-      'n-saved-but':'Сохранено, но','participant':'Участник'
+            'n-saved-but':'Сохранено, но','participant':'Участник',
+            'avatar-upload-max-size':'Максимальный размер файла: 4 МБ',
+            'avatar-upload-bad-format':'Поддерживаются форматы: JPEG, PNG, GIF, WebP',
+            'avatar-upload-error':'Ошибка загрузки аватара:',
+            'image-regenerated':'Картинка перегенерирована ✓',
+            'goal-delete-confirm':'Удалить цель?',
+            'goal-delete-error':'Ошибка удаления цели',
+            'disconnect-error':'Ошибка отключения',
+            'ai-lang-select-required':'Выберите язык общения AI',
+            'pwa-install-ios-hint':'Нажмите «Поделиться» → «На экран Домой»',
+            'pwa-install-browser-hint':'Откройте сайт в Chrome или Safari для установки',
+            'msg-sent-internal':'Сообщение отправлено'
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
@@ -18828,7 +18839,18 @@ except Exception as e:
       'c-disconnect-gmail':'Disconnect Gmail? Emails will be sent via Resend.',
       'n-agent-saved':'Agent saved','n-agent-deleted':'Agent deleted','n-agent-not-found':'Agent not found',
       'n-service-added':'Service added','n-add-service-hint':'Add a service using the form above',
-      'n-saved-but':'Saved, but','participant':'Participant'
+            'n-saved-but':'Saved, but','participant':'Participant',
+            'avatar-upload-max-size':'Maximum file size: 4 MB',
+            'avatar-upload-bad-format':'Supported formats: JPEG, PNG, GIF, WebP',
+            'avatar-upload-error':'Avatar upload error:',
+            'image-regenerated':'Image regenerated ✓',
+            'goal-delete-confirm':'Delete goal?',
+            'goal-delete-error':'Error deleting goal',
+            'disconnect-error':'Disconnect error',
+            'ai-lang-select-required':'Select AI communication language',
+            'pwa-install-ios-hint':'Tap Share → Add to Home Screen',
+            'pwa-install-browser-hint':'Open the site in Chrome or Safari to install',
+            'msg-sent-internal':'Message sent'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
