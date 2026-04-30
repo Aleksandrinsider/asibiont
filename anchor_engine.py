@@ -1024,6 +1024,15 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
             _to_masc_past,
             t,
         )
+    # Capitalize first letter after sentence-ending punctuation + space (for Russian lowercase)
+    t = _re_san.sub(
+        r'([.!?]\s+)([а-яё])',
+        lambda m: m.group(1) + m.group(2).upper(),
+        t,
+    )
+    # Capitalize very first character of the whole text if lowercase
+    if t and t[0].islower():
+        t = t[0].upper() + t[1:]
     return t.strip()
 
 
