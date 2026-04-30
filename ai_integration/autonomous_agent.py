@@ -7450,6 +7450,13 @@ def _normalize_agent_gender_grammar(text: str, agent_name: str) -> str:
         _src = _m if _is_fem else _f
         _dst = _f if _is_fem else _m
         t = _re_g.sub(r'\b' + _re_g.escape(_src) + r'\b', _dst, t, flags=_re_g.IGNORECASE)
+    # Широкая подстраховка для мужского рода: глаголы прош.вр. ж.р. → м.р.
+    if not _is_fem:
+        t = _re_g.sub(
+            r'\b([а-яёА-ЯЁ]{4,}(?:ала|ила|ела|ыла|яла|ула))\b',
+            lambda m: m.group(0)[:-1],
+            t,
+        )
     return t
 
 
@@ -7919,8 +7926,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Название проекта/компании из профиля агента (передаётся из контекста пользователя)
         _company_ctx = (agent.get('company') or '').strip()
         _team_ctx = f"команде {_company_ctx}" if _company_ctx else 'команде'
+        _gender_note = (
+            f"Ты МУЖЧИНА — всегда пиши в мужском роде: сделал, нашёл, проверил, готов, подготовил. "
+            f"НИКОГДА: сделала, нашла, готова. "
+        ) if not _is_fem else (
+            f"Ты ЖЕНЩИНА — всегда пиши в женском роде: сделала, нашла, проверила, готова, подготовила. "
+            f"НИКОГДА: сделал, нашёл, готов. "
+        )
         system_prompt = (
             f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
+            f"{_gender_note}"
             f"Работаешь в {_team_ctx}. Сейчас: {_now_str}.\n"
             f"{_intg_line}\n"
             f"{_kb_block}\n"
@@ -8078,7 +8093,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         )
     else:
         system_prompt = (
-            f"Ты — {agent['name']}, агент в команде ASI Biont. Сейчас: {_now_str}.\n"
+            f"Ты — {agent['name']}, агент в команде ASI Biont. {_gender_note}Сейчас: {_now_str}.\n"
             f"Пиши ТОЛЬКО от имени {agent['name']}. НЕ представляйся другим именем. "
             f"НЕ пиши от имени ASI, ASI Biont, или другого агента.\n\n"
 
