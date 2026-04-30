@@ -9456,6 +9456,78 @@ async def edit_post(new_content: str, user_id: int, post_id: int = None, session
             session.close()
 
 
+async def edit_note(new_content: str, user_id: int, note_id: int = None, new_title: str = None, session=None) -> str:
+    """
+    РЕДАКТИРОВАНИЕ ЗАМЕТКИ / БЛОГ-СТАТЬИ
+
+    Изменяет содержимое существующей заметки или блог-поста (source='blog').
+    Если note_id не указан — редактирует последнюю блог-статью пользователя.
+
+    Args:
+        new_content: Новый текст заметки/статьи
+        user_id: Telegram ID пользователя
+        note_id: ID заметки (опционально)
+        new_title: Новый заголовок (опционально)
+        session: DB сессия
+    """
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        if not new_content or not new_content.strip():
+            return "Новый текст заметки не может быть пустым."
+
+        if note_id:
+            note = session.query(Note).filter_by(id=note_id, user_id=user.id).first()
+            if not note:
+                return f"Заметка #{note_id} не найдена или не принадлежит тебе."
+        else:
+            # По умолчанию — последняя блог-статья
+            note = (
+                session.query(Note)
+                .filter_by(user_id=user.id, source='blog')
+                .order_by(Note.created_at.desc())
+                .first()
+            )
+            if not note:
+                # Fallback: любая последняя заметка
+                note = (
+                    session.query(Note)
+                    .filter_by(user_id=user.id)
+                    .order_by(Note.created_at.desc())
+                    .first()
+                )
+                if not note:
+                    return "У тебя нет заметок для редактирования."
+
+        old_preview = note.content[:40] + '...' if len(note.content) > 40 else note.content
+        note.content = new_content.strip()
+        if new_title and new_title.strip():
+            note.title = new_title.strip()
+
+        session.commit()
+
+        new_preview = new_content[:80] + '...' if len(new_content) > 80 else new_content
+        _note_label = "Блог-статья" if note.source == 'blog' else "Заметка"
+        _blog_link = f"\nСтатья на сайте: https://asibiont.com/blog/{note.slug}" if note.source == 'blog' and note.slug else ""
+        logger.info(f"[EDIT_NOTE] User {user_id} edited note #{note.id} (source={note.source})")
+        return f"✏️ {_note_label} #{note.id} обновлена!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»{_blog_link}"
+
+    except Exception as e:
+        logger.error(f"[EDIT_NOTE] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"❌ Ошибка редактирования заметки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def get_posts(user_id: int, limit: int = 5, session=None):
     """
      СПИСОК ПОСТОВ ПОЛЬЗОВАТЕЛЯ

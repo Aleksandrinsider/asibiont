@@ -554,7 +554,7 @@ def clean_technical_details(text, preserve_tool_names: bool = False):
             r'check_time_conflicts|cancel_delegation|'
             r'get_message_status|reschedule_task|'
             r'restore_task|accept_delegated_task|reject_delegated_task|'
-            r'set_content_strategy|edit_post|get_posts|delete_post|'
+            r'set_content_strategy|edit_post|edit_note|get_posts|delete_post|'
             r'list_marketplace|get_system_status|'
             r'get_incoming_messages|reply_to_user_message|'
             r'add_email_leads|update_email_campaign|'

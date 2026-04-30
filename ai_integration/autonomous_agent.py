@@ -1339,7 +1339,7 @@ class HybridAutonomousAgent:
                          'discord', 'telegram', 'канал', 'channel', 'стратег',
                          'запуст', 'продвиж', 'ролик', 'аудитор', 'подписч',
                          'smm', 'соцсет', 'блог', 'статью', 'статья'],
-            'tools': {'create_post', 'edit_post', 'delete_post', 'get_posts',
+            'tools': {'create_post', 'edit_post', 'edit_note', 'delete_post', 'get_posts',
                       'publish_to_telegram', 'publish_to_discord',
                       'set_content_strategy', 'start_content_campaign', 'manage_content_campaign'},
         },
@@ -6550,6 +6550,7 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
             # Публикации и контент
             'create_post': 'Публикация контента',
             'edit_post': 'Редактирование постов',
+            'edit_note': 'Редактирование заметок/блога',
             'get_posts': 'Просмотр публикаций',
             'delete_post': 'Удаление постов',
             'publish_to_telegram': 'Публикация в Telegram',
@@ -12099,7 +12100,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 r'research_and_plan|analyze_group_opportunities|'
                 r'generate_marketing_content|get_message_status|reschedule_task|'
                 r'restore_task|accept_delegated_task|reject_delegated_task|'
-                r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
+                r'update_profile|set_content_strategy|edit_post|edit_note|get_posts|delete_post|'
                 r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
                 r'get_incoming_messages|reply_to_user_message)\b',
                 '', response_text
