@@ -3,6 +3,7 @@ Database migrations — вынесены из main.py для чистоты ко
 Каждая миграция идемпотентна (проверяет существование перед добавлением).
 """
 import logging
+import os
 from sqlalchemy import text, inspect as sa_inspect
 from models import Session, engine
 from config import LOCAL
@@ -871,6 +872,10 @@ def _migrate_intelligence_tables(session, inspector):
 def _backfill_posts_to_blog_notes(session, inspector):
     """Бэкфилл: создаём blog Notes для Post-ов, у которых нет соответствующей Note source='blog'.
     Помечаем каждую Note слагом вида 'ap-{post_id}-...' чтобы не дублировать при повторных запусках."""
+    # ВАЖНО: отключено по умолчанию, чтобы удалённые вручную блог-посты не "воскресали".
+    # Включается только разово через env BACKFILL_POSTS_TO_BLOG_NOTES=1.
+    if os.getenv('BACKFILL_POSTS_TO_BLOG_NOTES', '0').strip() not in ('1', 'true', 'True', 'yes', 'YES'):
+        return
     if not (inspector.has_table('posts') and inspector.has_table('notes')):
         return
     try:
