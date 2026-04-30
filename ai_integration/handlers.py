@@ -9511,7 +9511,22 @@ async def edit_note(new_content: str, user_id: int, note_id: int = None, new_tit
         if new_title and new_title.strip():
             note.title = new_title.strip()
 
+        # Сбросить устаревший EN-перевод, чтобы не показывался старый текст
+        if note.source == 'blog':
+            note.content_en = None
+            note.title_en = None
+
         session.commit()
+
+        # Fire-and-forget EN translation for blog posts
+        if note.source == 'blog':
+            try:
+                import asyncio as _aio_en
+                _aio_en.get_running_loop().create_task(
+                    _translate_blog_post_to_en(note.id, note.title or '', note.content)
+                )
+            except Exception as _te:
+                logger.debug(f"[EDIT_NOTE] EN translation task skipped: {_te}")
 
         new_preview = new_content[:80] + '...' if len(new_content) > 80 else new_content
         _note_label = "Блог-статья" if note.source == 'blog' else "Заметка"
