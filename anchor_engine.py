@@ -7269,8 +7269,8 @@ class AnchorEngine:
                     # Включаем описания целей чтобы координатор понимал АУДИТОРИЮ (трейдеры vs разработчики vs etc.)
                     _gl_with_desc = []
                     for _g_bf in data.get('goals', [])[:3]:
-                        _t_bf = (_g_bf.get('title') or '')[:80]
-                        _d_bf = (_g_bf.get('description') or '').strip()[:120]
+                        _t_bf = (_g_bf.get('title') or '')[:200]
+                        _d_bf = (_g_bf.get('description') or '').strip()[:200]
                         if _t_bf:
                             _gl_with_desc.append(f'{_t_bf}' + (f' ({_d_bf})' if _d_bf else ''))
                     _brief_task = '; '.join(_gl_with_desc) if _gl_with_desc else (anchor.topic or 'цели')[:60]
@@ -7543,7 +7543,7 @@ class AnchorEngine:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
                         # Суть задания — передаём реальный текст из координатора, 
                         # не hardcoded шаблоны (те не учитывали интеграции агента)
-                        _task_hint_human = _brief_task[:80] if _brief_task else 'займись активными целями'
+                        _task_hint_human = _brief_task[:300] if _brief_task else 'займись активными целями'
                         # ── Последний ответ конкретного агента — координатор ВИДИТ результат ──
                         _last_agent_reply_c = ''
                         try:
