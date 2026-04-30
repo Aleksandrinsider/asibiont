@@ -108,8 +108,10 @@ def _has_email_no_calls_rule(user) -> bool:
         'не предлагать созвон', 'не предлагай созвон', 'без созвонов',
         'не упоминать звон', 'не предлагать звон', 'не предлагать встреч',
         'не предлагать встречу', 'не упоминать встреч',
+        'не упоминать и не предлагать звон', 'не упоминать и не предлагать вызов',
+        'не предлагать вызов', 'вести переписку через email', 'только email',
         'no calls', 'do not suggest calls', 'do not offer calls',
-        'no meetings', 'do not suggest meetings',
+        'no meetings', 'do not suggest meetings', 'email only',
     )
     try:
         import json as _json_nc
