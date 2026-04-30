@@ -1107,6 +1107,48 @@ def _user_prefers_no_images(user: User, session=None) -> tuple[bool, str]:
         return False, ''
 
 
+def _user_requires_images(user: User) -> tuple[bool, str]:
+    """Возвращает (require_images, matched_rule) по явным правилам пользователя.
+    Логика: только явное требование добавлять изображения.
+    """
+    try:
+        import json as _json_img_req
+        import re as _re_img_req
+
+        _rules: list[str] = []
+        try:
+            _mem_raw = decrypt_data(user.memory) if user.memory else '{}'
+            _mem = _json_img_req.loads(_mem_raw) if _mem_raw else {}
+            _rules.extend([r for r in _mem.get('rules', []) if isinstance(r, str) and r.strip()])
+        except Exception:
+            pass
+
+        try:
+            _ltm_raw = decrypt_data(user.long_term_memory) if user.long_term_memory else '{}'
+            _ltm = _json_img_req.loads(_ltm_raw) if _ltm_raw else {}
+            _rules.extend([r for r in _ltm.get('rules', []) if isinstance(r, str) and r.strip()])
+            _prefs = _ltm.get('preferences', [])
+            if isinstance(_prefs, list):
+                _rules.extend([p for p in _prefs if isinstance(p, str) and p.strip()])
+        except Exception:
+            pass
+
+        _must_add_rx = _re_img_req.compile(
+            r'(?:добавля(?:й|ть)?|всегда\s+добавля(?:й|ть)?|добавлять|add|always\s+add|include|use)'
+            r'.{0,40}'
+            r'(?:картин|изображ|иллюстрац|фото|image|images|illustration|visual)',
+            _re_img_req.IGNORECASE,
+        )
+
+        for _r in _rules:
+            _rl = (_r or '').strip()
+            if _rl and _must_add_rx.search(_rl):
+                return True, _r
+        return False, ''
+    except Exception:
+        return False, ''
+
+
 async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> None:
     """Переводит блог-пост: RU→EN или EN→RU (автоопределение языка оригинала)."""
     try:
@@ -1281,15 +1323,27 @@ def _strip_public_emojis(text: str) -> str:
 def _extract_image_style_from_memory(user) -> str:
     """Read user rules from memory and return preferred image style if defined."""
     import json as _json_img, re as _re_img
-    _raw = getattr(user, 'memory', None) or ''
-    if not _raw:
-        return ''
+    _raw_rules: list[str] = []
     try:
         from ai_integration.memory import decrypt_data as _dec_img
-        _raw = _dec_img(_raw)
+        _mem_raw = _dec_img(getattr(user, 'memory', None) or '') if getattr(user, 'memory', None) else '{}'
+        if _mem_raw:
+            _m = _json_img.loads(_mem_raw) if _mem_raw.strip().startswith('{') else {}
+            _raw_rules.extend([r for r in _m.get('rules', []) if isinstance(r, str) and r.strip()])
     except Exception:
         pass
-    if not _raw:
+    try:
+        from ai_integration.memory import decrypt_data as _dec_img2
+        _ltm_raw = _dec_img2(getattr(user, 'long_term_memory', None) or '') if getattr(user, 'long_term_memory', None) else '{}'
+        if _ltm_raw:
+            _l = _json_img.loads(_ltm_raw) if _ltm_raw.strip().startswith('{') else {}
+            _raw_rules.extend([r for r in _l.get('rules', []) if isinstance(r, str) and r.strip()])
+            _prefs = _l.get('preferences', [])
+            if isinstance(_prefs, list):
+                _raw_rules.extend([p for p in _prefs if isinstance(p, str) and p.strip()])
+    except Exception:
+        pass
+    if not _raw_rules:
         return ''
 
     _IMG_KW = r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|стил|генерац|фото|photo|визуал|watercolor|акварел|painterly|palette|цвет'
@@ -1348,32 +1402,20 @@ def _extract_image_style_from_memory(user) -> str:
         return _score
 
     try:
-        _raw_s = _raw.strip()
-        if _raw_s.startswith('{') or _raw_s.startswith('['):
-            _mem = _json_img.loads(_raw_s)
-            _rules = _mem.get('rules', []) if isinstance(_mem, dict) else _mem
-            _best_style = ''
-            _best_score = -999
-            for _rule in _rules:
-                _rule_text = _rule if isinstance(_rule, str) else str(_rule)
-                _style = _style_from_text(_rule_text)
-                if not _style:
-                    continue
-                _sc = _score_rule(_rule_text)
-                if _sc > _best_score:
-                    _best_score = _sc
-                    _best_style = _style
-            if _best_style:
-                return _best_style
-        else:
-            _style = _style_from_text(_raw_s)
-            if _style:
-                return _style
+        _best_style = ''
+        _best_score = -999
+        for _rule_text in _raw_rules:
+            _style = _style_from_text(_rule_text)
+            if not _style:
+                continue
+            _sc = _score_rule(_rule_text)
+            if _sc > _best_score:
+                _best_score = _sc
+                _best_style = _style
+        if _best_style:
+            return _best_style
     except Exception:
-        # На битом JSON пробуем как plain text, чтобы не терять пользовательское правило
-        _style = _style_from_text(str(_raw))
-        if _style:
-            return _style
+        pass
     return ''
 
 
@@ -1503,7 +1545,10 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 if not _has_image_marker and not _skip_image_by_rule:
                     try:
                         # Всегда генерируем описание сцены из контента через AI — стиль как модификатор
-                        _img_style_sn = _explicit_visual_prompt or _style
+                        if _explicit_visual_prompt:
+                            _img_style_sn = f"{_style}, {_explicit_visual_prompt}"
+                        else:
+                            _img_style_sn = _style
                         try:
                             from ai_integration.api_client import get_api_client as _get_api_sn
                             _api_sn = _get_api_sn()
@@ -9062,6 +9107,51 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             logger.info("[CREATE_POST] Explicit image_url dropped due to user no-image rule")
             image_url = None
 
+        # Если есть явное пользовательское правило "добавлять картинки" —
+        # генерируем изображение ДО сохранения поста, чтобы блог/TG/Discord получили его сразу.
+        if not _skip_image_by_rule and (not image_url or not image_url.strip()):
+            _must_add_image, _must_rule = _user_requires_images(user)
+            if _must_add_image:
+                try:
+                    _style_req = _extract_image_style_from_memory(user) or \
+                        'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+                    if _explicit_visual_prompt:
+                        _img_style_req = f"{_style_req}, {_explicit_visual_prompt}"
+                    else:
+                        _img_style_req = _style_req
+                    _img_prompt_req = content[:150].replace('\n', ' ').strip()
+                    try:
+                        from ai_integration.api_client import get_api_client as _get_api_req
+                        _api_req = _get_api_req()
+                        _vis_resp_req = await _api_req.chat([
+                            {"role": "system", "content": (
+                                "Convert the post into a concrete image scene prompt in English. "
+                                "Return ONLY one short prompt (max 40 words). "
+                                "No meta-phrases like 'concept of'."
+                            )},
+                            {"role": "user", "content": f"Post:\n{content[:400]}"},
+                        ], max_tokens=80, temperature=0.4)
+                        _img_prompt_req = (_vis_resp_req or '').strip().strip('"').strip("'") or _img_prompt_req
+                    except Exception:
+                        pass
+
+                    _img_result_req = await generate_image(
+                        prompt=_img_prompt_req,
+                        style=_img_style_req,
+                        user_id=user_id,
+                        session=session,
+                        close_session=False,
+                        send_to_telegram=False,
+                    )
+                    _m_req = re.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result_req or '')
+                    if _m_req:
+                        image_url = _m_req.group(1)
+                        logger.info("[CREATE_POST] Mandatory image generated by user rule: %s", _must_rule[:80])
+                    else:
+                        logger.warning("[CREATE_POST] Mandatory image rule set but generation returned no URL")
+                except Exception as _e_req_img:
+                    logger.warning("[CREATE_POST] Mandatory image generation failed: %s", _e_req_img)
+
         # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
         import datetime as dt
         import pytz as _pytz_cp
@@ -9110,7 +9200,10 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                                 _style_bg = _extract_image_style_from_memory(_post_user_bg) or _style_bg
                         except Exception:
                             pass
-                        _img_style_bg = _explicit_vp_bg or _style_bg
+                        if _explicit_vp_bg:
+                            _img_style_bg = f"{_style_bg}, {_explicit_vp_bg}"
+                        else:
+                            _img_style_bg = _style_bg
                         # AI генерирует описание сцены
                         _img_prompt_bg = _content_bg[:150].replace('\n', ' ').strip()
                         try:
