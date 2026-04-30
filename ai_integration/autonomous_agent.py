@@ -4497,22 +4497,22 @@ class HybridAutonomousAgent:
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
-                            "Reply like a real chat conversation — brief and to the point (up to 400 chars, max 600 for complex tasks). "
+                            "Reply like a real chat conversation — concise but informative (usually 500-900 chars; up to 1400 for complex or blocked cases). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses.\n"
                             "Structure: WHAT you did (1 phrase) → RESULT (facts/numbers/links). "
                             "If failed — say so honestly in one sentence. "
-                            "Answer what was asked first. You may add 1 short relevant context sentence if it directly explains the result (e.g. why it failed). "
+                            "Answer what was asked first. You may add up to 2 short relevant context sentences if they directly explain the result (e.g. why it failed). "
                             "Do NOT introduce unrelated topics, offer alternatives, or suggest next steps unless asked. "
                             "No corporate speak: remove 'Great', 'Here's what we have', emoji lists. Just facts and actions."
                             + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
-                            "Ответь пользователю как в живом диалоге — кратко и по делу (до 400 символов, макс 600 для сложных задач). "
+                            "Ответь пользователю как в живом диалоге — кратко, но информативно (обычно 500-900 символов; до 1400 для сложных или заблокированных кейсов). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task.\n"
                             "Структура: ЧТО сделал (1 фраза) → РЕЗУЛЬТАТ (факты/цифры/ссылки). "
                             "Если провал — скажи честно одним предложением. "
-                            "Сначала отвечай на то что спросили. Можно добавить 1 короткую фразу уместного контекста если она прямо объясняет результат (например почему не получилось или что произошло). Не уводи в новые темы, не предлагай варианты и следующие шаги если не просили. "
+                            "Сначала отвечай на то что спросили. Можно добавить до 2 коротких фраз уместного контекста если они прямо объясняют результат (например почему не получилось или что произошло). Не уводи в новые темы, не предлагай варианты и следующие шаги если не просили. "
                             "Без канцелярита: убери 'Отлично', 'Вот что у нас', эмодзи-списки. Просто факты и действия."
                             + _note_hint_ru
                         )})
@@ -4531,9 +4531,9 @@ class HybridAutonomousAgent:
                 _is_analysis_q = any(kw in _ml_lower for kw in _ANALYSIS_KWORDS)
                 # Сократили лимиты для живого диалога: краткие ответы
                 if _is_last_iter and all_execution_results:
-                    _max_tok = 800 if _is_analysis_q else 500
+                    _max_tok = 1200 if _is_analysis_q else 900
                 else:
-                    _max_tok = 1000 if _is_analysis_q else 600
+                    _max_tok = 1200 if _is_analysis_q else 800
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,

@@ -1542,7 +1542,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 logger.info(f"[SAVE_NOTE] Blog image skipped by user rule: {_matched_img_rule[:80]}")
             if content:
                 _style = _extract_image_style_from_memory(user) or \
-                    'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+                    'watercolor painting, soft wet washes, paper grain'
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker and not _skip_image_by_rule:
                     try:
@@ -6763,7 +6763,8 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     '\n\n'.join(_parts)
                     + "\n\nℹ️ Это email-контакты из EmailContact (НЕ пользователи платформы). "
                     "Пиши ТОЛЬКО новым контактам (статус new). "
-                    "⚠️ contacted = им уже написано, send_outreach_email заблокирует повтор — используй follow-up."
+                    "⚠️ contacted = им уже писали: повтор холодного письма будет заблокирован, "
+                    "используй follow-up с новым углом и ценностью."
                 )
             else:
                 # 0 контактов — не падаем дальше на поиск пользователей платформы — сразу отвечаем четко
@@ -9116,7 +9117,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             if _must_add_image:
                 try:
                     _style_req = _extract_image_style_from_memory(user) or \
-                        'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+                        'watercolor painting, soft wet washes, paper grain'
                     if _explicit_visual_prompt:
                         _img_style_req = f"{_style_req}, {_explicit_visual_prompt}"
                     else:
@@ -9195,7 +9196,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 try:
                     _bg_session = Session()
                     try:
-                        _style_bg = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+                        _style_bg = 'watercolor painting, soft wet washes, paper grain'
                         try:
                             _post_user_bg = _bg_session.query(User).filter_by(telegram_id=_user_id_bg).first()
                             if _post_user_bg:
@@ -13734,8 +13735,8 @@ async def send_outreach_email(
                 if _ec_replied_chk:
                     return (
                         f"⛔ {_rcpt} уже ответил (статус: {_ec_replied_chk.status}). "
-                        "Не отправляй новый холодный outreach — используй reply_to_outreach_email "
-                        "чтобы ответить на их сообщение, или negotiate_by_email для продолжения диалога."
+                        "Не отправляй новый холодный outreach: продолжай текущую переписку "
+                        "и ответь на их последнее письмо по существу."
                     )
             except Exception as _e_rpl_chk:
                 logger.debug("suppressed replied check: %s", _e_rpl_chk)
@@ -18387,8 +18388,8 @@ async def save_email_contact(
             if _cur_status in ('replied', 'interested'):
                 return (
                     f"✅ {_contact_label} — статус {_cur_status}, уже в диалоге! "
-                    f"Это твой приоритет: negotiate_by_email — développe личный диалог, "
-                    f"выясни потребность, предложи конкретный следующий шаг."
+                    "Это приоритетный контакт: продолжай личный диалог, "
+                    "уточни потребность и предложи конкретный следующий шаг."
                 )
             if _cur_status == 'unsubscribed':
                 return (
@@ -19344,7 +19345,7 @@ async def generate_image(
 
         # Пользовательское правило стиля полностью заменяет стиль от агента;
         # если правила нет — платформенный дефолт (watercolor)
-        _PLATFORM_DEFAULT_STYLE = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+        _PLATFORM_DEFAULT_STYLE = 'watercolor painting, soft wet washes, paper grain'
         _user_style = _extract_image_style_from_memory(user) or None
         if _user_style:
             # Правило пользователя абсолютный приоритет — стиль агента игнорируется
