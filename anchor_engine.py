@@ -1120,8 +1120,8 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_transfer',
 }
 MAX_AUTOPILOT_MSG_PER_DAY = 500  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES
-MAX_FEED_PER_DAY = 3
-MAX_CHANNEL_PER_DAY = 1  # постов в канал в день (site-first для SEO)
+MAX_FEED_PER_DAY = 10
+MAX_CHANNEL_PER_DAY = 10  # постов в канал в день
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
