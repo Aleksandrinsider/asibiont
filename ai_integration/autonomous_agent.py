@@ -7877,6 +7877,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _ia_ctx_e:
             logger.debug('[DIRECTOR-EXEC] integration facts load: %s', _ia_ctx_e)
 
+    # Гендерная нота — определяем ДО развилки autopilot/не-autopilot (нужна в обоих путях)
+    _gender_note = (
+        "Ты МУЖЧИНА — всегда пиши в мужском роде: сделал, нашёл, проверил, готов, подготовил. "
+        "НИКОГДА: сделала, нашла, готова. "
+    ) if not _is_fem else (
+        "Ты ЖЕНЩИНА — всегда пиши в женском роде: сделала, нашла, проверила, готова, подготовила. "
+        "НИКОГДА: сделал, нашёл, готов. "
+    )
+
     if _is_autopilot_task:
         # ── Компактный autopilot system prompt ──
         # Принцип: минимум правил, максимум конкретики.
@@ -7926,13 +7935,6 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Название проекта/компании из профиля агента (передаётся из контекста пользователя)
         _company_ctx = (agent.get('company') or '').strip()
         _team_ctx = f"команде {_company_ctx}" if _company_ctx else 'команде'
-        _gender_note = (
-            f"Ты МУЖЧИНА — всегда пиши в мужском роде: сделал, нашёл, проверил, готов, подготовил. "
-            f"НИКОГДА: сделала, нашла, готова. "
-        ) if not _is_fem else (
-            f"Ты ЖЕНЩИНА — всегда пиши в женском роде: сделала, нашла, проверила, готова, подготовила. "
-            f"НИКОГДА: сделал, нашёл, готов. "
-        )
         system_prompt = (
             f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
             f"{_gender_note}"
