@@ -3,7 +3,6 @@ Database migrations — вынесены из main.py для чистоты ко
 Каждая миграция идемпотентна (проверяет существование перед добавлением).
 """
 import logging
-import os
 from sqlalchemy import text, inspect as sa_inspect
 from models import Session, engine
 from config import LOCAL
@@ -847,7 +846,7 @@ def run_migrations():
         _migrate_agent_activity_log_title_default(session, inspector)
         _cleanup_junk_agent_tasks(session)
         _migrate_intelligence_tables(session, inspector)
-        _backfill_posts_to_blog_notes(session, inspector)
+        _cleanup_backfill_blog_duplicates(session, inspector)
         _backfill_blog_note_images(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
@@ -869,71 +868,30 @@ def _migrate_intelligence_tables(session, inspector):
                 logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
 
 
-def _backfill_posts_to_blog_notes(session, inspector):
-    """Бэкфилл: создаём blog Notes для Post-ов, у которых нет соответствующей Note source='blog'.
-    Помечаем каждую Note слагом вида 'ap-{post_id}-...' чтобы не дублировать при повторных запусках."""
-    # ВАЖНО: отключено по умолчанию, чтобы удалённые вручную блог-посты не "воскресали".
-    # Включается только разово через env BACKFILL_POSTS_TO_BLOG_NOTES=1.
-    if os.getenv('BACKFILL_POSTS_TO_BLOG_NOTES', '0').strip() not in ('1', 'true', 'True', 'yes', 'YES'):
-        return
-    if not (inspector.has_table('posts') and inspector.has_table('notes')):
+def _cleanup_backfill_blog_duplicates(session, inspector):
+    """Удаляет дубли blog Notes, созданные backfill-ом (slug ap-*),
+    если есть исходная blog Note с тем же user_id + content."""
+    if not inspector.has_table('notes'):
         return
     try:
-        import re as _re_bp
-        _TRANSLIT = {
-            'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z',
-            'и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r',
-            'с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh',
-            'щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
-        }
-        # Уже забэкфиленные ap-slug'и
-        existing = {
-            row[0] for row in session.execute(text(
-                "SELECT slug FROM notes WHERE source='blog' AND slug LIKE 'ap-%'"
-            )).fetchall()
-        }
-        # Все посты с контентом, последние 300
-        rows = session.execute(text(
-            "SELECT id, user_id, content, image_url, created_at "
-            "FROM posts WHERE content IS NOT NULL AND content != '' "
-            "ORDER BY created_at DESC LIMIT 300"
-        )).fetchall()
-        count = 0
-        for post_id, user_id, content, image_url, created_at in rows:
-            # Пропускаем уже забэкфиленные
-            prefix = f'ap-{post_id}-'
-            if any(s.startswith(prefix) for s in existing):
-                continue
-            title = (content or '').strip().split('\n')[0][:120].strip()
-            if not title or len(title) < 3:
-                title = f'Пост #{post_id}'
-            s = title.lower()
-            r = ''
-            for ch in s:
-                r += _TRANSLIT.get(ch, ch)
-            r = _re_bp.sub(r'[^a-z0-9]+', '-', r).strip('-')[:50].rstrip('-') or 'post'
-            slug = f"ap-{post_id}-{r}"
-            note_content = (content or '').strip()
-            if image_url:
-                note_content = f"![]({image_url})\n\n{note_content}"
-            if created_at is not None:
-                session.execute(text(
-                    "INSERT INTO notes (user_id, title, content, source, slug, created_at) "
-                    "VALUES (:uid, :title, :content, 'blog', :slug, :created_at)"
-                ), {'uid': user_id, 'title': title, 'content': note_content,
-                    'slug': slug, 'created_at': created_at})
-            else:
-                session.execute(text(
-                    "INSERT INTO notes (user_id, title, content, source, slug) "
-                    "VALUES (:uid, :title, :content, 'blog', :slug)"
-                ), {'uid': user_id, 'title': title, 'content': note_content, 'slug': slug})
-            existing.add(slug)
-            count += 1
-        if count:
+        res = session.execute(text(
+            "DELETE FROM notes n "
+            "USING notes o "
+            "WHERE n.source='blog' "
+            "AND o.source='blog' "
+            "AND n.id <> o.id "
+            "AND n.user_id = o.user_id "
+            "AND COALESCE(n.content, '') = COALESCE(o.content, '') "
+            "AND n.slug LIKE 'ap-%' "
+            "AND (o.slug IS NULL OR o.slug NOT LIKE 'ap-%') "
+            "AND n.created_at >= o.created_at"
+        ))
+        deleted = int(getattr(res, 'rowcount', 0) or 0)
+        if deleted:
             session.commit()
-            logger.info(f"[MIGRATION] Backfilled {count} posts as blog Notes")
+            logger.info(f"[MIGRATION] Removed {deleted} duplicate blog Notes from backfill")
     except Exception as _e:
-        logger.warning(f"[MIGRATION] Post->blog Note backfill failed: {_e}")
+        logger.warning(f"[MIGRATION] Blog duplicate cleanup failed: {_e}")
         session.rollback()
 
 
