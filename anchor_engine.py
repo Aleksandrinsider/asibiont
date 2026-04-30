@@ -26698,6 +26698,23 @@ class AnchorEngine:
                 )
                 return
 
+            # Гендерная коррекция и очистка opener-слов для агентских сообщений
+            if _agent_name and message:
+                try:
+                    import re as _re_agent_fix
+                    # Убираем opener-слова типа "Пишу.", "Слушаю.", "Работаю." в начале
+                    message = _re_agent_fix.sub(
+                        r'^(?:Пишу|Слушаю|Работаю|Думаю|Анализирую|Ищу|Изучаю|Проверяю|Отправляю|Готовлю)\.\s*\n?',
+                        '',
+                        message,
+                        flags=_re_agent_fix.IGNORECASE,
+                    ).strip()
+                    # Гендерная коррекция: is_fem=False для мужских агентов
+                    _is_fem_agent = _detect_agent_is_female(_agent_name)
+                    message = _sanitize_proactive_text(message, is_fem=_is_fem_agent)
+                except Exception as _gender_agent_err:
+                    logger.debug("[ANCHOR] agent gender fix failed: %s", _gender_agent_err)
+
             # Оборачиваем контент в __agent JSON, если есть агент
             interaction_content = message
             if _agent_name:
