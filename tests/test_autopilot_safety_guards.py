@@ -53,7 +53,7 @@ def test_publish_guard_removes_false_success_when_channel_error():
 
 
 def test_universal_policy_blocks_publish_tools_from_memory_rule():
-    rules = ["Не публикуй ничего без моего явного подтверждения"]
+    rules = ["Запомни: никогда не публикуй ничего без моего явного подтверждения"]
 
     blocked = aa_mod._resolve_forbidden_tools(rules, "сделай отчёт")
 
@@ -61,13 +61,12 @@ def test_universal_policy_blocks_publish_tools_from_memory_rule():
     assert 'publish_to_telegram' in blocked
 
 
-def test_universal_policy_blocks_email_tools_from_current_message():
+def test_universal_policy_does_not_make_permanent_block_from_context_message():
     rules = []
 
     blocked = aa_mod._resolve_forbidden_tools(rules, "не отправляй письма и без email")
 
-    assert 'send_outreach_email' in blocked
-    assert 'send_email' in blocked
+    assert blocked == {}
 
 
 def test_universal_policy_allows_domain_when_user_explicitly_reenables():
@@ -76,3 +75,16 @@ def test_universal_policy_allows_domain_when_user_explicitly_reenables():
     blocked = aa_mod._resolve_forbidden_tools(rules, "можно картинки, сделай картинку к посту")
 
     assert 'generate_image' not in blocked
+
+
+def test_contextual_block_only_for_current_send_action():
+    should_block, reason = aa_mod._should_block_tool_call(
+        tool_name='send_outreach_email',
+        params={'body': 'Отправляю это сообщение партнёру'},
+        user_rules=[],
+        user_message='не отправляй эту информацию',
+        coarse_blocked={},
+    )
+
+    assert should_block is True
+    assert 'текущем запросе' in reason.lower()

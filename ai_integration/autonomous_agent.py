@@ -399,106 +399,118 @@ def _collect_user_rules_text(user_obj) -> list[str]:
 
 
 def _resolve_forbidden_tools(user_rules: list[str], user_message: str = '') -> dict[str, str]:
-    """Возвращает {tool_name: reason} по универсальным запретам пользователя.
+    """Возвращает постоянные запреты из памяти пользователя.
 
-    Приоритет: явный запрет пользователя > поведение агента по умолчанию.
+    Использует только устойчивые правила (всегда/никогда/запомни/на будущее).
+    Контекстные команды текущего запроса обрабатывает `_should_block_tool_call`.
     """
-    _domains = [
-        {
-            'name': 'publish',
-            'tools': {
-                'create_post', 'publish_to_telegram', 'publish_to_discord',
-                'publish_to_vk', 'publish_to_twitter', 'publish_to_linkedin',
-                'start_content_campaign',
-            },
-            'deny': (
-                r'не\s+(?:публикуй|выкладывай|размещай|пость|пости)',
-                r'без\s+публикац',
-                r'не\s+надо\s+пост',
-                r"don't\s+publish",
-                r'no\s+publish',
-            ),
-            'allow': (
-                r'можно\s+публиковать',
-                r'публикуй',
-                r"publish\s+it",
-            ),
-            'reason': 'Запрет пользователя: не публиковать контент.',
-        },
-        {
-            'name': 'email',
-            'tools': {
-                'send_outreach_email', 'send_email', 'reply_to_outreach_email',
-                'send_follow_up_email', 'negotiate_by_email', 'start_email_campaign',
-            },
-            'deny': (
-                r'не\s+(?:пиши|отправляй)\s+(?:письм|email|имейл|почт)',
-                r'без\s+(?:email|почт|рассыл)',
-                r'запрет\s+email',
-                r"don't\s+send\s+email",
-                r'no\s+email',
-            ),
-            'allow': (
-                r'можно\s+писать\s+(?:на\s+)?почт',
-                r'отправь\s+письмо',
-                r"send\s+email",
-            ),
-            'reason': 'Запрет пользователя: не отправлять email.',
-        },
-        {
-            'name': 'images',
-            'tools': {'generate_image'},
-            'deny': (
-                r'без\s+картин',
-                r'не\s+(?:генерируй|делай|добавляй)\s+(?:картин|изображен)',
-                r'без\s+изображени',
-                r"don't\s+generate\s+image",
-                r'no\s+image',
-            ),
-            'allow': (
-                r'можно\s+картин',
-                r'сделай\s+картин',
-                r"generate\s+image",
-            ),
-            'reason': 'Запрет пользователя: не генерировать изображения.',
-        },
-        {
-            'name': 'payments',
-            'tools': {'create_payment_link', 'process_yookassa_payment', 'send_payment_invoice'},
-            'deny': (
-                r'не\s+(?:нужно|надо)\s+реквизит',
-                r'не\s+отправляй\s+реквизит',
-                r'без\s+оплат',
-                r"don't\s+send\s+payment",
-                r'no\s+payment',
-            ),
-            'allow': (
-                r'можно\s+реквизит',
-                r'пришли\s+ссылк\w*\s+на\s+оплат',
-                r"send\s+payment\s+link",
-            ),
-            'reason': 'Запрет пользователя: не инициировать оплату/реквизиты.',
-        },
+    _blocked: dict[str, str] = {}
+    _rules = [r for r in (user_rules or []) if isinstance(r, str) and r.strip()]
+
+    def _is_persistent(_txt: str) -> bool:
+        _t = (_txt or '').lower()
+        return any(_m in _t for _m in (
+            'всегда', 'никогда', 'вообще', 'впредь', 'на будущее', 'запомни',
+            'always', 'never', 'from now on',
+        ))
+
+    _persistent_rules = [r.lower() for r in _rules if _is_persistent(r)]
+    if not _persistent_rules:
+        return _blocked
+
+    _blob = '\n'.join(_persistent_rules)
+
+    _tool_groups = [
+        (
+            {'create_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign'},
+            ('не публикуй', 'без публикац', "don't publish", 'no publish'),
+            'Запрет пользователя: не публиковать контент.',
+        ),
+        (
+            {'send_outreach_email', 'send_email', 'reply_to_outreach_email', 'send_follow_up_email', 'negotiate_by_email', 'start_email_campaign'},
+            ('не отправляй пись', 'не пиши пись', 'без email', 'без почт', "don't send email", 'no email'),
+            'Запрет пользователя: не отправлять email.',
+        ),
+        (
+            {'generate_image'},
+            ('без картин', 'не генерируй картин', 'не добавляй изображ', "don't generate image", 'no image'),
+            'Запрет пользователя: не генерировать изображения.',
+        ),
+        (
+            {'create_payment_link', 'process_yookassa_payment', 'send_payment_invoice'},
+            ('не отправляй реквизит', 'без оплат', "don't send payment", 'no payment'),
+            'Запрет пользователя: не инициировать оплату/реквизиты.',
+        ),
     ]
 
-    _blocked: dict[str, str] = {}
-    _all_rules = [r for r in (user_rules or []) if isinstance(r, str) and r.strip()]
-    _msg = (user_message or '').strip()
-    _rules_blob = '\n'.join(_all_rules).lower()
-    _msg_low = _msg.lower()
-
-    for _d in _domains:
-        _allow_now = any(re.search(_p, _msg_low, flags=re.IGNORECASE) for _p in _d['allow'])
-        if _allow_now:
-            continue
-
-        _denied_by_mem = any(re.search(_p, _rules_blob, flags=re.IGNORECASE) for _p in _d['deny'])
-        _denied_by_msg = any(re.search(_p, _msg_low, flags=re.IGNORECASE) for _p in _d['deny'])
-        if _denied_by_mem or _denied_by_msg:
-            for _t in _d['tools']:
-                _blocked[_t] = _d['reason']
+    for _tools, _markers, _reason in _tool_groups:
+        if any(_m in _blob for _m in _markers):
+            for _t in _tools:
+                _blocked[_t] = _reason
 
     return _blocked
+
+
+def _should_block_tool_call(
+    tool_name: str,
+    params: dict,
+    user_rules: list[str],
+    user_message: str,
+    coarse_blocked: dict[str, str] | None = None,
+) -> tuple[bool, str]:
+    """Точечная проверка запрета для конкретного вызова инструмента.
+
+    Идея: не запрещать целую категорию из-за одной фразы, а блокировать
+    только релевантные действия в текущем запросе.
+    """
+    _coarse = coarse_blocked or {}
+    if tool_name in _coarse:
+        return True, _coarse[tool_name]
+
+    _msg = (user_message or '').lower()
+    _rules_blob = '\n'.join([r for r in (user_rules or []) if isinstance(r, str)]).lower()
+
+    _send_tools = {
+        'send_outreach_email', 'send_email', 'reply_to_outreach_email',
+        'send_follow_up_email', 'negotiate_by_email',
+        'create_post', 'publish_to_telegram', 'publish_to_discord',
+        'create_payment_link', 'process_yookassa_payment', 'send_payment_invoice',
+    }
+
+    _has_contextual_deny = any(
+        re.search(_p, _msg, flags=re.IGNORECASE)
+        for _p in (
+            r'не\s+отправляй\s+(?:эту|это|этот|данн\w*)',
+            r"don't\s+send\s+this",
+            r'не\s+публикуй\s+(?:эту|это|этот|данн\w*)',
+        )
+    )
+
+    # Локальный запрет на конкретную «эту информацию» — только на текущий запрос
+    # и только для инструментов отправки/публикации.
+    if _has_contextual_deny and tool_name in _send_tools:
+        return True, 'В текущем запросе пользователь запретил отправлять эту информацию.'
+
+    # Контентный фильтр для сообщений вида "не отправляй X"
+    _m_topic = re.search(
+        r'не\s+отправляй\s+(?:информац(?:ию|ии)\s+)?(?:про|о|об)\s+(.+)$',
+        _msg,
+        flags=re.IGNORECASE,
+    )
+    if _m_topic and tool_name in _send_tools:
+        _topic = (_m_topic.group(1) or '').strip(' .,!?:;"\'')
+        if _topic:
+            _payload_parts = []
+            for _k in ('content', 'text', 'body', 'message', 'subject', 'prompt', 'caption'):
+                _v = params.get(_k)
+                if isinstance(_v, str) and _v.strip():
+                    _payload_parts.append(_v.lower())
+            _payload = '\n'.join(_payload_parts)
+            _topic_tokens = [t for t in re.split(r'\s+', _topic.lower()) if len(t) >= 4][:6]
+            if _payload and _topic_tokens and any(t in _payload for t in _topic_tokens):
+                return True, f'Пользователь запретил отправлять информацию на тему: {_topic[:80]}.'
+
+    return False, ''
 
 
 def _get_active_agent_integration_snapshot(user_id: int) -> dict:
@@ -3081,9 +3093,15 @@ class HybridAutonomousAgent:
                 params = dict(raw_params)
                 reason = action.get('reason', '')
 
-                # Universal user-policy enforcement: запрещённые пользователем действия не выполняем.
-                _block_reason = _blocked_tools_exec.get(tool_name)
-                if _block_reason:
+                # Universal user-policy enforcement: умная точечная проверка запрета.
+                _is_blocked_call, _block_reason = _should_block_tool_call(
+                    tool_name=tool_name,
+                    params=params,
+                    user_rules=_user_rules_exec,
+                    user_message=(user_message or ''),
+                    coarse_blocked=_blocked_tools_exec,
+                )
+                if _is_blocked_call:
                     logger.warning('[EXEC] %s BLOCKED by user policy: %s', tool_name, _block_reason)
                     results.append({
                         'tool': tool_name,
