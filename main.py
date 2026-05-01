@@ -7370,19 +7370,20 @@ async def on_startup(app):
         else:
             webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
             _set_ok = False
-            for _attempt in range(3):
+            for _attempt in range(5):
                 try:
                     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
                     logger.info(f"✅ Webhook set to: {webhook_url}")
                     _set_ok = True
                     break
                 except Exception as e:
-                    if _attempt >= 2:
-                        logger.error(f"❌ Failed to set webhook after retries: {e}")
+                    if _attempt >= 4:
+                        logger.warning(f"[WEBHOOK] failed to set webhook after retries: {e}")
                         break
-                    _sleep = 3 * (_attempt + 1)  # 3s, 6s — give Telegram flood limit time to clear
+                    # 5s, 10s, 20s, 30s: лучше переживает краткие сетевые деградации платформы.
+                    _sleep = min(30, 5 * (2 ** _attempt))
                     await asyncio.sleep(_sleep)
-                    logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/3 after error: {e}")
+                    logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/5 after error: {e}")
             if not _set_ok:
                 logger.warning("[WEBHOOK] Bot starts without confirmed webhook; platform will retry on next restart")
             globals()['_webhook_last_attempt'] = _t_mod.time()

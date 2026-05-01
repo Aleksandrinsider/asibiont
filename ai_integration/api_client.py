@@ -477,6 +477,32 @@ class ExternalAPIClient:
     _DDG_FAIL_THRESHOLD: int = 4
     _DDG_SKIP_SECONDS: float = 300.0  # 5 минут
 
+    # Weather circuit breaker: при деградации сети не спамим OWM каждую минуту.
+    _weather_fail_streak: int = 0
+    _weather_skip_until: float = 0.0
+    _WEATHER_FAIL_THRESHOLD: int = 4
+    _WEATHER_SKIP_SECONDS: float = 180.0
+
+    def _weather_available(self) -> bool:
+        import time as _t
+        return _t.time() >= ExternalAPIClient._weather_skip_until
+
+    def _weather_record_fail(self) -> None:
+        import time as _t
+        ExternalAPIClient._weather_fail_streak += 1
+        if ExternalAPIClient._weather_fail_streak >= ExternalAPIClient._WEATHER_FAIL_THRESHOLD:
+            ExternalAPIClient._weather_skip_until = _t.time() + ExternalAPIClient._WEATHER_SKIP_SECONDS
+            logger.warning(
+                "[WEATHER] circuit breaker opened for %.0fs after %d consecutive failures",
+                ExternalAPIClient._WEATHER_SKIP_SECONDS,
+                ExternalAPIClient._weather_fail_streak,
+            )
+            ExternalAPIClient._weather_fail_streak = 0
+
+    def _weather_record_success(self) -> None:
+        ExternalAPIClient._weather_fail_streak = 0
+        ExternalAPIClient._weather_skip_until = 0.0
+
     def _get_ddg_semaphore(self) -> asyncio.Semaphore:
         if self._ddg_semaphore is None:
             ExternalAPIClient._ddg_semaphore = asyncio.Semaphore(1)
@@ -942,6 +968,10 @@ class ExternalAPIClient:
         # Rate-limit
         if not await self.rate_limiter.acquire('openweathermap'):
             return None
+
+        # Circuit breaker: при внешней сетевой деградации делаем паузу.
+        if not self._weather_available():
+            return None
         
         session = await self._get_session()
         
@@ -974,19 +1004,23 @@ class ExternalAPIClient:
                                 'city_name': data['name']
                             }
                             _clr_err('openweathermap')
+                            self._weather_record_success()
                             await self.cache.set('weather', cache_params, result, cache_ttl)
                             return result
 
                         _rec_err('openweathermap', f'API error {response.status}', code=response.status)
+                        self._weather_record_fail()
                         logger.warning(f"[WEATHER] API error {response.status} for: {city}")
                         return None
                 except (asyncio.TimeoutError, aiohttp.ClientError) as _net_err:
                     if _attempt >= 2:
+                        self._weather_record_fail()
                         raise
                     await asyncio.sleep(0.8 * (_attempt + 1))
                     logger.warning(f"[WEATHER] transient network error (attempt {_attempt+1}/3): {_net_err}")
                     
         except Exception as e:
+            self._weather_record_fail()
             _rec_err('openweathermap', f'Exception: {e}')
             logger.error(f"[WEATHER] Error: {e}")
             return None

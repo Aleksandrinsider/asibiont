@@ -137,9 +137,19 @@ async def start_discord_bot():
                 if _is_timeout and _retry <= 5:
                     _delay = min(30, 2 * _retry)
                     logger.warning(f"Discord bot transient network error (retry {_retry}/5 in {_delay}s): {e}")
+                    try:
+                        if not bot.is_closed():
+                            await bot.close()
+                    except Exception:
+                        pass
                     await asyncio.sleep(_delay)
                     continue
                 logger.error(f"Discord bot error: {e}", exc_info=True)
+                try:
+                    if not bot.is_closed():
+                        await bot.close()
+                except Exception:
+                    pass
                 return
 
     _discord_task = asyncio.create_task(runner())
