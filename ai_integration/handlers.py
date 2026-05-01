@@ -255,6 +255,67 @@ def _validate_email_domain(email: str) -> tuple:
         return True, None  # On any unexpected error, don't block sending
 
 
+def _normalize_email_input(raw_email: str) -> str:
+    """Extract and normalize email from noisy input.
+
+    Handles forms like:
+    - "Name <user@example.com>"
+    - "user . name @ example . com"
+    - strings with extra spaces/newlines/metadata.
+    """
+    _raw = str(raw_email or '').strip()
+    if not _raw:
+        return ''
+
+    # Remove all whitespace first — this recovers common "spaced email" input.
+    _compact = re.sub(r'\s+', '', _raw)
+    _m = re.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _compact, re.ASCII)
+    if _m:
+        return _m.group(0).strip().lower()
+
+    # Fallback: try original text in case compacting damaged separators unexpectedly.
+    _m2 = re.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _raw, re.ASCII)
+    if _m2:
+        return _m2.group(0).strip().lower()
+
+    return _compact.lower()
+
+
+def _build_default_followup_body(user_lang: str = 'ru', recipient_name: str = '') -> str:
+    """Build safe fallback body when follow-up text is missing."""
+    _lang = (user_lang or 'ru').lower()
+    if _lang not in ('ru', 'en'):
+        _lang = 'ru'
+    _name = (recipient_name or '').strip()
+    if _lang == 'en':
+        if _name:
+            return (
+                f"Hi {_name},\n\n"
+                "Following up on my previous email to share the latest market updates. "
+                "If this is relevant for you, I can send a concise summary and key takeaways by email.\n\n"
+                "Best regards,"
+            )
+        return (
+            "Hi,\n\n"
+            "Following up on my previous email to share the latest market updates. "
+            "If this is relevant for you, I can send a concise summary and key takeaways by email.\n\n"
+            "Best regards,"
+        )
+    if _name:
+        return (
+            f"Здравствуйте, {_name}!\n\n"
+            "Возвращаюсь к предыдущему письму: есть обновлённые данные по рынку. "
+            "Если актуально, пришлю краткую сводку и ключевые выводы в ответном письме.\n\n"
+            "С уважением,"
+        )
+    return (
+        "Здравствуйте!\n\n"
+        "Возвращаюсь к предыдущему письму: есть обновлённые данные по рынку. "
+        "Если актуально, пришлю краткую сводку и ключевые выводы в ответном письме.\n\n"
+        "С уважением,"
+    )
+
+
 def _text_to_email_html(text: str) -> str:
     """Конвертирует plain-text тело письма в HTML с сохранением абзацев.
     \n\n → <p>, \n → <br>. Параграфы не слипаются в один блок.
@@ -13670,13 +13731,8 @@ async def send_outreach_email(
         # ── NORMALIZE: извлекаем чистый email из любого формата ──
         # Агент может передать "Имя <email@example.com>", "email@example.com (GitHub)",
         # строку с пробелами/переносами и т.п. — извлекаем только email.
-        import re as _re_email_norm
         _raw_rcpt = (recipient_email or '').strip()
-        _email_norm_m = _re_email_norm.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _raw_rcpt, _re_email_norm.ASCII)
-        if _email_norm_m:
-            recipient_email = _email_norm_m.group().strip().lower()
-        else:
-            recipient_email = _raw_rcpt.lower()
+        recipient_email = _normalize_email_input(_raw_rcpt)
 
         # ── GUARD: невалидный email после нормализации ──
         if (not recipient_email or '@' not in recipient_email
@@ -14179,7 +14235,24 @@ async def send_outreach_email(
                 recipient_email=recipient_email,
             ).first()
         if existing and existing.status not in ('draft', 'failed'):
-            return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}. Для повторного контакта используй send_follow_up_email — не пытайся слать новое."
+            _auto_body = body or _build_default_followup_body(
+                user_lang=(getattr(user, 'language', 'ru') or 'ru'),
+                recipient_name=(recipient_name or ''),
+            )
+            _fu_result = await send_follow_up_email(
+                outreach_id=existing.id,
+                recipient_email=recipient_email,
+                subject=subject,
+                body=_auto_body,
+                user_id=user_id,
+                sent_by_agent=sent_by_agent,
+                session=session,
+                close_session=False,
+            )
+            return (
+                f"↪ Автопереключение: контакт уже в кампании #{campaign.id}, "
+                f"выполняю send_follow_up_email.\n{_fu_result}"
+            )
 
         # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
         # 1. Не слать тому, кому уже отправляли из другой кампании последние 14 дней
@@ -14194,7 +14267,24 @@ async def send_outreach_email(
         if cross_existing:
             other_camp = session.query(EmailCampaign).filter_by(id=cross_existing.campaign_id).first()
             other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
-            return f" {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}), cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней. Используй send_follow_up_email если контакт ответил, иначе жди окончания cooldown."
+            _auto_body = body or _build_default_followup_body(
+                user_lang=(getattr(user, 'language', 'ru') or 'ru'),
+                recipient_name=(recipient_name or ''),
+            )
+            _fu_result = await send_follow_up_email(
+                outreach_id=cross_existing.id,
+                recipient_email=recipient_email,
+                subject=subject,
+                body=_auto_body,
+                user_id=user_id,
+                sent_by_agent=sent_by_agent,
+                session=session,
+                close_session=False,
+            )
+            return (
+                f"↪ Автопереключение: {recipient_email} уже в кампании «{other_name}», "
+                f"выполняю send_follow_up_email.\n{_fu_result}"
+            )
 
         # 2. Не слать тому, кто ранее получил hard bounce (bounced)
         # 'failed' = технические/валидационные ошибки — не блокируем навсегда
@@ -15734,6 +15824,10 @@ async def send_follow_up_email(
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return " Пользователь не найден"
+
+        # Нормализуем email получателя из свободного ввода агента/пользователя
+        _raw_follow_rcpt = (recipient_email or '').strip()
+        recipient_email = _normalize_email_input(_raw_follow_rcpt)
 
         # Найти письмо
         outreach = None
