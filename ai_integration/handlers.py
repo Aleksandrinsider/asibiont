@@ -17941,6 +17941,21 @@ async def send_email(
         if not user:
             return " Пользователь не найден."
 
+        # ── USER RULE ENFORCEMENT: no call/meeting proposals in email ───────
+        try:
+            if _has_email_no_calls_rule(user):
+                subject, _se_subj_fixed = _sanitize_no_calls_subject(subject, body)
+                body, _se_body_fixed = _sanitize_no_calls_email_text(body)
+                if _se_subj_fixed or _se_body_fixed:
+                    logger.info(
+                        "[SEND_EMAIL][NO_CALLS_RULE] sanitized: user_id=%s subj_fixed=%s body_fixed=%s",
+                        user_id,
+                        _se_subj_fixed,
+                        _se_body_fixed,
+                    )
+        except Exception as _no_calls_send_email_err:
+            logger.debug("send_email no-calls rule check skipped: %s", _no_calls_send_email_err)
+
         # ── Проверяем почтовые интеграции пользователя ──────────────────────
         _email_integrations = _get_user_email_integrations(user, session)
         _chosen_integration = None
@@ -17996,9 +18011,10 @@ async def send_email(
         # Всегда использовать email из интеграции (не из параметров ИИ)
         sender_email = _chosen_integration['email_user']
         # Нормализация адресата
-        to_clean = to.strip().lower()
+        _raw_to = (to or '').strip()
+        to_clean = _normalize_email_input(_raw_to)
         if not to_clean or '@' not in to_clean:
-            return f" Некорректный email получателя: {to!r}. Укажи адрес в формате name@domain.com"
+            return f" Некорректный email получателя: {_raw_to!r}. Укажи адрес в формате name@domain.com"
 
         # ── GUARD: не отправлять email самому себе (user.email / IMAP-аккаунт агента) ──
         _own_emails_se = set()
