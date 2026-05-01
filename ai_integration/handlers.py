@@ -13722,20 +13722,40 @@ async def send_outreach_email(
             import json as _json_er
             import re as _re_url
             _mem_er = _json_er.loads(_dec_email_rule(user.memory)) if user.memory else {}
-            _EMAIL_STOP_KW = ('не писать', 'не отправлять', 'не слать', 'стоп email',
-                              'stop email', 'без email', 'без рассылк', 'запрет email',
-                              'не рассыл', 'прекрати email', 'прекрати рассыл',
-                              'отключить email', 'отключи email', 'не использовать email',
-                              'не отправляй email', 'не отправляй письм',
-                              'не пиши по email', 'не пиши email', 'не пиши по почте',
-                              'не писать по email', 'не писать email', 'не писать по почте')
+            # Только явные ГЛОБАЛЬНЫЕ запреты email-канала.
+            # Общие фразы "не писать"/"не отправлять" не используем,
+            # чтобы адресные правила не блокировали всю рассылку.
+            _EMAIL_STOP_KW = (
+                'стоп email', 'stop email', 'без email', 'запрет email',
+                'без рассылк', 'прекрати email', 'прекрати рассыл',
+                'отключить email', 'отключи email', 'не использовать email',
+                'не отправляй email', 'не отправляй письм', 'не отправлять email',
+                'не пиши по email', 'не пиши email', 'не пиши по почте',
+                'не писать по email', 'не писать email', 'не писать по почте',
+            )
+            _NEGATIVE_CONTACT_KW = (
+                'не писать', 'не пиши', 'не отправлять', 'не отправляй',
+                'не слать', 'не отвечать', 'не вести переписку', 'игнорируй',
+                'не контактировать', 'не связываться',
+            )
+            _EMAIL_RE_ER = _re_url.compile(r'[\w.+-]+@[\w-]+\.[\w.]+', _re_url.IGNORECASE)
             _URL_RE = _re_url.compile(r'https?://[^\s\'">,]+', _re_url.IGNORECASE)
             _SITE_KW = ('сайт', 'site', 'landing', 'лендинг', 'url', 'ссылк', 'мой сайт', 'наш сайт', 'платформ')
             for _r_er in _mem_er.get('rules', []):
-                if any(kw in _r_er.lower() for kw in _EMAIL_STOP_KW):
+                _r_low = _r_er.lower()
+                _rule_emails = {m.lower() for m in _EMAIL_RE_ER.findall(_r_er or '')}
+                # Адресный запрет: блокируем только конкретного получателя.
+                if _rule_emails and recipient_email and recipient_email.lower() in _rule_emails:
+                    if any(kw in _r_low for kw in _NEGATIVE_CONTACT_KW):
+                        return f"⛔ Отправка на {recipient_email} запрещена правилом пользователя: «{_r_er[:80]}»"
+                # Глобальный запрет email-канала.
+                if any(kw in _r_low for kw in _EMAIL_STOP_KW):
+                    # Если правило с конкретным email, это не глобальный блок.
+                    if _rule_emails:
+                        continue
                     return f"⛔ Email-рассылка заблокирована правилом пользователя: «{_r_er[:80]}»"
                 # Извлекаем URL из правил вида "мой сайт https://..." или "landing: https://..."
-                if not _user_landing_url and any(kw in _r_er.lower() for kw in _SITE_KW):
+                if not _user_landing_url and any(kw in _r_low for kw in _SITE_KW):
                     _url_match = _URL_RE.search(_r_er)
                     if _url_match:
                         _user_landing_url = _url_match.group(0).rstrip('/')

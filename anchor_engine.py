@@ -6167,19 +6167,31 @@ class AnchorEngine:
         _email_blocked_by_rule = False
         try:
             from ai_integration.memory import decrypt_data as _dec_rules_pu
+            import re as _re_rules_pu
             _mem_raw_pu = _dec_rules_pu(user.memory) if user.memory else '{}'
             _mem_dict_pu = json.loads(_mem_raw_pu) if _mem_raw_pu else {}
             _user_rules_pu = _mem_dict_pu.get('rules', [])
-            _EMAIL_STOP_KW = ('не писать', 'не отправлять', 'не слать', 'стоп email',
-                              'stop email', 'без email', 'без рассылк', 'запрет email',
-                              'не рассыл', 'прекрати email', 'прекрати рассыл',
-                              'отключить email', 'отключи email', 'не использовать email',
-                              'не отправляй email', 'не отправляй письм',
-                              'не пиши по email', 'не пиши email', 'не пиши по почте',
-                              'не писать по email', 'не писать email', 'не писать по почте')
+            # ВАЖНО: только ЯВНЫЕ глобальные запреты email-канала.
+            # Не используем общие фразы вроде "не писать" — они часто относятся
+            # к одному контакту (например: "не писать на ap@...") и не должны
+            # выключать всю рассылку.
+            _EMAIL_STOP_KW = (
+                'стоп email', 'stop email', 'без email', 'запрет email',
+                'без рассылк', 'прекрати email', 'прекрати рассыл',
+                'отключить email', 'отключи email', 'не использовать email',
+                'не отправляй email', 'не отправляй письм', 'не отправлять email',
+                'не пиши по email', 'не пиши email', 'не пиши по почте',
+                'не писать по email', 'не писать email', 'не писать по почте',
+            )
+            _EMAIL_RE_PU = _re_rules_pu.compile(r'[\w.+-]+@[\w-]+\.[\w.]+', _re_rules_pu.IGNORECASE)
             for _r_pu in _user_rules_pu:
                 _r_low = _r_pu.lower()
+                _has_explicit_contact = bool(_EMAIL_RE_PU.search(_r_low))
                 if any(kw in _r_low for kw in _EMAIL_STOP_KW):
+                    # Если в правиле явно указан контактный email,
+                    # считаем это адресным запретом, а НЕ глобальным.
+                    if _has_explicit_contact:
+                        continue
                     _email_blocked_by_rule = True
                     logger.info(f"[ANCHOR] User {user_id}: ⛔ email blocked by user rule: {_r_pu[:80]}")
                     break
