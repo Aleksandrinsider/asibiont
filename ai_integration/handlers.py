@@ -944,17 +944,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
                 session.close()
             return f"[INTERNAL] Задача '{_completed_dup.title}' уже выполнялась этим циклом. Перейди к следующему шагу."
 
-        # Лимит: максимум 10 pending задач от агентов — не засоряем пользователю список
-        _agent_pending_count = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status == 'pending',
-            Task.source == 'agent',
-        ).count()
-        if _agent_pending_count >= 10:
-            logger.warning(f"[ADD_TASK] Agent pending limit reached: {_agent_pending_count} tasks for user {user.id}")
-            if close_session:
-                session.close()
-            return "[INTERNAL] Лимит задач от агентов (10 pending). НЕ сообщай пользователю — переключись на другое действие."
+        # Ограничение pending-задач для агента отключено: не блокируем автопилот.
     
     # Create new task — время обязательно для пользовательских задач,
     # но агентские задачи (created_by_agent_id) могут быть без времени (отслеживание прогресса)
@@ -1647,17 +1637,8 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             else:
                 _note_title = content.strip()[:200] if content.strip() else 'Заметка'
 
-        # --- Rate limit: автопилот не должен спамить заметками ---
-        _since_1h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=1)
+        # Rate-limit заметок отключён: сохраняем всё, что агент считает важным.
         _since_24h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=24)
-        _recent_notes_1h = session.query(Note).filter(
-            Note.user_id == user.id,
-            Note.created_at >= _since_1h,
-            Note.source == 'chat',
-        ).count()
-        if _recent_notes_1h >= 12:
-            logger.info(f"[SAVE_NOTE] Rate limit: {_recent_notes_1h} notes in last hour for user {user.id}")
-            return "[INTERNAL] Лимит заметок: уже создано 12+ за последний час. Сохраняй только финальные выводы с конкретными данными — не промежуточные шаги."
 
         # --- Дедуп: проверяем похожий заголовок за последние 4ч (было 24ч — слишком агрессивно) ---
         _since_dedup = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=4)
@@ -9311,7 +9292,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if not _skip_image_by_rule and (not image_url or not image_url.strip()):
             _must_add_image, _must_rule = _user_requires_images(user)
             _user_style_pref = (_extract_image_style_from_memory(user) or '').strip()
-            _force_sync_image = _must_add_image or bool(_user_style_pref) or bool(_explicit_visual_prompt)
+            _has_publish_channel = bool(getattr(user, 'telegram_channel', None)) or bool(getattr(user, 'discord_webhook', None))
+            _force_sync_image = _must_add_image or bool(_user_style_pref) or bool(_explicit_visual_prompt) or _has_publish_channel
             if _force_sync_image:
                 try:
                     # Дефолт если нет user-стиля: базовый watercolor.
@@ -9360,7 +9342,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 except Exception as _e_req_img:
                     logger.warning("[CREATE_POST] Sync image generation failed: %s", _e_req_img)
 
-        # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
+        # Жёсткий лимит постов отключён: публикации не блокируем.
         import datetime as dt
         import pytz as _pytz_cp
         _utz_cp = _pytz_cp.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
@@ -9370,8 +9352,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             Post.user_id == user.id,
             Post.created_at >= _today_start_cp,
         ).count()
-        # Hard-stop лимит по числу постов в день отключён: пользователь явно может публиковать
-        # больше 10 материалов в день. Сохраняем только метрику posts_today для аналитики/логов.
+        # posts_today оставляем только для аналитики/логов.
 
         # ── Сразу сохраняем пост в БД (без картинки) — гарантируем что пост создан ──
         # Картинка генерируется в фоне и добавляется к посту асинхронно
@@ -9952,17 +9933,7 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         ).count()
         
         total_channel_posts_today = auto_channel_today + manual_channel_today
-        # Лимит поднят до 20 — не блокируем публикации
-        if total_channel_posts_today >= 20 and not force:
-            channel = user.telegram_channel or 'канал'
-            if not channel.startswith('@') and not channel.startswith('-'):
-                channel = f"@{channel}"
-            next_reset = (today_start + timedelta(days=1)).strftime('%H:%M')
-            return (
-                f"⛔ Публикация в {channel} недоступна: достигнут лимит 20 постов/день. "
-                f"Сброс лимита в {next_reset} ({user.timezone or 'Europe/Moscow'}). "
-                "Сохрани текст через create_post и предложи опубликовать вручную или дождаться сброса."
-            )
+        # Дневной лимит публикаций в Telegram отключён.
         
         # Если content это JSON строка от generate_marketing_content, парсим
         try:
@@ -10968,16 +10939,13 @@ async def send_message_to_user(
             except (json.JSONDecodeError, TypeError):
                 pass
         
-        # Антиспам: макс 3 сообщения в день одному получателю
+        # Ограничение сообщений в день одному получателю отключено.
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         sent_today = session.query(UserMessage).filter(
             UserMessage.sender_id == sender.id,
             UserMessage.recipient_id == recipient.id,
             UserMessage.created_at >= today_start
         ).count()
-        
-        if sent_today >= 3:
-            return "[INTERNAL] Лимит сообщений (3/день одному получателю). НЕ сообщай пользователю — переключись на другого получателя."
 
         # Дедупликация по intent: тот же intent тому же получателю за последние 6 часов
         # Предотвращает дубли от агентов, запущенных несколько раз за цикл
@@ -11252,7 +11220,7 @@ async def find_and_message_relevant_users(
         top = [c for c in top if c['user'].id not in already_messaged_today]
         
         if not top:
-            return "[INTERNAL] Всем подходящим получателям уже написали. НЕ сообщай пользователю — расширь поиск или переключись на другую задачу."
+            return "Подходящих новых получателей нет: либо контакты отсутствуют, либо уже были охвачены."
         
         # Preview mode: вернуть список без отправки
         if preview_only:
@@ -11273,12 +11241,7 @@ async def find_and_message_relevant_users(
             result += "\n\n💡 Скажи «отправляй» чтобы написать им, или уточни кому именно."
             return result
         
-        total_sent_today = len(already_messaged_today)
-        remaining = max(0, 50 - total_sent_today)
-        if remaining == 0:
-            return "[INTERNAL] Лимит исходящих сообщений (50/день) исчерпан. НЕ сообщай пользователю — переключись на другую задачу."
-        
-        top = top[:remaining]
+        # Дневной лимит исходящих сообщений отключён.
         
         # Отправляем сообщения
         sent_results = []
@@ -14138,45 +14101,15 @@ async def send_outreach_email(
                     pass
                 return "⚠️ Нет активной email-кампании. Вызови start_email_campaign чтобы создать её, затем повтори отправку."
 
-        # Проверка лимитов (max_emails=0 означает безлимитно)
-        if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
-            campaign.status = 'completed'
-            session.commit()
-            return f" Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
+        # Ограничение max_emails отключено: кампанию не останавливаем по счётчику.
 
-        # Дневной лимит — считаем «сегодня» по таймзоне пользователя
+        # Дневные email-лимиты отключены: today_start оставляем для служебной логики.
         from datetime import datetime as dt, timezone as tz
         import pytz as _pytz
         _user_tz = _pytz.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
         _user_now = dt.now(_user_tz)
         _day_local = _user_now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start = _day_local.astimezone(tz.utc)
-        sent_today = session.query(EmailOutreach).filter(
-            EmailOutreach.campaign_id == campaign.id,
-            EmailOutreach.sent_at >= today_start,
-            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-        ).count()
-        if sent_today >= campaign.daily_limit:
-            return f"[INTERNAL] Дневной лимит ({campaign.daily_limit} писем) исчерпан. НЕ сообщай пользователю — переключись на другую задачу (контент, исследование, задачи)."
-
-        # Глобальный дневной лимит: УНИКАЛЬНЫХ получателей на пользователя в сутки
-        GLOBAL_DAILY_LIMIT = 100
-        from sqlalchemy import func, distinct as _distinct
-        global_recipients_today = session.query(
-            func.count(_distinct(EmailOutreach.recipient_email))
-        ).filter(
-            EmailOutreach.user_id == user.id,
-            EmailOutreach.sent_at >= today_start,
-            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-        ).scalar() or 0
-        # Проверяем только если это новый получатель сегодня
-        is_new_recipient_today = not session.query(EmailOutreach).filter(
-            EmailOutreach.user_id == user.id,
-            EmailOutreach.recipient_email == recipient_email,
-            EmailOutreach.sent_at >= today_start,
-        ).first()
-        if is_new_recipient_today and global_recipients_today >= GLOBAL_DAILY_LIMIT:
-            return f"[INTERNAL] Лимит уникальных получателей ({GLOBAL_DAILY_LIMIT}/день) исчерпан. НЕ сообщай пользователю — переключись на другую задачу (create_post, research_topic, add_task)."
 
         # ── ATOMIC GUARD: pg_try_advisory_xact_lock предотвращает race condition ──
         # ВАЖНО: используем pg_TRY_advisory_xact_lock (не блокирующий вариант) —
@@ -15861,22 +15794,9 @@ async def send_follow_up_email(
         if not campaign:
             return " Кампания не найдена."
 
-        max_follow_ups = campaign.max_follow_ups or 2
-        # Если контакт ответил (replied) — follow-up без ограничений (продолжаем диалог)
-        if outreach.status != 'replied' and outreach.follow_up_count >= max_follow_ups:
-            return f" Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}. Контакт не отвечает."
+        # Лимит количества follow-up отключён.
 
-        # ── GUARD: слишком рано для follow-up ──
-        if outreach.status != 'replied' and outreach.next_follow_up_at:
-            from datetime import datetime as _dt_fu_g, timezone as _tz_fu_g
-            _nfu_g = outreach.next_follow_up_at
-            if _nfu_g.tzinfo is None:
-                _nfu_g = _nfu_g.replace(tzinfo=_tz_fu_g.utc)
-            if _dt_fu_g.now(_tz_fu_g.utc) < _nfu_g:
-                _days_left = max(1, int((_nfu_g - _dt_fu_g.now(_tz_fu_g.utc)).total_seconds() // 86400) + 1)
-                return (f"⏰ Ещё рано для follow-up {outreach.recipient_email} — "
-                        f"следующий запланирован на {_nfu_g.strftime('%d.%m')} (через ~{_days_left} дн.). "
-                        f"Переключись на другую задачу — не беспокой контакт раньше времени.")
+        # Ограничение по времени до следующего follow-up отключено.
 
         # Follow-up — к уже существующему получателю, глобальный лимит не применяется
 
@@ -18278,19 +18198,7 @@ async def send_email(
         if not mx_valid:
             return f" {mx_err}"
 
-        # Простой дневной лимит для прямых писем: 50 отправок/день
-        from models import EmailOutreach as _EO_check
-        from datetime import datetime as _dt_limit, timezone as _tz_limit
-        import pytz as _pytz_limit
-        _user_tz_p = _pytz_limit.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
-        _today_start = _dt_limit.now(_user_tz_p).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_limit.utc)
-        from sqlalchemy import func as _func_limit
-        _sent_today = session.query(_func_limit.count(_EO_check.id)).filter(
-            _EO_check.user_id == user.id,
-            _EO_check.sent_at >= _today_start,
-        ).scalar() or 0
-        if _sent_today >= 50:
-            return f" Достигнут дневной лимит: {_sent_today} писем отправлено сегодня (макс. 50). Продолжим завтра."
+        # Дневной лимит прямых писем отключён.
 
 
         from config import WEB_APP_URL
@@ -18895,24 +18803,7 @@ async def publish_to_discord(
                 "Переформулируй контент как экспертный пост для подписчиков."
             )
 
-        # Лимит: 1 пост в Discord в день (можно обойти force=True если пользователь явно просит)
-        if not force:
-            import pytz as _pytz_dc
-            import datetime as _dt_dc
-            _utz_dc = _pytz_dc.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
-            _today_dc = _dt_dc.datetime.now(_utz_dc).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_dc.UTC).replace(tzinfo=None)
-            try:
-                from models import AgentActivityLog as _AAL
-                _discord_today = session.query(_AAL).filter(
-                    _AAL.user_id == user.id,
-                    _AAL.activity_type == 'post_discord',
-                    _AAL.created_at >= _today_dc,
-                    _AAL.status == 'published',
-                ).count()
-                if _discord_today >= 20:
-                    return f" Сегодня в Discord уже {_discord_today} постов (anti-spam лимит — 20 в день)."
-            except Exception as _lim_e:
-                logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
+        # Дневной лимит публикаций в Discord отключён.
 
         import aiohttp as _aiohttp
 
