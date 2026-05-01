@@ -926,3 +926,48 @@ def test_g40_build_agent_goal_strategy_block_includes_own_and_team_context():
     assert 'Не повторяй без нового основания' in block
     assert 'Твои недавние попытки' in block
     assert 'Что уже делала команда' in block
+
+
+def test_g41_critic_layer_in_agent_block_when_fails_present():
+    from anchor_engine import _build_agent_goal_strategy_block
+
+    strategy_content = (
+        'Гипотеза: персонализированный outreach даёт больше ответов.\n'
+        'Сработало: письма с упоминанием конкретного pain point.\n'
+        'Не сработало: массовый outreach по общей базе без сегментации.\n'
+        'Почему не сработало: аудитория слишком широкая, нет ICP-фильтрации.\n'
+        'Следующий эксперимент: сегмент fintech seed-стартапов, письма на founders.'
+    )
+
+    block = _build_agent_goal_strategy_block(
+        'Привлечь B2B клиентов',
+        strategy_content,
+        agent_name='Beatrice',
+        per_agent_history={},
+    )
+
+    # Critic-layer должен быть виден агенту с провалами
+    assert 'ПЕРЕД ПОВТОРОМ ПРОВАЛЬНОГО ХОДА' in block
+    assert 'Какую конкретную гипотезу' in block or 'гипотезу' in block.lower()
+    assert 'Что изменилось vs' in block or 'изменилось' in block.lower()
+    # why_failed должен попасть в блок
+    assert 'Почему провалилось' in block or 'аудитория' in block.lower()
+
+
+def test_g42_format_parse_roundtrip_with_why_failed():
+    from anchor_engine import _format_goal_strategy_note_content, _parse_goal_strategy_note_content
+
+    content = _format_goal_strategy_note_content(
+        hypothesis='ICP outreach работает лучше.',
+        works='Персонализация по pain point.',
+        fails='Общий outreach без фильтрации.',
+        next_experiment='Тест 5 писем fintech founders.',
+        why_failed='Слишком широкая аудитория без сегментации.',
+    )
+    parsed = _parse_goal_strategy_note_content(content)
+
+    assert parsed['hypothesis'] == 'ICP outreach работает лучше.'
+    assert parsed['works'] == 'Персонализация по pain point.'
+    assert parsed['fails'] == 'Общий outreach без фильтрации.'
+    assert parsed['why_failed'] == 'Слишком широкая аудитория без сегментации.'
+    assert parsed['next_experiment'] == 'Тест 5 писем fintech founders.'

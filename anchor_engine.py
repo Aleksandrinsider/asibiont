@@ -1787,11 +1787,13 @@ def _select_goal_relevant_history(goal_title: str, per_agent_history: dict, limi
     return selected
 
 
-def _format_goal_strategy_note_content(hypothesis: str, works: str, fails: str, next_experiment: str) -> str:
+def _format_goal_strategy_note_content(hypothesis: str, works: str, fails: str, next_experiment: str,
+                                        why_failed: str = '') -> str:
     return (
         f"Гипотеза: {(hypothesis or 'данных пока мало').strip()}\n"
         f"Сработало: {(works or 'данных пока мало').strip()}\n"
         f"Не сработало: {(fails or 'явных провалов пока не зафиксировано').strip()}\n"
+        f"Почему не сработало: {(why_failed or 'не проанализировано').strip()}\n"
         f"Следующий эксперимент: {(next_experiment or 'получить один подтверждённый результат и обновить стратегию').strip()}"
     )
 
@@ -1801,6 +1803,7 @@ def _parse_goal_strategy_note_content(content: str) -> dict[str, str]:
         'hypothesis': 'данных пока мало',
         'works': 'данных пока мало',
         'fails': 'явных провалов пока не зафиксировано',
+        'why_failed': 'не проанализировано',
         'next_experiment': 'получить один подтверждённый результат и обновить стратегию',
     }
     for line in (content or '').splitlines():
@@ -1812,6 +1815,8 @@ def _parse_goal_strategy_note_content(content: str) -> dict[str, str]:
             parsed['works'] = stripped.split(':', 1)[1].strip() or parsed['works']
         elif lower.startswith('не сработало:'):
             parsed['fails'] = stripped.split(':', 1)[1].strip() or parsed['fails']
+        elif lower.startswith('почему не сработало:'):
+            parsed['why_failed'] = stripped.split(':', 1)[1].strip() or parsed['why_failed']
         elif lower.startswith('следующий эксперимент:'):
             parsed['next_experiment'] = stripped.split(':', 1)[1].strip() or parsed['next_experiment']
     return parsed
@@ -1830,7 +1835,16 @@ def _build_goal_strategy_memory_block(strategy_items: list[dict]) -> str:
         lines.append(f"    Сработало: {(item.get('works') or 'данных пока мало').strip()[:220]}")
         lines.append(f"    Не сработало: {(item.get('fails') or 'явных провалов пока не зафиксировано').strip()[:220]}")
         lines.append(f"    Следующий эксперимент: {(item.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip()[:220]}")
-    lines.append('  Правило: если повторяешь ход из блока «Не сработало», обязан явно назвать, что изменилось в сегменте, канале или оффере.')
+        _why = (item.get('why_failed') or '').strip()
+        if _why and _why not in ('не проанализировано', 'данных пока мало'):
+            lines.append(f"    Почему не сработало: {_why[:220]}")
+    lines.append(
+        '  🔍 КРИТИК-ПРОТОКОЛ: если повторяешь ход из блока «Не сработало» — ОБЯЗАН явно ответить:\n'
+        '    • Какую гипотезу проверяю этим ходом?\n'
+        '    • Что конкретно изменилось vs прошлая попытка: аудитория / канал / оффер / формулировка / источник данных?\n'
+        '    • Какой сигнал подтвердит, что новая версия лучше?\n'
+        '    Нет ответа → выбери другой подход.'
+    )
     return '\n'.join(lines) + '\n\n'
 
 
@@ -1856,13 +1870,19 @@ def _build_agent_goal_strategy_block(goal_title: str, strategy_content: str, age
     if not has_signal:
         return ''
 
+    _fails_val = (parsed.get('fails') or 'явных провалов пока не зафиксировано').strip()
+    _why_val = (parsed.get('why_failed') or 'не проанализировано').strip()
     lines = [
         '🧠 СТРАТЕГИЯ ИМЕННО ПО ЭТОЙ ЦЕЛИ:',
         f"  Гипотеза: {(parsed.get('hypothesis') or 'данных пока мало').strip()[:220]}",
         f"  Повтори: {(parsed.get('works') or 'данных пока мало').strip()[:220]}",
-        f"  Не повторяй без нового основания: {(parsed.get('fails') or 'явных провалов пока не зафиксировано').strip()[:220]}",
-        f"  Следующий эксперимент: {(parsed.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip()[:220]}",
+        f"  Не повторяй без нового основания: {_fails_val[:220]}",
     ]
+    if _why_val not in ('не проанализировано', 'данных пока мало'):
+        lines.append(f"  Почему провалилось: {_why_val[:220]}")
+    lines.append(
+        f"  Следующий эксперимент: {(parsed.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip()[:220]}"
+    )
     if own_history:
         lines.append('  Твои недавние попытки по этой цели:')
         for snippet in own_history:
@@ -1871,7 +1891,18 @@ def _build_agent_goal_strategy_block(goal_title: str, strategy_content: str, age
         lines.append('  Что уже делала команда по этой цели:')
         for snippet in team_history:
             lines.append(f'    • {snippet[:220]}')
-    lines.append('  Если снова идёшь в ход из блока «Не повторяй», сначала измени сегмент, канал, сообщение или источник данных.')
+    # Мягкий critic-layer: требует обоснования перед повтором провала
+    _has_fails = _fails_val not in ('явных провалов пока не зафиксировано', 'данных пока мало', '')
+    if _has_fails:
+        lines += [
+            '  🔍 ПЕРЕД ПОВТОРОМ ПРОВАЛЬНОГО ХОДА — ответь себе:',
+            '    1. Какую конкретную гипотезу проверяю именно сейчас?',
+            '    2. Что изменилось vs прошлая попытка? (аудитория / канал / оффер / формулировка / источник данных)',
+            '    3. Какой сигнал подтвердит, что эта версия лучше?',
+            '    Нет ответа → выбери другой подход.',
+        ]
+    else:
+        lines.append('  Если идёшь в новый ход — сначала назови: что тестируешь и какой результат считаешь успехом.')
     return '\n' + '\n'.join(lines) + '\n'
 
 
@@ -1978,13 +2009,14 @@ async def _build_goal_strategy_memory(goals_summary: list, per_agent_history: di
             'На входе только факты: метрики, последние действия, прошлые выводы. '
             'Нужно не пересказать лог, а обновить рабочую гипотезу по каждой цели.\n\n'
             'Верни ТОЛЬКО JSON-массив объектов. Формат каждого объекта:\n'
-            '[{"goal_index":1,"hypothesis":"...","works":"...","fails":"...","next_experiment":"..."}]\n\n'
+            '[{"goal_index":1,"hypothesis":"...","works":"...","fails":"...","why_failed":"...","next_experiment":"..."}]\n\n'
             'Правила:\n'
             '1. Опирайся только на факты из входа, не выдумывай метрики и каналы.\n'
             '2. works = что стоит повторить. fails = что не надо повторять без нового основания.\n'
-            '3. next_experiment = один конкретный следующий тест или ход.\n'
-            '4. Если данных мало, так и напиши: "данных пока мало".\n'
-            '5. Не пиши markdown, комментарии и пояснения вне JSON.\n\n'
+            '3. why_failed = конкретная причина провала (не та аудитория, не тот канал, слабое предложение, нет данных, и т.п.). Если неизвестно, пиши: "не проанализировано".\n'
+            '4. next_experiment = один конкретный следующий тест или ход.\n'
+            '5. Если данных мало, так и напиши: "данных пока мало".\n'
+            '6. Не пиши markdown, комментарии и пояснения вне JSON.\n\n'
             + '\n'.join(evidence_parts)
         )
         reflection_raw = await _quick_ai_call_raw(
@@ -2013,6 +2045,7 @@ async def _build_goal_strategy_memory(goals_summary: list, per_agent_history: di
                     'hypothesis': (reflection.get('hypothesis') or 'данных пока мало').strip(),
                     'works': (reflection.get('works') or 'данных пока мало').strip(),
                     'fails': (reflection.get('fails') or 'явных провалов пока не зафиксировано').strip(),
+                    'why_failed': (reflection.get('why_failed') or 'не проанализировано').strip(),
                     'next_experiment': (reflection.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip(),
                 })
             if strategy_items:
@@ -2022,7 +2055,8 @@ async def _build_goal_strategy_memory(goals_summary: list, per_agent_history: di
                         for item in strategy_items:
                             note_title = _goal_strategy_note_title(item['goal_title'])
                             note_content = _format_goal_strategy_note_content(
-                                item['hypothesis'], item['works'], item['fails'], item['next_experiment']
+                                item['hypothesis'], item['works'], item['fails'], item['next_experiment'],
+                                why_failed=item.get('why_failed', ''),
                             )
                             note = _save_sess.query(_StrategyNote).filter(
                                 _StrategyNote.user_id == user_id,
