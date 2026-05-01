@@ -12663,6 +12663,36 @@ class AnchorEngine:
 
             # ── Failed/cancelled tasks awareness — координатор ЗНАЕТ что провалилось ──
             _failed_tasks_str = ''
+
+            # ── Email CRM статистика — координатор знает кому ещё не писали ──
+            _email_crm_str = ''
+            try:
+                from models import EmailContact as _EC_coord, EmailOutreach as _EO_coord
+                _new_count = session.query(_EC_coord).filter(
+                    _EC_coord.user_id == user.id,
+                    _EC_coord.status == 'new',
+                ).count()
+                _fu_count = session.query(_EO_coord).filter(
+                    _EO_coord.user_id == user.id,
+                    _EO_coord.status.in_(['sent', 'delivered']),
+                    _EO_coord.follow_up_count < 3,
+                    _EO_coord.sent_at <= datetime.now(timezone.utc) - timedelta(days=3),
+                ).count()
+                _today_count = session.query(_EO_coord).filter(
+                    _EO_coord.user_id == user.id,
+                    _EO_coord.sent_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                ).count()
+                _email_parts = []
+                if _new_count > 0:
+                    _email_parts.append(f'📬 {_new_count} новых контактов БЕЗ письма — назначь рассылку ПРЯМО СЕЙЧАС')
+                if _fu_count > 0:
+                    _email_parts.append(f'⏰ {_fu_count} просроченных follow-up (3+ дней без ответа) — назначь send_follow_up_email')
+                if _today_count < 10:
+                    _email_parts.append(f'⚠️ Отправлено писем сегодня: только {_today_count} — это ниже нормы (должно быть 30-100/день)')
+                if _email_parts:
+                    _email_crm_str = '📧 EMAIL СТАТУС:\n' + '\n'.join(f'  • {p}' for p in _email_parts) + '\n'
+            except Exception as _ec_err:
+                logger.debug('[COORD] email crm stats: %s', _ec_err)
             try:
                 from models import Task as _Task_fail
                 from models import AgentActivityLog as _AAL_fail
@@ -12711,13 +12741,13 @@ class AnchorEngine:
                     for _to in _aal_timeouts:
                         _title_low = (_to.title or '').lower()
                         _ag_to = next((p['name'] for p in _profiles if p['name'].lower() in _title_low), '?')
-                        _ft_lines.append(f'  ⚠️ ТАЙМАУТ ({_ag_to}): {(_to.title or "")[:80]} — если повторять, упрости задачу или смени подход')
+                        _ft_lines.append(f'  ⚠️ ТАЙМАУТ → ПОВТОРИ ({_ag_to}): {(_to.title or "")[:80]} — назначь снова, разбей на 1 шаг')
                     for _ae in _aal_errors:
                         _ae_title_low = (_ae.title or '').lower()
                         _ae_agent = next((p['name'] for p in _profiles if p['name'].lower() in _ae_title_low), '?')
                         _ae_result_short = (_ae.result or '')[:120].strip()
                         _ft_lines.append(f'  ⚠️ ПРОБЛЕМА ({_ae_agent}): {(_ae.title or "")[:60]} → {_ae_result_short}')
-                    _ft_lines.append('  → Учти эти результаты: смени стратегию, упрости задачу, или попробуй другой подход.')
+                    _ft_lines.append('  → Таймауты = назначь снова с более коротким заданием (1 инструмент = 1 задача). Остальное — смени стратегию или подход.')
                     _failed_tasks_str = '\n'.join(_ft_lines) + '\n'
             except Exception as _ft_err:
                 logger.debug('[COORD] failed tasks query: %s', _ft_err)
@@ -14969,6 +14999,7 @@ class AnchorEngine:
                 + (f"Кампании: {_email_campaigns_str}\n" if _has_outreach_goals or _email_sent > 0 else '')
                 + f"{_banned_tools_str}"
                 + f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
+                + f"{_email_crm_str}"
                 + f"{_failed_tasks_str}"
                 + f"{_do_not_contact_str}"
                 + _missing_intg_str_c
@@ -17393,8 +17424,9 @@ class AnchorEngine:
 
                     # ── DEDUP: не создавать задачу если аналогичная уже была за 8 часов ──
                     # Рутинные действия (check_emails, reply) не дедуплицируем — они важны каждый цикл
+                    # send_outreach_email НЕ освобождён — иначе одинаковые задачи плодятся 3+ раза
                     _NODEDUP_TOOLS = {'check_emails', 'reply_to_outreach_email', 'send_follow_up_email',
-                                       'send_outreach_email', 'negotiate_by_email'}
+                                       'negotiate_by_email'}
                     _skip_dedup = _tool_hint in _NODEDUP_TOOLS
                     _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=8)
                     # Стоп-слова: не учитывать при сравнении

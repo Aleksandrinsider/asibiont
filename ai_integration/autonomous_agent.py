@@ -7080,7 +7080,7 @@ def _build_user_context_sync(user_db_id: int) -> str:
             contacts = (_s.query(_EC)
                         .filter_by(user_id=user_db_id)
                         .order_by(_EC.created_at.desc())
-                        .limit(10).all())
+                        .limit(30).all())
             tasks = (_s.query(_T)
                      .filter(_T.user_id == user_db_id, _T.status.in_(['pending', 'in_progress']))
                      .order_by(_T.due_date.asc().nullslast())
@@ -7093,6 +7093,7 @@ def _build_user_context_sync(user_db_id: int) -> str:
 
     # ── Дополнительные запросы: история писем + активность команды ──
     outreach_recent: list = []
+    followup_overdue: list = []
     team_activity_recent: list = []
     try:
         from models import Session as _Db2, EmailOutreach as _EO_uc, AgentActivityLog as _AAL_uc
@@ -7104,6 +7105,18 @@ def _build_user_context_sync(user_db_id: int) -> str:
                 .filter_by(user_id=user_db_id)
                 .order_by(_EO_uc.created_at.desc())
                 .limit(5).all()
+            )
+            # Follow-up overdue: sent 3+ days ago, follow_up_count < 3, no reply
+            followup_overdue = (
+                _s2.query(_EO_uc)
+                .filter(
+                    _EO_uc.user_id == user_db_id,
+                    _EO_uc.status.in_(['sent', 'delivered']),
+                    _EO_uc.follow_up_count < 3,
+                    _EO_uc.sent_at <= _dt_uc_act.datetime.now(_dt_uc_act.timezone.utc) - _dt_uc_act.timedelta(days=3),
+                )
+                .order_by(_EO_uc.sent_at.asc())
+                .limit(20).all()
             )
             team_activity_recent = (
                 _s2.query(_AAL_uc)
@@ -7198,22 +7211,41 @@ def _build_user_context_sync(user_db_id: int) -> str:
 
     # --- Email-контакты пользователя ---
     if contacts:
-        contact_lines = []
-        for c in contacts:
-            line = f'• {c.name or "(нет имени)"} <{c.email}>'
-            if c.company:
-                line += f', {c.company}'
-            if c.position:
-                line += f', {c.position}'
-            if c.status and c.status != 'new':
-                line += f' [{c.status}]'
-            if c.notes:
-                line += f' — {c.notes[:80]}'
-            contact_lines.append(line)
-        parts.append(
-            'EMAIL-КОНТАКТЫ (уже в базе — НЕ ищи их повторно!):\n' + '\n'.join(contact_lines)
-            + '\n⚠️ Эти люди УЖЕ сохранены. Ищи НОВЫХ контактов, не дублируй этих.'
-        )
+        _new_contacts = [c for c in contacts if (c.status or 'new') == 'new']
+        _other_contacts = [c for c in contacts if (c.status or 'new') != 'new']
+
+        if _new_contacts:
+            _new_lines = []
+            for c in _new_contacts[:15]:
+                line = f'• {c.name or "(нет имени)"} <{c.email}>'
+                if c.company:
+                    line += f', {c.company}'
+                if c.position:
+                    line += f', {c.position}'
+                if c.notes:
+                    line += f' — {c.notes[:80]}'
+                _new_lines.append(line)
+            parts.append(
+                f'📬 КОНТАКТЫ БЕЗ ПИСЬМА — ПИШИ ИМ ПРЯМО СЕЙЧАС ({len(_new_contacts)} чел.):\n'
+                + '\n'.join(_new_lines)
+                + '\n⚡ Это ПРИОРИТЕТ: вызови send_outreach_email для каждого из них. Не ищи новых — сначала напиши этим.'
+            )
+
+        if _other_contacts:
+            _other_lines = []
+            for c in _other_contacts[:10]:
+                line = f'• {c.name or "(нет имени)"} <{c.email}>'
+                if c.company:
+                    line += f', {c.company}'
+                if c.status:
+                    line += f' [{c.status}]'
+                if c.notes:
+                    line += f' — {c.notes[:60]}'
+                _other_lines.append(line)
+            parts.append(
+                'EMAIL-КОНТАКТЫ (уже писали):\n' + '\n'.join(_other_lines)
+                + '\n⚠️ Этим людям уже отправляли письма. Повторно — только follow-up если прошло 3+ дня.'
+            )
 
     # --- История outreach писем (последние 5) ---
     if outreach_recent:
@@ -7232,6 +7264,22 @@ def _build_user_context_sync(user_db_id: int) -> str:
         parts.append(
             'ИСТОРИЯ OUTREACH (последние письма):\n' + '\n'.join(_o_lines)
             + '\n⚠️ sent/replied = УЖЕ писали этому человеку. replied = ждёт ответа.'
+        )
+
+    # --- Follow-up overdue (просроченные) ---
+    if followup_overdue:
+        import datetime as _dt_fu
+        _fu_lines = []
+        for _fo in followup_overdue:
+            _days_ago = (_dt_fu.datetime.now(_dt_fu.timezone.utc) - _fo.sent_at.replace(tzinfo=_dt_fu.timezone.utc)).days if _fo.sent_at else 0
+            _fu_lines.append(
+                f"• {_fo.recipient_name or ''} <{_fo.recipient_email}> — "
+                f"«{(_fo.subject or '')[:50]}» (отправлено {_days_ago}д назад, fu_count={_fo.follow_up_count})"
+            )
+        parts.append(
+            f'⏰ ПРОСРОЧЕННЫЕ FOLLOW-UP ({len(followup_overdue)} чел.) — СРОЧНО ОТПРАВЬ ПРЯМО СЕЙЧАС:\n'
+            + '\n'.join(_fu_lines)
+            + '\n⚡ Вызови send_follow_up_email для каждого. Нет ответа 3+ дней = нужен follow-up.'
         )
 
     # --- Активные задачи пользователя ---
