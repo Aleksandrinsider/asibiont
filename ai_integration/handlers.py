@@ -327,6 +327,64 @@ def _has_existing_email_signature(text: str, sender_name: str = '') -> bool:
     return False
 
 
+def _build_sender_role_line(session, user_id: int, sender_name: str) -> str:
+    """Build optional role/company line for sender signature."""
+    if not session or not user_id:
+        return ''
+    try:
+        from models import UserProfile as _UP_sig
+        _prof_sig = session.query(_UP_sig).filter_by(user_id=user_id).first()
+        if not _prof_sig:
+            return ''
+        _pos = (getattr(_prof_sig, 'position', '') or '').strip()
+        _comp = (getattr(_prof_sig, 'company', '') or '').strip()
+        if _pos and _comp:
+            return f"{_pos}, {_comp}"
+        if _pos:
+            return _pos
+        if _comp:
+            return _comp
+        return ''
+    except Exception:
+        return ''
+
+
+def _ensure_sender_signature(body: str, sender_name: str = '', session=None, user_id: int | None = None) -> tuple[str, bool]:
+    """Ensure outgoing email has a complete sender signature without duplicates.
+
+    Returns (updated_body, has_signature_markers).
+    """
+    _body = (body or '').rstrip()
+    _sig_name = (sender_name or '').strip()
+    _has_sig_markers = _has_existing_email_signature(_body, sender_name=_sig_name)
+
+    if not _sig_name:
+        return _body, _has_sig_markers
+
+    _role_line = _build_sender_role_line(session, user_id or 0, _sig_name)
+
+    if not _has_sig_markers:
+        _body = _body + f"\n\n— {_sig_name}"
+        if _role_line:
+            _body += f"\n{_role_line}"
+        return _body, True
+
+    # Incomplete sign-off case: "С уважением," / "Best regards," without sender name.
+    if _sig_name.lower() not in _body.lower():
+        import re as _re_sign_tail
+        _tail = _body[-240:]
+        _incomplete_signoff = bool(_re_sign_tail.search(
+            r'(?is)(?:с\s+уважением|best\s+regards|kind\s+regards|regards|sincerely|thanks)\s*,?\s*$',
+            _tail,
+        ))
+        if _incomplete_signoff:
+            _body = _body + f"\n{_sig_name}"
+            if _role_line:
+                _body += f"\n{_role_line}"
+
+    return _body, _has_sig_markers
+
+
 def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '', unsub_url: str = '') -> str:
     """Общий HTML-шаблон для email с unsubscribe footer.
 
@@ -14287,61 +14345,12 @@ async def send_outreach_email(
         # 2. "—" или "– " (дефис перед подписью)
         # 3. Любое имя (собственное) в последних 3 строках (признак готовой подписи)
         _sig_name = (campaign.sender_name or '').strip()
-        _body_signed = body
-        _has_sig_markers = _has_existing_email_signature(_body_signed, sender_name=_sig_name)
-        # Неполная подпись: есть только sign-off ("С уважением,"/"Best regards,") без имени.
-        # В таком случае обязательно дописываем имя отправителя.
-        _incomplete_signoff = False
-        if _sig_name and _has_sig_markers and _sig_name.lower() not in (_body_signed or '').lower():
-            import re as _re_sign_tail
-            _tail_signed = (_body_signed or '').strip()[-240:]
-            _incomplete_signoff = bool(_re_sign_tail.search(
-                r'(?is)(?:с\s+уважением|best\s+regards|kind\s+regards|regards|sincerely|thanks)\s*,?\s*$',
-                _tail_signed,
-            ))
-            if _incomplete_signoff:
-                _sig_position = ''
-                try:
-                    from models import UserProfile as _UP_sig
-                    _prof_sig = session.query(_UP_sig).filter_by(user_id=user.id).first()
-                    if _prof_sig:
-                        _pos = (getattr(_prof_sig, 'position', '') or '').strip()
-                        _comp = (getattr(_prof_sig, 'company', '') or '').strip()
-                        if _pos and _comp:
-                            _sig_position = f"{_pos}, {_comp}"
-                        elif _pos:
-                            _sig_position = _pos
-                        elif _comp:
-                            _sig_position = _comp
-                except Exception:
-                    pass
-                _body_signed = _body_signed.rstrip() + f"\n{_sig_name}"
-                if _sig_position:
-                    _body_signed += f"\n{_sig_position}"
-                # После автодополнения подпись считается корректной.
-                _has_sig_markers = True
-        # Если нет признаков подписи И нет имён в конце → добавляем только если нужно
-        if _sig_name and not _has_sig_markers:
-            # Должность и компания из профиля — дополняют имя агента
-            _sig_position = ''
-            try:
-                from models import UserProfile as _UP_sig
-                _prof_sig = session.query(_UP_sig).filter_by(user_id=user.id).first()
-                if _prof_sig:
-                    _pos = (getattr(_prof_sig, 'position', '') or '').strip()
-                    _comp = (getattr(_prof_sig, 'company', '') or '').strip()
-                    if _pos and _comp:
-                        _sig_position = f"{_pos}, {_comp}"
-                    elif _pos:
-                        _sig_position = _pos
-                    elif _comp:
-                        _sig_position = _comp
-            except Exception:
-                pass
-            _sig_block = f"\n\n— {_sig_name}"
-            if _sig_position:
-                _sig_block += f"\n{_sig_position}"
-            _body_signed = body.rstrip() + _sig_block
+        _body_signed, _has_sig_markers = _ensure_sender_signature(
+            body=body,
+            sender_name=_sig_name,
+            session=session,
+            user_id=user.id,
+        )
 
         # Сайт и Telegram НЕ добавляем если уже есть подпись в письме
         # (чтобы не создавать пеструю смесь из разных подписей)
@@ -14926,6 +14935,14 @@ async def reply_to_outreach_email(
             reply_body, _reply_fixed = _sanitize_no_calls_email_text(reply_body)
             if _reply_fixed:
                 logger.info("[EMAIL_REPLY] Auto-sanitized call/meeting phrases by user rule (user_id=%s)", user_id)
+
+        # Универсальная подпись отправителя: единый пайплайн для всех исходящих email.
+        reply_body, _ = _ensure_sender_signature(
+            body=reply_body,
+            sender_name=_campaign_sender_name,
+            session=session,
+            user_id=user.id,
+        )
 
         # ── GUARD: блокируем плейсхолдеры в тексте ответа ──
         import re as _re_placeholder
