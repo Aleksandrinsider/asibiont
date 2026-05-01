@@ -3648,6 +3648,30 @@ class HybridAutonomousAgent:
                     params['query'] = 'поиск информации'
                 logger.info(f"[FIX_PARAMS] web_search: set query='{params['query'][:60]}'")
 
+            # Guard для outreach: блокируем низкоконверсионные запросы
+            # вида StackOverflow/dev.to profile scraping и направляем на рабочий шаблон.
+            _q = str(params.get('query') or '').strip()
+            _q_l = _q.lower()
+            _looks_outreach = any(w in _q_l for w in (
+                'email', 'contact', 'contacts', 'редакц', 'editor', 'founder',
+                'cto', 'ceo', 'journalist', 'outreach', 'лид', 'партн',
+            ))
+            _bad_sources = (
+                'stackoverflow.com', 'stack overflow', 'dev.to', 'site:dev.to',
+                'site:stackoverflow.com', 'stackoverflow/users',
+            )
+            if _looks_outreach and any(bs in _q_l for bs in _bad_sources):
+                params['__skip__'] = True
+                params['__block_error__'] = (
+                    "⛔ Этот web_search-запрос для outreach неэффективен (StackOverflow/dev.to profiles). "
+                    "Сделай запрос по рабочему шаблону:\n"
+                    "1) site:company.com (team OR about OR press OR contacts) + имя\n"
+                    "2) site:linkedin.com/in + имя + company\n"
+                    "3) company domain + firstname.lastname@domain\n"
+                    "Или используй find_relevant_contacts_for_task + save_email_contact."
+                )
+                return params
+
         elif tool_name == 'add_task' and user_message:
             if 'title' not in params or not params.get('title'):
                 # DeepSeek вызвал add_task без title — извлекаем из сообщения
@@ -8344,6 +8368,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "     Telegram-канал → run_agent_action telegram_get_channel или web_search «имя + сайт»\n"
             "     Habr/DTF/VC профиль → web_search «имя + личный сайт OR GitHub OR LinkedIn» (не «имя email contact»)\n"
             "  ⛔ web_search «ник/логин email contact» ВСЕГДА даёт 0 — это потеря хода. Используй инструмент платформы или ищи сайт человека.\n"
+            "  ⛔ Для outreach НЕ используй StackOverflow/dev.to профили как первичный источник email — конверсия почти нулевая.\n"
+            "     Вместо этого: site:company.com (team|about|press|contacts) + имя, либо LinkedIn/company page + corporate domain.\n"
+            "     Если в CRM уже есть new-контакты — сначала пиши им, а не запускай новый web_search.\n"
             "  🔢 ПОРОГ ПОИСКА EMAIL: попробовал 2 разных способа — нет личного email?\n"
             "     → Используй корп. email (если цель B2B) ИЛИ переключись на другого человека/другую задачу.\n"
             "     Не трать 3й, 4й, 5й ход на поиск одного человека — это застой.\n"
