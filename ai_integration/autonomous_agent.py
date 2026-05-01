@@ -8921,6 +8921,21 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'list_email_contacts', 'save_email_contact',
                     'find_relevant_contacts_for_task',
                 })
+            # Универсальный safeguard: если задача про пост/публикацию, не блокируем контент-цепочку
+            # даже при урезанном tools_allowed у агента.
+            _is_content_task = any(w in (task or '').lower() for w in (
+                'опублик', 'publish', 'размест', 'пост', 'контент', 'канал', 'telegram', 'тг',
+                'create_post', 'publish_to_telegram', 'изображен', 'иллюстрац', 'картинк', 'image',
+            ))
+            _has_content_profile = (
+                any(w in _spec_ext for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr', 'копирайт'))
+                or any(w in _lbl_ext for w in ('telegram', 'discord', 'slack', 'вконтакт', 'smm', 'контент'))
+            )
+            if _is_content_task or _has_content_profile:
+                _allowed_tools.update({
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    'generate_image', 'get_news_trends',
+                })
         try:
             from .tools import get_available_tools as _gat2
             _all_names = {t['function']['name'] for t in _gat2()}
@@ -9998,6 +10013,57 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "Не удалось выполнить действие из-за технической ошибки при вызове инструмента. "
                         "Повтори задачу, я отправлю заново."
                     )
+
+            # ── Anti-consultative-stall: агент задаёт пользователю встречный вопрос вместо действия ──
+            # Пример bad output: "Что делаем?", "Какой вариант идём?" при явной задаче.
+            _CONSULTATIVE_PATTERNS = (
+                'что делаем', 'какой вариант', 'какой путь', 'какой вариант идем', 'какой вариант идём',
+                'или, если хочешь', 'если хочешь, могу', 'как поступим', 'что выберем',
+                'which option', 'what should we do', 'which way should we go',
+            )
+            _is_consultative_stall = (
+                _is_autopilot_task
+                and _iter == 0
+                and not _tool_calls
+                and _tool_call_count == 0
+                and bool(_meta_lc)
+                and any(_p in _meta_lc for _p in _CONSULTATIVE_PATTERNS)
+            )
+            if _is_consultative_stall:
+                logger.warning(
+                    "[DIRECTOR-EXEC] anti-consultative-stall: %s asked options without tool call: %s",
+                    agent.get('name'), _meta_lc[:180],
+                )
+                _messages.append({"role": "assistant", "content": _content})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Не задавай пользователю встречные вопросы и не предлагай варианты, "
+                    "когда уже дана конкретная задача. "
+                    "ОБЯЗАТЕЛЬНО прямо сейчас вызови инструмент и выполни ближайшее действие. "
+                    "Если первый инструмент недоступен — выбери альтернативный доступный инструмент "
+                    "и продолжи выполнение без вопроса пользователю."
+                )})
+                try:
+                    _ac_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=1200,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _ac_resp and _ac_resp.get('choices'):
+                        _ac_msg = _ac_resp['choices'][0]['message']
+                        _ac_tools = _ac_msg.get('tool_calls') or []
+                        if _ac_tools:
+                            logger.info("[DIRECTOR-EXEC] anti-consultative-stall retry succeeded: %d tools", len(_ac_tools))
+                            _tool_calls = _ac_tools
+                            _msg = _ac_msg
+                            _content = _ac_msg.get('content') or ''
+                except Exception as _ac_err:
+                    logger.warning("[DIRECTOR-EXEC] anti-consultative-stall retry error: %s", _ac_err)
 
             # ── Anti-fake-action: агент заявляет о выполнении, но не вызвал ни одного инструмента ──
             # Цель: пресечь ответы вида "нашёл/сохранил/отправил" без фактического действия.
