@@ -3007,11 +3007,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     )
     _catalog = (
         "ИНСТРУМЕНТЫ — выбирай по принципу «что нужно ПРОИЗВЕСТИ из этой цели?»:\n"
-        "  → данные / анализ / мониторинг   : Интеграции + Поиск первыми\n"
-        "  → охватить людей / контакты       : Email/Outreach первым\n"
-        "  → видимость / аудитория / охват   : Публикация первой\n"
-        "  → структура / план / трекинг      : Задачи первыми\n"
-        "  → внешние API / реальные данные   : run_agent_action первым\n"
+        "  → данные / анализ / мониторинг   : обычно лучше начать с Интеграций + Поиска\n"
+        "  → охватить людей / контакты       : часто эффективен Email/Outreach\n"
+        "  → видимость / аудитория / охват   : часто эффективна Публикация\n"
+        "  → структура / план / трекинг      : обычно помогает запуск через Задачи\n"
+        "  → внешние API / реальные данные   : часто лучше через run_agent_action\n"
+        "  → жёсткого 'первого шага' нет: выбирай действие с максимальным ожидаемым вкладом в текущую цель\n"
         "Все секции доступны — применяй нужные, игнорируй лишние.\n"
         + _catalog_guardrail
         + _sec_integrations
@@ -3301,15 +3302,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         )
         if _web_search_hist_count >= 3:
             _memory_block += (
-                f"\n⛔ ОБЯЗАТЕЛЬНЫЙ ПИВОТ — web_search/research_topic использован {_web_search_hist_count} раз!\n"
-                "СЛЕДУЮЩИЙ ШАГ ДОЛЖЕН БЫТЬ ДЕЙСТВИЕМ, а не поиском:\n"
+                f"\n⚠️ РЕКОМЕНДУЕМЫЙ ПИВОТ — web_search/research_topic использован {_web_search_hist_count} раз.\n"
+                "С высокой вероятностью следующий шаг лучше сделать ДЕЙСТВИЕМ, а не новым поиском:\n"
                 "  → send_outreach_email (написать найденным контактам)\n"
                 "  → save_email_contact (сохранить найденные данные)\n"
                 "  → create_post / publish_to_telegram (опубликовать контент)\n"
                 "  → update_goal_progress (зафиксировать достигнутый результат)\n"
                 "  → delegate_task (делегировать коллеге с найденными данными)\n"
-                "Если данных нет — ВСЕГДА есть что делегировать или опубликовать.\n"
-                "Повторный поиск без действия = нарушение протокола автопилота.\n"
+                "Если данных пока мало — делегируй подготовку, уточни гипотезу или запусти малый тест через доступные инструменты.\n"
             )
         _memory_block += _untried_block
         _memory_block += _check_emails_overuse
@@ -3910,7 +3910,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 if _camp_directives:
                     # Проверяем есть ли хоть одна кампания которая реально нуждается в помощи
                     _needs_help = any('НУЖНЫ КОНТАКТЫ' in d for d in _camp_directives)
-                    _header = "\n\n🚨 АКТИВНЫЕ EMAIL-КАМПАНИИ (ВЫСШИЙ ПРИОРИТЕТ — выполни ПЕРВЫМ!):\n" if _needs_help else "\n\n📧 АКТИВНЫЕ EMAIL-КАМПАНИИ:\n"
+                    _header = "\n\n🚨 АКТИВНЫЕ EMAIL-КАМПАНИИ (высокий потенциал влияния, оцени вместе с альтернативами):\n" if _needs_help else "\n\n📧 АКТИВНЫЕ EMAIL-КАМПАНИИ:\n"
                     _campaign_directive = (
                         _header
                         + '\n'.join(_camp_directives)
@@ -3919,10 +3919,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 elif _goal_type in ('outreach', 'general', 'startup', 'ecommerce', 'hr', 'finance') and _has_imap:
                     # Нет активных кампаний, но цель связана с привлечением и email подключён
                     _campaign_directive = (
-                        f"\n\n🚀 НУЖНА EMAIL-КАМПАНИЯ — её нет, создай первым шагом:\n"
+                        f"\n\n🚀 EMAIL-КАМПАНИЯ МОЖЕТ ПОМОЧЬ — сейчас её нет:\n"
                         f"  Вызови start_email_campaign(name='...', goal='...', target_audience='...', offer='...')\n"
                         f"  name — короткое имя (до 5 слов), goal — из активных целей пользователя, target_audience — кто получатель.\n"
-                        f"  После создания: сразу найди контакты → save_email_contact → send_outreach_email.\n"
+                        f"  Если это лучший шаг по ожидаемому прогрессу: найди контакты → save_email_contact → send_outreach_email.\n"
                         f"  ❌ НЕ используй send_outreach_email без активной кампании — письма не будут засчитаны в статистику.\n"
                     )
             finally:
