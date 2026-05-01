@@ -116,28 +116,20 @@ async def _generate_image_for_post(post_text: str, style: str = "", user_rules: 
     if not REPLICATE_API_TOKEN:
         return ""
 
-    # Приоритет пользовательского стиля: если есть style, считаем его главным
+    # Старый базовый подход: AI пишет только сцену, стиль добавляем отдельно в конце.
     _priority_style = (style or '').strip()
-
-    # Формируем блок правил пользователя для AI
-    _rules_block = ""
-    if user_rules:
-        _rules_block = (
-            "\n\nUser visual preferences (MUST be respected in the image):\n"
-            + "\n".join(f"- {r}" for r in user_rules if str(r).strip())
-        )
-    if _priority_style:
-        _rules_block += f"\n\nPrimary mandatory style (highest priority): {_priority_style}."
+    _rules_hint = "; ".join([str(r).strip() for r in (user_rules or []) if str(r).strip()][:3])
+    _style_instruction = f" The image MUST be rendered in this style: {_priority_style}." if _priority_style else ""
+    if _rules_hint:
+        _style_instruction += f" User visual preferences to honor: {_rules_hint}."
 
     try:
         image_prompt = await _generate_text_with_ai(
-            f"""You are a visual prompt engineer. Based on this social media post and user preferences, """
-            f"""write one short English image-generation prompt (max 45 words). """
-            f"""Include: concrete visual elements (objects, place, action, mood) AND any style/aesthetic from user preferences. """
-            f"""Do not substitute the main subject with unrelated nature motifs. """
-            f"""No text overlays, no meta-phrases like 'concept of'."""
-            f"""{_rules_block}"""
-            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the image prompt:"""
+            f"""You are a visual prompt engineer. Based on this social media post, write one short English image-generation prompt (max 35 words, NO style words). """
+            f"""Describe only concrete visual elements: objects, place, action, mood. Keep the topic faithful. """
+            f"""Do not substitute the main subject with decorative nature motifs unless explicitly mentioned in the post. """
+            f"""No text overlays, no meta-phrases like 'concept of', no style descriptors (style will be appended separately).{_style_instruction}"""
+            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the scene description (no style words):"""
         )
         if not image_prompt or len(image_prompt) < 5:
             image_prompt = "person working at a desk, focused, modern office"
@@ -149,7 +141,7 @@ async def _generate_image_for_post(post_text: str, style: str = "", user_rules: 
         if _priority_style:
             image_prompt += f", {_priority_style}"
 
-    # Если есть явный стиль — гарантированно дописываем в финальный промпт для Replicate
+    # Гарантированно добавляем стиль в финальный промпт для Replicate
     if _priority_style and _priority_style.lower() not in image_prompt.lower():
         image_prompt = f"{image_prompt.rstrip(', ')} | style: {_priority_style}"
 
