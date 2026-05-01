@@ -14289,6 +14289,37 @@ async def send_outreach_email(
         _sig_name = (campaign.sender_name or '').strip()
         _body_signed = body
         _has_sig_markers = _has_existing_email_signature(_body_signed, sender_name=_sig_name)
+        # Неполная подпись: есть только sign-off ("С уважением,"/"Best regards,") без имени.
+        # В таком случае обязательно дописываем имя отправителя.
+        _incomplete_signoff = False
+        if _sig_name and _has_sig_markers and _sig_name.lower() not in (_body_signed or '').lower():
+            import re as _re_sign_tail
+            _tail_signed = (_body_signed or '').strip()[-240:]
+            _incomplete_signoff = bool(_re_sign_tail.search(
+                r'(?is)(?:с\s+уважением|best\s+regards|kind\s+regards|regards|sincerely|thanks)\s*,?\s*$',
+                _tail_signed,
+            ))
+            if _incomplete_signoff:
+                _sig_position = ''
+                try:
+                    from models import UserProfile as _UP_sig
+                    _prof_sig = session.query(_UP_sig).filter_by(user_id=user.id).first()
+                    if _prof_sig:
+                        _pos = (getattr(_prof_sig, 'position', '') or '').strip()
+                        _comp = (getattr(_prof_sig, 'company', '') or '').strip()
+                        if _pos and _comp:
+                            _sig_position = f"{_pos}, {_comp}"
+                        elif _pos:
+                            _sig_position = _pos
+                        elif _comp:
+                            _sig_position = _comp
+                except Exception:
+                    pass
+                _body_signed = _body_signed.rstrip() + f"\n{_sig_name}"
+                if _sig_position:
+                    _body_signed += f"\n{_sig_position}"
+                # После автодополнения подпись считается корректной.
+                _has_sig_markers = True
         # Если нет признаков подписи И нет имён в конце → добавляем только если нужно
         if _sig_name and not _has_sig_markers:
             # Должность и компания из профиля — дополняют имя агента
