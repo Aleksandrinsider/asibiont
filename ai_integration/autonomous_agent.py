@@ -3603,6 +3603,21 @@ class HybridAutonomousAgent:
                     # Нет контента — возвращаем ошибку, чтобы AI сгенерировал контент сначала
                     params['__skip__'] = True
                     logger.warning(f"[FIX_PARAMS] {tool_name}: no content provided, blocking publish call")
+            # ── GUARD: блокируем посты с выдуманными GitHub-репозиториями ──
+            # Агент иногда пишет «открыл репозиторий github.com/org/repo» без реального создания.
+            # Если в тексте поста есть github.com/*/*, но ни http_api_request, ни run_agent_action
+            # не были вызваны — пост содержит галлюцинацию и должен быть заблокирован.
+            if not params.get('__skip__') and params.get('content'):
+                import re as _re_gh
+                _gh_urls = _re_gh.findall(
+                    r'github\.com/[\w.-]+/[\w.-]+', params['content'], _re_gh.IGNORECASE
+                )
+                if _gh_urls:
+                    # Проверяем: были ли в этом цикле реальные GitHub API-вызовы
+                    # _tools_used не доступен здесь (это _fix_tool_params статический метод),
+                    # поэтому помечаем для проверки на уровне executor через спец-флаг
+                    params['__gh_urls_in_content__'] = list(set(_gh_urls))
+                    logger.info(f"[FIX_PARAMS] {tool_name}: GitHub URLs detected in content: {_gh_urls}")
             # Подставляем pending image URL если агент вызвал generate_image в предыдущей итерации
             if not params.get('__skip__') and not params.get('image_url'):
                 _pending_url = getattr(self, '_pending_image_url', {}).get(params.get('user_id') or user_message)
@@ -5816,7 +5831,11 @@ class HybridAutonomousAgent:
                 "только данные из реальных tool-результатов. Нет результата = нет данных, скажи об этом честно.\n"
                 "⛔ ЗАПРЕТ НА ВЫДУМАННЫЕ ОГРАНИЧЕНИЯ: никогда не говори 'упёрся в ограничение', 'достиг лимита', "
                 "'нет доступа к инструменту' если ты не получил реальную ошибку от инструмента. "
-                "Если инструмент доступен — ИСПОЛЬЗУЙ его, не выдумывай причины для делегирования."
+                "Если инструмент доступен — ИСПОЛЬЗУЙ его, не выдумывай причины для делегирования.\n"
+                "⛔ ЗАПРЕТ ВЫДУМАННЫХ РЕСУРСОВ В ПОСТАХ: нельзя писать в посте 'открыл репозиторий github.com/...', "
+                "'создал сайт', 'запустил проект' — если ты не вызвал инструмент (http_api_request/run_agent_action) "
+                "для создания этого ресурса прямо сейчас в этой сессии. Пост должен описывать только реально "
+                "существующее: платформу asibiont.com, уже опубликованный контент, реальные факты."
             )
             _DATA_VERIFY_RU = (
                 "\nПРАВИЛО ДАННЫХ: секция ПАМЯТЬ = фон. Актуальны ТОЛЬКО данные из инструментов. "
@@ -10365,6 +10384,38 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _targs['delegated_to_username'] = _targs.pop('agent_name')
                 if 'task' in _targs and 'title' not in _targs:
                     _targs['title'] = _targs.pop('task')
+            # ── GUARD: пост содержит GitHub-URL — проверяем что репозитории реально создавались ──
+            # _fix_tool_params помечает __gh_urls_in_content__ если нашёл github.com/org/repo в тексте.
+            # Если http_api_request / run_agent_action НЕ вызывались ранее в этом цикле —
+            # GitHub-репо выдуман, блокируем пост и требуем сначала создать ресурс.
+            if (_tname in ('create_post', 'publish_to_telegram', 'publish_to_discord')
+                    and _targs.get('__gh_urls_in_content__')
+                    and _is_autopilot_task):
+                _gh_urls_detected = _targs.pop('__gh_urls_in_content__', [])
+                _prior_set = set(_tools_used[:-1])
+                _has_gh_create = bool(_prior_set & {'http_api_request', 'run_agent_action'})
+                if not _has_gh_create:
+                    logger.warning(
+                        "[DIRECTOR-EXEC] FAKE-REPO guard: %s claims github.com URLs %s without creating them",
+                        agent.get('name'), _gh_urls_detected,
+                    )
+                    _tc_result = json.dumps({
+                        "error": (
+                            f"⛔ Пост заблокирован: содержит GitHub-репозитори{'и' if len(_gh_urls_detected) > 1 else 'й'} "
+                            f"({', '.join(_gh_urls_detected[:3])}) которые не были созданы через инструменты в этой сессии. "
+                            "СНАЧАЛА создай репозиторий через http_api_request(url='https://api.github.com/user/repos', "
+                            "method='POST', auth_key='GITHUB_TOKEN', body={...}), ПОТОМ пиши пост о нём. "
+                            "Если создать репозиторий невозможно — напиши пост без ссылки на несуществующий ресурс."
+                        )
+                    }, ensure_ascii=False)
+                    _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                    _tool_call_count += 1
+                    continue
+                else:
+                    # Репо создавалось — убираем служебный флаг из аргументов
+                    _targs.pop('__gh_urls_in_content__', None)
+            elif _targs.get('__gh_urls_in_content__'):
+                _targs.pop('__gh_urls_in_content__', None)
             # ── Обычные инструменты ───────────────────────────────────────────────────────────
             # Проверяем доступность инструмента (not elif — delegate_to_agent уже переименован выше)
             if _allowed_tools and _tname not in _allowed_tools:
