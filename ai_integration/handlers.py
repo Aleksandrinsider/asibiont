@@ -9328,6 +9328,40 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if not content:
             return "Текст поста не может быть пустым после очистки."
 
+        # Дедупликация: не создаём почти одинаковые посты в коротком окне,
+        # если агент вызвал create_post дважды в одном пайплайне.
+        try:
+            from datetime import timedelta as _td_cp
+            from difflib import SequenceMatcher as _SM_cp
+            _recent_cutoff = dt.datetime.now(dt.timezone.utc) - _td_cp(minutes=20)
+            _recent_posts = (
+                session.query(Post)
+                .filter(
+                    Post.user_id == user.id,
+                    Post.created_at >= _recent_cutoff,
+                )
+                .order_by(Post.created_at.desc())
+                .limit(5)
+                .all()
+            )
+            _cur_norm = ' '.join((content or '').lower().split())[:1200]
+            for _rp in _recent_posts:
+                _rp_norm = ' '.join(((_rp.content or '')).lower().split())[:1200]
+                if not _rp_norm:
+                    continue
+                _sim = _SM_cp(None, _cur_norm, _rp_norm).ratio()
+                if _sim >= 0.93:
+                    logger.warning(
+                        "[CREATE_POST] Dedup skip: similar recent post #%s (sim=%.2f)",
+                        _rp.id, _sim,
+                    )
+                    return (
+                        f"⚠️ Похожий пост уже создан недавно (#{_rp.id}, сходство {_sim:.0%}). "
+                        "Новый дубль не публикую."
+                    )
+        except Exception as _cp_dedup_e:
+            logger.debug("suppressed create_post dedup check: %s", _cp_dedup_e)
+
         # Проверяем пользовательские правила запрета картинок ДО сохранения поста.
         # Если правило есть — отключаем любые картинки, даже если AI передал image_url явно.
         _skip_image_by_rule = False
@@ -9610,7 +9644,9 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             # чтобы создание blog Note не падало с "current transaction is aborted".
             session.rollback()
             from models import Note as _NoteCP
-            _blog_title = content.strip().split('\n')[0][:120].strip()
+            _blog_title = content.strip().split('\n')[0].strip()
+            if len(_blog_title) > 1000:
+                _blog_title = _blog_title[:1000].rstrip()
             if not _blog_title or len(_blog_title) < 5:
                 _blog_title = post_preview
             _blog_note_content = content.strip()

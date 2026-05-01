@@ -5005,6 +5005,17 @@ class HybridAutonomousAgent:
                         if name == 'create_post':
                             used_once_only.add('publish_to_telegram')
                             used_once_only.add('publish_to_discord')
+                        # Если publish_to_telegram будет reroute в create_post (site-first),
+                        # блокируем и create_post, чтобы не получить 2 почти одинаковых поста
+                        # при порядке вызовов: publish_to_telegram -> create_post.
+                        if name == 'publish_to_telegram':
+                            _um_l_once = (user_message or '').lower()
+                            _tg_only_once = any(k in _um_l_once for k in (
+                                'только в telegram', 'только в тг', 'без блога', 'не в блог',
+                                'only telegram', 'tg only',
+                            ))
+                            if not _tg_only_once:
+                                used_once_only.add('create_post')
 
                     # Multi-limit
                     if name in multi_limit_tools:
