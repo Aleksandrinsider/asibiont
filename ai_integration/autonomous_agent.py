@@ -3883,6 +3883,7 @@ class HybridAutonomousAgent:
             return (
                 "\n\n[TOOL USAGE INSTRUCTIONS]"
                 "\nShort user replies (yes, sure, create, set, ok, go, do it) = CONFIRMATION of your last suggestion. Look at your previous answer and EXECUTE what you proposed. BUT if you suggested creating a task and NO TIME was specified — FIRST ask: 'What time should I set it for?'. A task WITHOUT reminder time = USELESS task. NEVER create a task without reminder_time."
+                "\nEITHER/OR FOLLOW-UP REPLIES: if you just asked 'A or B?', and user replies 'both', 'both of them', 'all of them', 'either works, do both' — treat it as explicit confirmation of BOTH options. Do NOT say you didn't understand. Proceed with a combined plan and execute next steps."
                 "\nCONTEXTUAL REFERENCES: 'this task', 'it', 'that', 'set it for 2pm' — ALWAYS refers to your LAST suggestion. Re-read your previous answer and execute. Asking 'which task?' when you just suggested it = CRITICAL ERROR."
                 "\n🔗 DIALOG CONTINUITY: BEFORE responding, re-read your 2-3 LAST messages. If you asked a question — the user is ANSWERING it, react to their answer, don't start over. 'I don't know, any suggestions?' to your question = give SPECIFIC NEW ideas not mentioned before. NEVER repeat advice, ideas or facts you ALREADY said in this dialog. Scan history before answering — if you already mentioned something — give a DIFFERENT idea. Repetition = bot amnesia."
                 "\nBE PROACTIVE — call 1-3 tools on EVERY dialog turn. Don't wait for direct commands."
@@ -3908,6 +3909,7 @@ class HybridAutonomousAgent:
             return (
                 "\n\n[ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ]"
                 "\nКороткие ответы пользователя (да, давай, создай, поставь, ок, го, сделай) = ПОДТВЕРЖДЕНИЕ твоего последнего предложения. Посмотри свой предыдущий ответ в истории и ВЫПОЛНИ то, что предложил. НО ЕСЛИ ты предложил создать задачу и время НЕ БЫЛО указано ни тобой ни пользователем — СНАЧАЛА спроси время: «На какое время поставить?». Задача БЕЗ времени напоминания = БЕСПОЛЕЗНАЯ задача. НИКОГДА не создавай задачу без reminder_time."
+                "\nОТВЕТЫ НА ВЫБОР ИЗ ДВУХ ВАРИАНТОВ: если ты только что спросил «A или B?», и пользователь пишет «и те и другие», «оба», «оба варианта», «all of them», «both», «both of them» — это ЯВНОЕ подтверждение ОБОИХ вариантов. НЕ отвечай «не понял». Прими решение как «запускаем обе ветки параллельно/по очереди» и сразу переходи к действиям."
                 "\nКОНТЕКСТНЫЕ ССЫЛКИ: «эту задачу», «это», «её», «давай так», «поставь на 14:00» — ВСЕГДА ссылка на твоё ПОСЛЕДНЕЕ предложение. Перечитай свой предыдущий ответ и выполни. ПЕРЕСПРАШИВАТЬ «какую задачу?» когда ты сам только что предложил = ГРУБЕЙШАЯ ОШИБКА."
                 "\n🔗 ПОСЛЕДОВАТЕЛЬНОСТЬ ДИАЛОГА И КОНТЕКСТ: ПЕРЕД ответом ОБЯЗАТЕЛЬНО перечитай блок [РАНЕЕ В ЭТОМ РАЗГОВОРЕ] и свои 2-3 ПОСЛЕДНИХ сообщения.\n"
                 "   • Если ты задал вопрос — пользователь ОТВЕЧАЕТ на него, реагируй на его ответ, а не начинай заново.\n"
