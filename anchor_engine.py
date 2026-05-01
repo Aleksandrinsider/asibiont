@@ -6748,37 +6748,33 @@ class AnchorEngine:
                 logger.debug("[DISPATCH-THROTTLE] throttle check failed: %s", _throttle_err)
 
             # ── Помечаем якорь доставленным СРАЗУ — защита от бесконечных retry при crash/restart ──
-            # RETRY LOGIC: if main session times out, try fresh sessions with exponential backoff
+            # Выполняем в executor чтобы не блокировать event loop (синхронный SQLAlchemy).
             _early_del_ok = False
-            import time as _time_mod
-            _del_attempts = 0
-            while _del_attempts < 3:
-                try:
+            _anchor_id_del = anchor.id
+            for _del_attempt in range(3):
+                def _mark_delivered_sync(_aid=_anchor_id_del):
+                    from models import Session as _S_del
                     from sqlalchemy import text as _del_text
-                    _del_stmt = _del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid")
-                    session.execute(_del_stmt, {'aid': anchor.id})
-                    session.commit()
-                    _early_del_ok = True
+                    _s = _S_del()
+                    try:
+                        _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
+                        _s.commit()
+                        return True
+                    except Exception:
+                        _s.rollback()
+                        raise
+                    finally:
+                        _s.close()
+                try:
+                    _early_del_ok = await asyncio.get_event_loop().run_in_executor(None, _mark_delivered_sync)
                     break
                 except Exception as _del_err:
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
-                    _del_attempts += 1
-                    if _del_attempts < 3:
-                        _sleep_s = 1 + (_del_attempts - 1) * 2  # 1s, 3s
-                        _time_mod.sleep(_sleep_s)
-                        logger.debug("[DISPATCH] delivered_at retry %d/3 after %s (sleeping %ds)", _del_attempts, str(_del_err)[:100], _sleep_s)
-                        # Try with fresh session on retry
-                        if _del_attempts > 1:
-                            try:
-                                session.close()
-                                session = None
-                            except Exception:
-                                pass
+                    if _del_attempt < 2:
+                        _sleep_s = 1 + _del_attempt * 2  # 1s, 3s
+                        logger.debug("[DISPATCH] delivered_at retry %d/3 after %s (sleeping %ds)", _del_attempt + 1, str(_del_err)[:100], _sleep_s)
+                        await asyncio.sleep(_sleep_s)
                     else:
-                        logger.warning("[DISPATCH] delivered_at failed after %d attempts: %s — skipping to prevent stuck anchor", _del_attempts, str(_del_err)[:150])
+                        logger.warning("[DISPATCH] delivered_at failed after 3 attempts: %s — skipping", str(_del_err)[:150])
             if not _early_del_ok:
                 return  # anchor stays pending, next scan will retry
 
