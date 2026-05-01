@@ -859,3 +859,70 @@ def test_g37_agent_persona_cap_counts_real_result_message():
         assert eng._agent_persona_daily_cap_reached(s, u, 'Кристина', limit=1) is True
     finally:
         s.close()
+
+
+def test_g38_goal_strategy_keywords_filter_stopwords():
+    from anchor_engine import _goal_strategy_keywords
+
+    keywords = _goal_strategy_keywords('Найти 10 клиентов для email automation в B2B SaaS')
+
+    assert 'клиентов' in keywords
+    assert 'email' in keywords or 'automation' in keywords
+    assert 'для' not in keywords
+    assert 'найти' not in keywords
+
+
+def test_g39_select_goal_relevant_history_matches_goal_context():
+    from anchor_engine import _select_goal_relevant_history
+
+    per_agent_history = {
+        'Lorenzo': [
+            '01.05 12:00 [web_search] Нашёл 12 founder email для B2B SaaS → РЕЗУЛЬТАТ',
+            '01.05 11:20 [create_post] Опубликовал пост про дизайн лендинга',
+        ],
+        'Beatrice': [
+            '01.05 12:30 [send_outreach_email] Отправила 8 писем founder B2B SaaS → РЕЗУЛЬТАТ',
+            '01.05 10:00 [research_topic] Искала идеи для блога без результата',
+        ],
+    }
+
+    relevant = _select_goal_relevant_history(
+        'Привлечь клиентов для B2B SaaS email automation',
+        per_agent_history,
+        limit=3,
+    )
+    joined = ' '.join(f'{agent} {snippet}' for agent, snippet in relevant).lower()
+
+    assert 'b2b saas' in joined or 'email' in joined
+    assert 'дизайн лендинга' not in joined
+
+
+def test_g40_build_agent_goal_strategy_block_includes_own_and_team_context():
+    from anchor_engine import _build_agent_goal_strategy_block
+
+    strategy_content = (
+        'Гипотеза: узкий B2B SaaS outreach работает лучше массового.\n'
+        'Сработало: founder email с конкретным pain point.\n'
+        'Не сработало: общий outreach без персонализации.\n'
+        'Следующий эксперимент: протестировать 5 писем по ICP fintech infra.'
+    )
+    per_agent_history = {
+        'Beatrice': [
+            '01.05 12:30 [send_outreach_email] Отправила 8 писем founder B2B SaaS → РЕЗУЛЬТАТ',
+        ],
+        'Lorenzo': [
+            '01.05 12:00 [web_search] Нашёл 12 founder email для B2B SaaS → РЕЗУЛЬТАТ',
+        ],
+    }
+
+    block = _build_agent_goal_strategy_block(
+        'Привлечь клиентов для B2B SaaS email automation',
+        strategy_content,
+        agent_name='Beatrice',
+        per_agent_history=per_agent_history,
+    )
+
+    assert 'СТРАТЕГИЯ ИМЕННО ПО ЭТОЙ ЦЕЛИ' in block
+    assert 'Не повторяй без нового основания' in block
+    assert 'Твои недавние попытки' in block
+    assert 'Что уже делала команда' in block

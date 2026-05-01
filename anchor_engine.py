@@ -56,6 +56,15 @@ logger = logging.getLogger(__name__)
 
 # Telegram message limit
 _TG_MAX_LEN = 4096
+_AUTOPILOT_STRATEGY_NOTE_PREFIX = '[AP_STRATEGY] '
+_GOAL_STRATEGY_STOPWORDS = {
+    'как', 'для', 'или', 'что', 'это', 'эта', 'эти', 'твой', 'твоя', 'нужно', 'надо',
+    'цель', 'цели', 'который', 'которая', 'через', 'после', 'снова', 'ещё', 'уже',
+    'если', 'чтобы', 'того', 'этого', 'своих', 'свои', 'свой', 'быть', 'сделать',
+    'найти', 'сделай', 'сейчас', 'пользователя', 'пользователь', 'рост', 'получить',
+    'увеличить', 'increase', 'more', 'with', 'from', 'into', 'that', 'this', 'your',
+    'goal', 'user', 'the', 'and', 'for', 'без', 'под', 'при', 'над',
+}
 
 
 # ═══════════════════════════════════════════════════════
@@ -1720,6 +1729,337 @@ def _build_tool_outcome_block(session, user_id: int, per_agent_history: dict) ->
         _lines.append('     → Используй ДРУГОЙ инструмент, ДРУГУЮ аудиторию или ДРУГОЙ формат.')
 
     return '\n' + '\n'.join(_lines) + '\n\n'
+
+
+def _goal_strategy_note_title(goal_title: str) -> str:
+    return f"{_AUTOPILOT_STRATEGY_NOTE_PREFIX}{(goal_title or '').strip()[:120]}"
+
+
+def _goal_strategy_keywords(goal_title: str, max_keywords: int = 6) -> list[str]:
+    words = re.findall(r'[A-Za-zА-Яа-яЁё0-9+#._-]{3,}', (goal_title or '').lower())
+    keywords: list[str] = []
+    for word in words:
+        if word in _GOAL_STRATEGY_STOPWORDS or word.isdigit():
+            continue
+        if word not in keywords:
+            keywords.append(word)
+        if len(keywords) >= max_keywords:
+            break
+    return keywords
+
+
+def _select_goal_relevant_history(goal_title: str, per_agent_history: dict, limit: int = 6) -> list[tuple[str, str]]:
+    keywords = _goal_strategy_keywords(goal_title)
+    if not keywords or not per_agent_history:
+        return []
+
+    scored: list[tuple[int, str, str]] = []
+    for agent_name, entries in (per_agent_history or {}).items():
+        for entry in (entries or [])[:12]:
+            entry_text = (entry or '').strip()
+            if not entry_text:
+                continue
+            entry_lower = entry_text.lower()
+            score = 0
+            for keyword in keywords:
+                if keyword in entry_lower:
+                    score += 3
+            if '→ результат' in entry_lower:
+                score += 2
+            if any(token in entry_lower for token in ('ошибк', 'не удалось', 'без результата', '0 ответ', 'пустой результат')):
+                score += 1
+            if score <= 0:
+                continue
+            snippet = re.sub(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s*', '', entry_text).strip()
+            scored.append((score, agent_name, snippet[:260]))
+
+    scored.sort(key=lambda item: (-item[0], item[1], item[2]))
+    selected: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for _, agent_name, snippet in scored:
+        dedup_key = snippet.lower()
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+        selected.append((agent_name, snippet))
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _format_goal_strategy_note_content(hypothesis: str, works: str, fails: str, next_experiment: str) -> str:
+    return (
+        f"Гипотеза: {(hypothesis or 'данных пока мало').strip()}\n"
+        f"Сработало: {(works or 'данных пока мало').strip()}\n"
+        f"Не сработало: {(fails or 'явных провалов пока не зафиксировано').strip()}\n"
+        f"Следующий эксперимент: {(next_experiment or 'получить один подтверждённый результат и обновить стратегию').strip()}"
+    )
+
+
+def _parse_goal_strategy_note_content(content: str) -> dict[str, str]:
+    parsed = {
+        'hypothesis': 'данных пока мало',
+        'works': 'данных пока мало',
+        'fails': 'явных провалов пока не зафиксировано',
+        'next_experiment': 'получить один подтверждённый результат и обновить стратегию',
+    }
+    for line in (content or '').splitlines():
+        stripped = line.strip()
+        lower = stripped.lower()
+        if lower.startswith('гипотеза:'):
+            parsed['hypothesis'] = stripped.split(':', 1)[1].strip() or parsed['hypothesis']
+        elif lower.startswith('сработало:'):
+            parsed['works'] = stripped.split(':', 1)[1].strip() or parsed['works']
+        elif lower.startswith('не сработало:'):
+            parsed['fails'] = stripped.split(':', 1)[1].strip() or parsed['fails']
+        elif lower.startswith('следующий эксперимент:'):
+            parsed['next_experiment'] = stripped.split(':', 1)[1].strip() or parsed['next_experiment']
+    return parsed
+
+
+def _build_goal_strategy_memory_block(strategy_items: list[dict]) -> str:
+    if not strategy_items:
+        return ''
+    lines = ['\n🧠 СТРАТЕГИЧЕСКАЯ ПАМЯТЬ ПО ЦЕЛЯМ:']
+    for item in strategy_items[:3]:
+        goal_title = (item.get('goal_title') or '').strip()
+        if not goal_title:
+            continue
+        lines.append(f"  • «{goal_title[:80]}»")
+        lines.append(f"    Гипотеза: {(item.get('hypothesis') or 'данных пока мало').strip()[:220]}")
+        lines.append(f"    Сработало: {(item.get('works') or 'данных пока мало').strip()[:220]}")
+        lines.append(f"    Не сработало: {(item.get('fails') or 'явных провалов пока не зафиксировано').strip()[:220]}")
+        lines.append(f"    Следующий эксперимент: {(item.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip()[:220]}")
+    lines.append('  Правило: если повторяешь ход из блока «Не сработало», обязан явно назвать, что изменилось в сегменте, канале или оффере.')
+    return '\n'.join(lines) + '\n\n'
+
+
+def _build_agent_goal_strategy_block(goal_title: str, strategy_content: str, agent_name: str = '',
+                                     per_agent_history: dict | None = None) -> str:
+    goal_title = (goal_title or '').strip()
+    if not goal_title:
+        return ''
+
+    parsed = _parse_goal_strategy_note_content(strategy_content or '')
+    relevant_history = _select_goal_relevant_history(goal_title, per_agent_history or {}, limit=4)
+    agent_name_l = (agent_name or '').strip().lower()
+    own_history = [snippet for ag, snippet in relevant_history if ag.lower() == agent_name_l][:2] if agent_name_l else []
+    team_history = [f'{ag}: {snippet}' for ag, snippet in relevant_history if ag.lower() != agent_name_l][:2] if agent_name_l else [f'{ag}: {snippet}' for ag, snippet in relevant_history[:2]]
+
+    has_signal = any([
+        strategy_content and strategy_content.strip(),
+        own_history,
+        team_history,
+        parsed.get('works') not in ('', 'данных пока мало'),
+        parsed.get('fails') not in ('', 'явных провалов пока не зафиксировано'),
+    ])
+    if not has_signal:
+        return ''
+
+    lines = [
+        '🧠 СТРАТЕГИЯ ИМЕННО ПО ЭТОЙ ЦЕЛИ:',
+        f"  Гипотеза: {(parsed.get('hypothesis') or 'данных пока мало').strip()[:220]}",
+        f"  Повтори: {(parsed.get('works') or 'данных пока мало').strip()[:220]}",
+        f"  Не повторяй без нового основания: {(parsed.get('fails') or 'явных провалов пока не зафиксировано').strip()[:220]}",
+        f"  Следующий эксперимент: {(parsed.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip()[:220]}",
+    ]
+    if own_history:
+        lines.append('  Твои недавние попытки по этой цели:')
+        for snippet in own_history:
+            lines.append(f'    • {snippet[:220]}')
+    if team_history:
+        lines.append('  Что уже делала команда по этой цели:')
+        for snippet in team_history:
+            lines.append(f'    • {snippet[:220]}')
+    lines.append('  Если снова идёшь в ход из блока «Не повторяй», сначала измени сегмент, канал, сообщение или источник данных.')
+    return '\n' + '\n'.join(lines) + '\n'
+
+
+def _get_goal_strategy_note_content(session, user_id: int, goal_title: str) -> str:
+    goal_title = (goal_title or '').strip()
+    if not goal_title:
+        return ''
+    try:
+        from models import Note as _StrategyNote
+        note_title = _goal_strategy_note_title(goal_title)
+        note = session.query(_StrategyNote).filter(
+            _StrategyNote.user_id == user_id,
+            _StrategyNote.title == note_title,
+        ).order_by(_StrategyNote.created_at.desc()).first()
+        return (getattr(note, 'content', '') or '').strip() if note else ''
+    except Exception as _strategy_note_err:
+        logger.debug('[COORD] goal strategy note read failed: %s', _strategy_note_err)
+        return ''
+
+
+async def _build_goal_strategy_memory(goals_summary: list, per_agent_history: dict, user_id: int) -> str:
+    goal_items = [g for g in (goals_summary or []) if (g.get('title') or '').strip()][:3]
+    if not goal_items:
+        return ''
+
+    from models import Session as _StrategySession, Note as _StrategyNote
+
+    note_by_title: dict[str, object] = {}
+    now_utc = datetime.now(timezone.utc)
+    fresh_cutoff = now_utc - timedelta(minutes=90)
+
+    try:
+        _ns = _StrategySession()
+        try:
+            _existing_notes = _ns.query(_StrategyNote).filter(
+                _StrategyNote.user_id == user_id,
+                _StrategyNote.title.like(f'{_AUTOPILOT_STRATEGY_NOTE_PREFIX}%'),
+            ).order_by(_StrategyNote.created_at.desc()).limit(20).all()
+            for note in _existing_notes:
+                note_by_title.setdefault((note.title or '').strip(), note)
+        finally:
+            _ns.close()
+    except Exception as _strategy_note_err:
+        logger.debug('[COORD] strategy notes preload failed: %s', _strategy_note_err)
+
+    fresh_items: list[dict] = []
+    all_fresh = True
+    for goal in goal_items:
+        note = note_by_title.get(_goal_strategy_note_title(goal.get('title', '')))
+        if not note or not getattr(note, 'created_at', None) or note.created_at < fresh_cutoff:
+            all_fresh = False
+            break
+        parsed = _parse_goal_strategy_note_content(getattr(note, 'content', '') or '')
+        parsed['goal_title'] = goal.get('title', '')
+        fresh_items.append(parsed)
+    if all_fresh and fresh_items:
+        return _build_goal_strategy_memory_block(fresh_items)
+
+    evidence_items = []
+    for idx, goal in enumerate(goal_items, start=1):
+        goal_title = (goal.get('title') or '').strip()
+        relevant_history = _select_goal_relevant_history(goal_title, per_agent_history, limit=5)
+        prior_note = note_by_title.get(_goal_strategy_note_title(goal_title))
+        has_signal = bool(relevant_history) or bool(prior_note) or bool(goal.get('metric_current')) or bool(goal.get('progress'))
+        if not has_signal:
+            continue
+        evidence_items.append({
+            'goal_index': idx,
+            'goal_title': goal_title,
+            'metric_current': int(goal.get('metric_current', 0) or 0),
+            'metric_target': goal.get('metric_target'),
+            'metric_unit': (goal.get('metric_unit') or '').strip(),
+            'progress': int(goal.get('progress', 0) or 0),
+            'history': relevant_history,
+            'prior_note': (getattr(prior_note, 'content', '') or '').strip(),
+        })
+
+    if not evidence_items:
+        return _build_goal_strategy_memory_block(fresh_items)
+
+    evidence_parts = []
+    for item in evidence_items:
+        metric_target = item['metric_target'] if item['metric_target'] is not None else '?'
+        evidence_parts.append(
+            f"GOAL_INDEX: {item['goal_index']}\n"
+            f"TITLE: {item['goal_title']}\n"
+            f"METRIC: {item['metric_current']}/{metric_target} {(item['metric_unit'] or '').strip()}\n"
+            f"PROGRESS: {item['progress']}%"
+        )
+        if item['history']:
+            evidence_parts.append('RECENT_ACTIONS:')
+            for agent_name, snippet in item['history']:
+                evidence_parts.append(f"- {agent_name}: {snippet}")
+        if item['prior_note']:
+            evidence_parts.append('PRIOR_STRATEGY:')
+            evidence_parts.append(item['prior_note'][:500])
+        evidence_parts.append('')
+
+    try:
+        from ai_integration.autonomous_agent import _quick_ai_call_raw
+
+        reflection_prompt = (
+            'Ты обновляешь стратегическую память автопилота по целям пользователя. '
+            'На входе только факты: метрики, последние действия, прошлые выводы. '
+            'Нужно не пересказать лог, а обновить рабочую гипотезу по каждой цели.\n\n'
+            'Верни ТОЛЬКО JSON-массив объектов. Формат каждого объекта:\n'
+            '[{"goal_index":1,"hypothesis":"...","works":"...","fails":"...","next_experiment":"..."}]\n\n'
+            'Правила:\n'
+            '1. Опирайся только на факты из входа, не выдумывай метрики и каналы.\n'
+            '2. works = что стоит повторить. fails = что не надо повторять без нового основания.\n'
+            '3. next_experiment = один конкретный следующий тест или ход.\n'
+            '4. Если данных мало, так и напиши: "данных пока мало".\n'
+            '5. Не пиши markdown, комментарии и пояснения вне JSON.\n\n'
+            + '\n'.join(evidence_parts)
+        )
+        reflection_raw = await _quick_ai_call_raw(
+            [{'role': 'user', 'content': reflection_prompt}],
+            max_tokens=900,
+            temperature=0.2,
+            _caller='goal_strategy_memory',
+            _timeouts=[45, 75],
+        )
+        reflection_text = (reflection_raw or '').strip()
+        if reflection_text:
+            reflection_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', reflection_text, flags=re.IGNORECASE | re.DOTALL).strip()
+            reflection_data = json.loads(reflection_text)
+            strategy_items: list[dict] = []
+            item_by_index = {item['goal_index']: item for item in evidence_items}
+            for reflection in reflection_data if isinstance(reflection_data, list) else []:
+                try:
+                    goal_index = int(reflection.get('goal_index'))
+                except Exception:
+                    continue
+                evidence = item_by_index.get(goal_index)
+                if not evidence:
+                    continue
+                strategy_items.append({
+                    'goal_title': evidence['goal_title'],
+                    'hypothesis': (reflection.get('hypothesis') or 'данных пока мало').strip(),
+                    'works': (reflection.get('works') or 'данных пока мало').strip(),
+                    'fails': (reflection.get('fails') or 'явных провалов пока не зафиксировано').strip(),
+                    'next_experiment': (reflection.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию').strip(),
+                })
+            if strategy_items:
+                try:
+                    _save_sess = _StrategySession()
+                    try:
+                        for item in strategy_items:
+                            note_title = _goal_strategy_note_title(item['goal_title'])
+                            note_content = _format_goal_strategy_note_content(
+                                item['hypothesis'], item['works'], item['fails'], item['next_experiment']
+                            )
+                            note = _save_sess.query(_StrategyNote).filter(
+                                _StrategyNote.user_id == user_id,
+                                _StrategyNote.title == note_title,
+                            ).order_by(_StrategyNote.created_at.desc()).first()
+                            if note:
+                                note.content = note_content
+                                note.created_at = now_utc
+                            else:
+                                _save_sess.add(_StrategyNote(
+                                    user_id=user_id,
+                                    title=note_title,
+                                    content=note_content,
+                                    source='chat',
+                                    created_at=now_utc,
+                                ))
+                        _save_sess.commit()
+                    finally:
+                        _save_sess.close()
+                except Exception as _strategy_save_err:
+                    logger.debug('[COORD] strategy note save failed: %s', _strategy_save_err)
+                return _build_goal_strategy_memory_block(strategy_items)
+    except Exception as _strategy_err:
+        logger.debug('[COORD] strategy memory reflection failed: %s', _strategy_err)
+
+    fallback_items: list[dict] = []
+    for item in evidence_items:
+        parsed_prior = _parse_goal_strategy_note_content(item['prior_note']) if item['prior_note'] else {}
+        recent_snippets = [snippet for _, snippet in item['history'][:2]]
+        fallback_items.append({
+            'goal_title': item['goal_title'],
+            'hypothesis': parsed_prior.get('hypothesis') or 'данных пока мало',
+            'works': parsed_prior.get('works') or (recent_snippets[0] if recent_snippets else 'данных пока мало'),
+            'fails': parsed_prior.get('fails') or ('; '.join(s for s in recent_snippets if any(token in s.lower() for token in ('ошибк', 'не удалось', 'без результата', '0 ответ'))) or 'явных провалов пока не зафиксировано'),
+            'next_experiment': parsed_prior.get('next_experiment') or 'получить один подтверждённый результат и обновить стратегию',
+        })
+    return _build_goal_strategy_memory_block(fallback_items or fresh_items)
 
 
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
@@ -14905,6 +15245,16 @@ class AnchorEngine:
             # ── ШАГ 1: Анализ ситуации (chain-of-thought перед планированием) ──
             # AI сначала диагностирует ЧТО происходит, потом использует этот вывод при составлении плана
             _coordinator_analysis_str = ''
+            _goal_strategy_memory_str = ''
+            try:
+                _goal_strategy_memory_str = await _build_goal_strategy_memory(
+                    _goals,
+                    _per_agent_history,
+                    user.id,
+                )
+            except Exception as _gsm_err:
+                logger.debug('[COORD] goal strategy memory failed: %s', _gsm_err)
+
             try:
                 # Текущее состояние активных циклов — AI видит и учитывает
                 _active_dispatches = 0
@@ -14922,6 +15272,7 @@ class AnchorEngine:
                     f"ЦЕЛИ: {'; '.join(g['title'] for g in _goals[:3])}\n"
                     + (f"АКТИВНЫХ ЦИКЛОВ СЕЙЧАС: {_active_dispatches} (если >0 — часть агентов уже работает)\n\n"
                        if _active_dispatches > 0 else "\n")
+                    + (_goal_strategy_memory_str[:900] if _goal_strategy_memory_str else '')
                     + (_strategic_7day_str[:700] if _strategic_7day_str else '')
                     + (_email_analytics_str[:500] if _email_analytics_str else '')
                     + (_multiday_review_str[:500] if _multiday_review_str else '')
@@ -14959,6 +15310,7 @@ class AnchorEngine:
                 + _coordinator_analysis_str
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
+                + _goal_strategy_memory_str
                 + _effectiveness_str
                 + _strategy_scorecard_str
                 + _channel_stagnation_str
@@ -18050,6 +18402,16 @@ class AnchorEngine:
                         f"\n\nКоманда:\n" + '\n'.join(_team_lines_c) + '\n'
                     )
 
+                    _agent_goal_strategy_block = ''
+                    if _ag_goal_title:
+                        _strategy_note_content = _get_goal_strategy_note_content(session, user.id, _ag_goal_title)
+                        _agent_goal_strategy_block = _build_agent_goal_strategy_block(
+                            _ag_goal_title,
+                            _strategy_note_content,
+                            agent_name=_ag_name,
+                            per_agent_history=_per_agent_history,
+                        )
+
                 _agent_prompt = (
                     # ── 1. КТО ТЫ — идентичность всегда первой ──
                     f"Ты — {_ag_name}. {_ag_role_str}.{_ag_desc_line}\n"
@@ -18066,6 +18428,7 @@ class AnchorEngine:
                        f"   НЕ обновляй за: поиск, RSS, find_contacts из базы, check_emails «авто».\n"
                        f"   ⚠️ Название цели УЖЕ УКАЗАНО — НЕ спрашивай пользователя 'какую цель обновить?'. Используй ТОЧНО: '{_ag_goal_title}'.\n"
                        if _ag_goal_title else '')
+                          + _agent_goal_strategy_block
                     + (f"→ Рекомендованный инструмент: {_tool_hint} — реши сам, подходит ли.\n" if _tool_hint else '')
                     # ── 3. РАБОТА КОМАНДЫ — реагируй ──
                     + _team_reactive_block
