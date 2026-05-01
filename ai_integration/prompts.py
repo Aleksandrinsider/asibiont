@@ -55,6 +55,7 @@ def _build_universal_execution_contract(lang: str, profile_data: dict | None, us
             f"- Integration context state: {_integration_state}\n"
             "- Decision loop for each step: choose the action with highest expected progress to user's current goal,\n"
             "  while strictly honoring user rules and using connected integrations first.\n"
+            "- In ambiguity: infer intent from recent dialog, state best interpretation, do one useful step, then ask one narrow clarifying question if still needed.\n"
             "- If required integration is missing: ask for one concrete connection step and provide fallback action now.\n"
             "- Never apply defaults that contradict user rules; user rules always override heuristics."
         )
@@ -68,6 +69,7 @@ def _build_universal_execution_contract(lang: str, profile_data: dict | None, us
         f"- Состояние интеграционного контекста: {_integration_state}\n"
         "- Цикл выбора каждого шага: выбирать действие с максимальным ожидаемым прогрессом к текущей цели пользователя,\n"
         "  при этом строго соблюдая правила пользователя и используя сначала подключённые интеграции.\n"
+        "- При неоднозначности: восстанови смысл из последних реплик, озвучь лучшую интерпретацию, сделай один полезный шаг и только потом задай один точечный вопрос (если всё ещё нужно).\n"
         "- Если нужная интеграция не подключена: запросить один конкретный шаг подключения и дать рабочий fallback уже сейчас.\n"
         "- Никогда не применять дефолты, которые противоречат правилам пользователя; правила всегда выше эвристик."
     )
