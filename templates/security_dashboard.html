@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -279,62 +279,62 @@
         }
     </script>
     <div class="container">
-        <a href="/dashboard" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">← На главную</a>
+        <a href="/dashboard" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">в†ђ РќР° РіР»Р°РІРЅСѓСЋ</a>
         <div class="header">
-            <h1>🛡️ Security Dashboard</h1>
-            <p>Мониторинг безопасности и защита от атак • Обновлено: {{ current_time }}</p>
+            <h1>рџ›ЎпёЏ Security Dashboard</h1>
+            <p>РњРѕРЅРёС‚РѕСЂРёРЅРі Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё Рё Р·Р°С‰РёС‚Р° РѕС‚ Р°С‚Р°Рє вЂў РћР±РЅРѕРІР»РµРЅРѕ: {{ current_time }}</p>
         </div>
 
         <!-- User Statistics Section -->
         {% if stats.user_stats %}
         <div class="section">
-            <h2>👥 Статистика пользователей</h2>
+            <h2>рџ‘Ґ РЎС‚Р°С‚РёСЃС‚РёРєР° РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <h3>Всего пользователей</h3>
+                    <h3>Р’СЃРµРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№</h3>
                     <div class="value">{{ stats.user_stats.total_users }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Пользователей онлайн</h3>
+                    <h3>РџРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РѕРЅР»Р°Р№РЅ</h3>
                     <div class="value" style="color: #059669;">{{ stats.user_stats.users_online }}</div>
-                    <div class="timestamp">за последние 15 минут</div>
+                    <div class="timestamp">Р·Р° РїРѕСЃР»РµРґРЅРёРµ 15 РјРёРЅСѓС‚</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>За 24 часа</h3>
+                    <h3>Р—Р° 24 С‡Р°СЃР°</h3>
                     <div class="value">+{{ stats.user_stats.new_users_24h }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>За неделю</h3>
+                    <h3>Р—Р° РЅРµРґРµР»СЋ</h3>
                     <div class="value">+{{ stats.user_stats.new_users_week }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Активных подписок</h3>
+                    <h3>РђРєС‚РёРІРЅС‹С… РїРѕРґРїРёСЃРѕРє</h3>
                     <div class="value">{{ stats.user_stats.active_subscriptions }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Заполненных профилей</h3>
+                    <h3>Р—Р°РїРѕР»РЅРµРЅРЅС‹С… РїСЂРѕС„РёР»РµР№</h3>
                     <div class="value">{{ stats.user_stats.profiles_filled }}</div>
-                    <div class="timestamp">{{ stats.user_stats.profile_completion_rate }}% завершенность</div>
+                    <div class="timestamp">{{ stats.user_stats.profile_completion_rate }}% Р·Р°РІРµСЂС€РµРЅРЅРѕСЃС‚СЊ</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Всего задач</h3>
+                    <h3>Р’СЃРµРіРѕ Р·Р°РґР°С‡</h3>
                     <div class="value">{{ stats.user_stats.total_tasks }}</div>
-                    <div class="timestamp">{{ stats.user_stats.completed_tasks }} завершено ({{ stats.user_stats.task_completion_rate }}%)</div>
+                    <div class="timestamp">{{ stats.user_stats.completed_tasks }} Р·Р°РІРµСЂС€РµРЅРѕ ({{ stats.user_stats.task_completion_rate }}%)</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Взаимодействий с AI</h3>
+                    <h3>Р’Р·Р°РёРјРѕРґРµР№СЃС‚РІРёР№ СЃ AI</h3>
                     <div class="value">{{ stats.user_stats.total_interactions }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Распределение тарифов</h3>
+                    <h3>Р Р°СЃРїСЂРµРґРµР»РµРЅРёРµ С‚Р°СЂРёС„РѕРІ</h3>
                     <div style="margin-top: 8px;">
                         {% if stats.user_stats.tier_distribution %}
                             {% for tier, count in stats.user_stats.tier_distribution.items() %}
@@ -352,10 +352,10 @@
 
         <!-- Security Statistics -->
         <div class="section">
-            <h2>🔒 Статистика безопасности</h2>
+            <h2>рџ”’ РЎС‚Р°С‚РёСЃС‚РёРєР° Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <h3>Всего запросов</h3>
+                    <h3>Р’СЃРµРіРѕ Р·Р°РїСЂРѕСЃРѕРІ</h3>
                     <div class="value">{{ stats.total_requests }}</div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: 100%;"></div>
@@ -363,17 +363,17 @@
                 </div>
 
                 <div class="stat-card">
-                    <h3>Уникальных IP</h3>
+                    <h3>РЈРЅРёРєР°Р»СЊРЅС‹С… IP</h3>
                     <div class="value">{{ stats.unique_ips }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Заблокировано IP</h3>
+                    <h3>Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРѕ IP</h3>
                     <div class="value">{{ stats.blocked_ips|length }}</div>
                 </div>
 
                 <div class="stat-card">
-                    <h3>Подозрительных IP</h3>
+                    <h3>РџРѕРґРѕР·СЂРёС‚РµР»СЊРЅС‹С… IP</h3>
                     <div class="value">{{ stats.suspicious_ips|length }}</div>
                 </div>
             </div>
@@ -382,15 +382,15 @@
         <!-- Recent Users -->
         {% if stats.user_stats and stats.user_stats.recent_users %}
         <div class="section">
-            <h2>🆕 Последние регистрации</h2>
+            <h2>рџ†• РџРѕСЃР»РµРґРЅРёРµ СЂРµРіРёСЃС‚СЂР°С†РёРё</h2>
             <table>
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>Username</th>
-                        <th>Имя</th>
-                        <th>Тариф</th>
-                        <th>Дата регистрации</th>
+                        <th>РРјСЏ</th>
+                        <th>РўР°СЂРёС„</th>
+                        <th>Р”Р°С‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -419,14 +419,14 @@
         <!-- Top Active Users -->
         {% if stats.user_stats and stats.user_stats.top_active_users %}
         <div class="section">
-            <h2>⚡ Самые активные пользователи</h2>
+            <h2>вљЎ РЎР°РјС‹Рµ Р°РєС‚РёРІРЅС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»Рё</h2>
             <table>
                 <thead>
                     <tr>
                         <th>Username</th>
-                        <th>Имя</th>
-                        <th>Взаимодействий</th>
-                        <th>Активность</th>
+                        <th>РРјСЏ</th>
+                        <th>Р’Р·Р°РёРјРѕРґРµР№СЃС‚РІРёР№</th>
+                        <th>РђРєС‚РёРІРЅРѕСЃС‚СЊ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -449,15 +449,15 @@
 
         <!-- Top IPs by Request Count -->
         <div class="section">
-            <h2>🔥 Топ-10 IP по количеству запросов</h2>
+            <h2>рџ”Ґ РўРѕРї-10 IP РїРѕ РєРѕР»РёС‡РµСЃС‚РІСѓ Р·Р°РїСЂРѕСЃРѕРІ</h2>
             {% if stats.top_ips %}
             <table>
                 <thead>
                     <tr>
-                        <th>IP Адрес</th>
-                        <th>Запросов</th>
-                        <th>Статус</th>
-                        <th>Прогресс</th>
+                        <th>IP РђРґСЂРµСЃ</th>
+                        <th>Р—Р°РїСЂРѕСЃРѕРІ</th>
+                        <th>РЎС‚Р°С‚СѓСЃ</th>
+                        <th>РџСЂРѕРіСЂРµСЃСЃ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -467,11 +467,11 @@
                         <td>{{ ip_data.count }}</td>
                         <td>
                             {% if ip_data.ip in stats.blocked_ips %}
-                            <span class="badge badge-danger">Заблокирован</span>
+                            <span class="badge badge-danger">Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ</span>
                             {% elif ip_data.ip in stats.suspicious_ips %}
-                            <span class="badge badge-warning">Подозрительный</span>
+                            <span class="badge badge-warning">РџРѕРґРѕР·СЂРёС‚РµР»СЊРЅС‹Р№</span>
                             {% else %}
-                            <span class="badge badge-success">Норма</span>
+                            <span class="badge badge-success">РќРѕСЂРјР°</span>
                             {% endif %}
                         </td>
                         <td>
@@ -484,20 +484,20 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="empty-state">Нет данных о запросах</div>
+            <div class="empty-state">РќРµС‚ РґР°РЅРЅС‹С… Рѕ Р·Р°РїСЂРѕСЃР°С…</div>
             {% endif %}
         </div>
 
         <!-- Top Endpoints -->
         <div class="section">
-            <h2>📊 Топ-10 эндпоинтов</h2>
+            <h2>рџ“Љ РўРѕРї-10 СЌРЅРґРїРѕРёРЅС‚РѕРІ</h2>
             {% if stats.top_endpoints %}
             <table>
                 <thead>
                     <tr>
-                        <th>Путь</th>
-                        <th>Запросов</th>
-                        <th>Прогресс</th>
+                        <th>РџСѓС‚СЊ</th>
+                        <th>Р—Р°РїСЂРѕСЃРѕРІ</th>
+                        <th>РџСЂРѕРіСЂРµСЃСЃ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -515,20 +515,20 @@
                 </tbody>
             </table>
             {% else %}
-            <div class="empty-state">Нет данных о запросах</div>
+            <div class="empty-state">РќРµС‚ РґР°РЅРЅС‹С… Рѕ Р·Р°РїСЂРѕСЃР°С…</div>
             {% endif %}
         </div>
 
         <!-- Blocked IPs -->
         {% if stats.blocked_ips %}
         <div class="section">
-            <h2>🚫 Заблокированные IP</h2>
+            <h2>рџљ« Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹Рµ IP</h2>
             <table>
                 <thead>
                     <tr>
-                        <th>IP Адрес</th>
-                        <th>Время блокировки</th>
-                        <th>Разблокировка через</th>
+                        <th>IP РђРґСЂРµСЃ</th>
+                        <th>Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё</th>
+                        <th>Р Р°Р·Р±Р»РѕРєРёСЂРѕРІРєР° С‡РµСЂРµР·</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -536,7 +536,7 @@
                     <tr>
                         <td><strong>{{ ip }}</strong></td>
                         <td>{{ blocked_until }}</td>
-                        <td><span class="badge badge-danger">1 час</span></td>
+                        <td><span class="badge badge-danger">1 С‡Р°СЃ</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -547,13 +547,13 @@
         <!-- Suspicious IPs -->
         {% if stats.suspicious_ips %}
         <div class="section">
-            <h2>⚠️ Подозрительные IP</h2>
+            <h2>вљ пёЏ РџРѕРґРѕР·СЂРёС‚РµР»СЊРЅС‹Рµ IP</h2>
             <table>
                 <thead>
                     <tr>
-                        <th>IP Адрес</th>
-                        <th>Нарушений</th>
-                        <th>Статус</th>
+                        <th>IP РђРґСЂРµСЃ</th>
+                        <th>РќР°СЂСѓС€РµРЅРёР№</th>
+                        <th>РЎС‚Р°С‚СѓСЃ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -563,11 +563,11 @@
                         <td>{{ violations }}</td>
                         <td>
                             {% if violations >= 4 %}
-                            <span class="badge badge-danger">Критично</span>
+                            <span class="badge badge-danger">РљСЂРёС‚РёС‡РЅРѕ</span>
                             {% elif violations >= 2 %}
-                            <span class="badge badge-warning">Внимание</span>
+                            <span class="badge badge-warning">Р’РЅРёРјР°РЅРёРµ</span>
                             {% else %}
-                            <span class="badge badge-success">Низкий риск</span>
+                            <span class="badge badge-success">РќРёР·РєРёР№ СЂРёСЃРє</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -578,29 +578,29 @@
         {% endif %}
 
         <div style="text-align: center; margin-top: 30px;">
-            <button class="refresh-btn" onclick="location.reload()">🔄 Обновить данные</button>
+            <button class="refresh-btn" onclick="location.reload()">рџ”„ РћР±РЅРѕРІРёС‚СЊ РґР°РЅРЅС‹Рµ</button>
         </div>
 
         <!-- CTA -->
         <div class="cta-section" style="text-align: center; margin: 32px 0 0 0; padding: 24px 16px;">
-            <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">Все функции доступны сразу.</p>
+            <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">Р’СЃРµ С„СѓРЅРєС†РёРё РґРѕСЃС‚СѓРїРЅС‹ СЃСЂР°Р·Сѓ.</p>
             <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                <a href="https://t.me/asibiont_bot" target="_blank" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">Попробовать бесплатно — 1 500 токенов</a>
-                <button id="pwa-install-btn" onclick="triggerPwaInstall()" style="display: inline-flex; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s; align-items: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Установить приложение</button>
+                <a href="https://t.me/asibiont_bot" target="_blank" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">РџРѕРїСЂРѕР±РѕРІР°С‚СЊ Р±РµСЃРїР»Р°С‚РЅРѕ вЂ” 1 500 С‚РѕРєРµРЅРѕРІ</a>
+                <button id="pwa-install-btn" onclick="triggerPwaInstall()" style="display: inline-flex; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s; align-items: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµ</button>
             </div>
         </div>
 
         <!-- Footer -->
         <div class="footer-links" style="text-align: center; margin-top: 24px; padding-top: 24px; color: #6C727F; font-size: 13px;">
-            <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
-            <a href="/blog" style="color: #59636E; text-decoration: none; margin-right: 16px;">Блог</a>
+            <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Р“Р»Р°РІРЅР°СЏ</a>
+            <a href="/blog" style="color: #59636E; text-decoration: none; margin-right: 16px;">Р‘Р»РѕРі</a>
             <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
-            <a href="/subscription-tiers" style="color: #59636E; text-decoration: none; margin-right: 16px;">Тарифы</a>
-            <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
-            <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
-            <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
-            <a href="/arena" style="color: #59636E; text-decoration: none; margin-right: 16px;">Арена AI</a>
-            <a href="/integrations" style="color: #59636E; text-decoration: none;">Вебхуки</a>
+            <a href="/subscription-tiers" style="color: #59636E; text-decoration: none; margin-right: 16px;">РўР°СЂРёС„С‹</a>
+            <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">РџРѕРґРґРµСЂР¶РєР°</a>
+            <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">РЎРѕРіР»Р°С€РµРЅРёРµ</a>
+            <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">РџСЂР°РІРёР»Р°</a>
+            <a href="/arena" style="color: #59636E; text-decoration: none; margin-right: 16px;">РђСЂРµРЅР° AI</a>
+            <a href="/integrations" style="color: #59636E; text-decoration: none;">Р’РµР±С…СѓРєРё</a>
             <div style="margin-top: 8px;">2026 ASI Biont</div>
         </div>
     </div>
@@ -623,9 +623,9 @@ function triggerPwaInstall() {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
     } else if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-        alert('Нажмите «Поделиться» → «На экран Домой»');
+        alert('РќР°Р¶РјРёС‚Рµ В«РџРѕРґРµР»РёС‚СЊСЃСЏВ» в†’ В«РќР° СЌРєСЂР°РЅ Р”РѕРјРѕР№В»');
     } else {
-        alert('Откройте сайт в Chrome или Safari для установки');
+        alert('РћС‚РєСЂРѕР№С‚Рµ СЃР°Р№С‚ РІ Chrome РёР»Рё Safari РґР»СЏ СѓСЃС‚Р°РЅРѕРІРєРё');
     }
 }
 </script>
@@ -637,11 +637,13 @@ function triggerPwaInstall() {
         m[i].l=1*new Date();
         for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
         k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=107270723', 'ym');
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js', 'ym');
 
-    ym(107270723, 'init', {clickmap:true, trackLinks:true, accurateTrackBounce:true, webvisor:true});
+    ym(107270723, 'init', {clickmap:true, trackLinks:true, accurateTrackBounce:true, webvisor:true, defer:true, trackHash:true, triggerEvent:true});
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/107270723" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
 <!-- /Yandex.Metrika counter -->
 </body>
 </html>
+
+
