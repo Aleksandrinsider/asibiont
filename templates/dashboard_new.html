@@ -18911,26 +18911,9 @@ except Exception as e:
         m[i].l=1*new Date();
         for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
         k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js', 'ym');
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=107270723', 'ym');
 
-        ym(107270723, 'init', {clickmap:true, trackLinks:true, accurateTrackBounce:true, webvisor:true, defer:true, trackHash:true, triggerEvent:true});
-
-        // Dashboard behaves like SPA; send explicit hits on in-page navigation/events.
-        (function() {
-            var _ymHit = function() {
-                try {
-                    if (typeof window.ym === 'function') {
-                        window.ym(107270723, 'hit', window.location.href, { title: document.title });
-                    }
-                } catch (e) {}
-            };
-            window.addEventListener('hashchange', _ymHit);
-            window.addEventListener('popstate', _ymHit);
-            document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible') _ymHit();
-            });
-            setTimeout(_ymHit, 1200);
-        })();
+    ym(107270723, 'init', {clickmap:true, trackLinks:true, accurateTrackBounce:true, webvisor:true});
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/107270723" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
 <!-- /Yandex.Metrika counter -->
@@ -18964,5 +18947,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
-
