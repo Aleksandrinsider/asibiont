@@ -10021,10 +10021,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _CONSULTATIVE_PATTERNS = (
                 'что делаем', 'какой вариант', 'какой путь', 'какой вариант идем', 'какой вариант идём',
                 'или, если хочешь', 'если хочешь, могу', 'как поступим', 'что выберем',
+                'ничего не делегировано', 'не делегировано', 'сейчас ничего не делегировано',
                 'which option', 'what should we do', 'which way should we go',
             )
+            _looks_like_idle_agent_stall = (
+                bool(_meta_lc)
+                and ('делегир' in _meta_lc or 'агент' in _meta_lc)
+                and ('ничего не делегировано' in _meta_lc or 'если хочешь, могу' in _meta_lc)
+            )
             _is_consultative_stall = (
-                _is_autopilot_task
+                (_is_autopilot_task or _looks_like_idle_agent_stall)
                 and _iter == 0
                 and not _tool_calls
                 and _tool_call_count == 0
@@ -10041,6 +10047,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "СТОП. Не задавай пользователю встречные вопросы и не предлагай варианты, "
                     "когда уже дана конкретная задача. "
                     "ОБЯЗАТЕЛЬНО прямо сейчас вызови инструмент и выполни ближайшее действие. "
+                    "Если агент свободен/ничего не делегировано — СРАЗУ поставь ему конкретную задачу через delegate_task, "
+                    "а не спрашивай разрешение. "
                     "Если первый инструмент недоступен — выбери альтернативный доступный инструмент "
                     "и продолжи выполнение без вопроса пользователю."
                 )})
@@ -10794,6 +10802,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _atask = _re_fin.sub(
                     r'^' + _re_fin.escape(_aname) + r'[\s,:.!]+',
                     '', _atask, flags=_re_fin.IGNORECASE,
+                # Лексическая правка частой ошибки LLM в статусе генерации изображения.
+                final = re.sub(r'(?i)\bкартинка\s+готов\.?', 'Изображение готово.', final or '')
                 ).strip()
                 if _aname and _atask:
                     # ── DELEGATE quality guard (финальный парсинг) ──
