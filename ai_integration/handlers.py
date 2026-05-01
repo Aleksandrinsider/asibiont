@@ -14526,23 +14526,20 @@ async def send_outreach_email(
             user_id=user.id,
         )
 
-        # Сайт и Telegram НЕ добавляем если уже есть подпись в письме
-        # (чтобы не создавать пеструю смесь из разных подписей)
-        if not _has_sig_markers:
-            # Сайт: добавляем как plain-text домен в подпись БЕЗ https:// и без гиперссылки.
-            # Ссылки (→ https://...) в холодных письмах — главный триггер спам-фильтров,
-            # они снижают доставляемость и могут убить репутацию домена отправки.
-            # Plain-text домен в подписи безопасен и при этом сообщает пользователю о сайте.
-            _cta_url = (campaign.landing_url or '').strip() or (_user_landing_url or '')
-            if _cta_url:
-                # Извлекаем чистый домен без схемы: https://example.com → example.com
-                _plain_domain = _cta_url.replace('https://', '').replace('http://', '').split('/')[0]
-                if _plain_domain and _plain_domain.lower() not in _body_signed.lower():
-                    _body_signed = _body_signed.rstrip() + f"\n{_plain_domain}"
-            # Telegram: plain-text link (t.me/channel) — безопасен для спам-фильтров
-            _tg_link_oe = _get_email_tg_link(user)
-            if _tg_link_oe and _tg_link_oe not in _body_signed:
-                _body_signed = _body_signed.rstrip() + f'\n{_tg_link_oe}'
+        # Сайт и Telegram добавляем всегда в подпись, если их ещё нет в тексте.
+        # Наличие имени/sign-off в теле не означает наличие контактных данных.
+        # Ссылки (→ https://...) в холодных письмах — главный триггер спам-фильтров,
+        # поэтому используем plain-text формат без схемы.
+        _cta_url = (campaign.landing_url or '').strip() or (_user_landing_url or '')
+        if _cta_url:
+            # Извлекаем чистый домен без схемы: https://example.com → example.com
+            _plain_domain = _cta_url.replace('https://', '').replace('http://', '').split('/')[0]
+            if _plain_domain and _plain_domain.lower() not in _body_signed.lower():
+                _body_signed = _body_signed.rstrip() + f"\n{_plain_domain}"
+        # Telegram: plain-text link (t.me/channel) — безопасен для спам-фильтров
+        _tg_link_oe = _get_email_tg_link(user)
+        if _tg_link_oe and _tg_link_oe not in _body_signed:
+            _body_signed = _body_signed.rstrip() + f'\n{_tg_link_oe}'
 
         # ── SMTP dispatch (Яндекс / Mail.ru / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False
