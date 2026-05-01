@@ -25528,6 +25528,9 @@ class AnchorEngine:
                           "If the contact wrote in Russian/Cyrillic, your reply must be fully Russian/Cyrillic. "
                           "If the contact wrote in English/Latin, your reply must be fully English/Latin.\n\n"
                         f"RULES:\n"
+                                                f"- NO TEMPLATES: do not write generic canned text like 'thanks for your reply' only.\n"
+                                                f"- Ground your reply in THIS exact email: include at least 1-2 concrete details from their message (name/company/invoice/code/amount/topic).\n"
+                                                f"- If they shared operational details (invoice, budget, legal/accounting contact, timeline), acknowledge those exact details and continue via email.\n"
                         f"- Read their reply carefully. If it's a QUESTION — answer it specifically and honestly.\n"
                         f"- If it's a REFUSAL or OPT-OUT — do NOT reply (return empty body).\n"
                         f"- Keep it short: 3-5 sentences, conversational tone.\n"
@@ -25578,7 +25581,51 @@ class AnchorEngine:
                         logger.error(f"[ANCHOR] email_reply_received compose error: {_compose_err}")
                     return _reply_body_local, _ai_result_local
 
+                def _looks_templated_email_reply(_body_text: str, _incoming_text: str) -> bool:
+                    """Heuristic: detect overly generic canned drafts that ignore incoming details."""
+                    import re as _re_tpl
+                    _b = (_body_text or '').strip().lower()
+                    _in = (_incoming_text or '').strip().lower()
+                    if not _b:
+                        return True
+                    _generic_markers = (
+                        'спасибо за ответ', 'благодарю за ответ', 'буду рад', 'будем рады',
+                        'готовы обсудить', 'на связи', 'жду вашего ответа',
+                        'thank you for your reply', 'happy to discuss', 'looking forward',
+                    )
+                    _has_generic = any(m in _b for m in _generic_markers)
+
+                    # Concrete entities from incoming: invoice codes, amounts, emails/domains, long tokens.
+                    _entities = set()
+                    for _m in _re_tpl.findall(r'[A-ZА-Я0-9]{4,}', _incoming_text or ''):
+                        _entities.add(_m.lower())
+                    for _m in _re_tpl.findall(r'\b\d{3,}\b', _incoming_text or ''):
+                        _entities.add(_m.lower())
+                    for _m in _re_tpl.findall(r'[\w.+\-]+@[\w.\-]+', _incoming_text or ''):
+                        _entities.add(_m.lower())
+                    for _m in _re_tpl.findall(r'\b[\w\-]{6,}\b', _in):
+                        if _m not in {'подготовка', 'публикация', 'стоимость', 'исполнителя'}:
+                            _entities.add(_m)
+
+                    _has_entity_overlap = any(e in _b for e in list(_entities)[:20]) if _entities else False
+                    return _has_generic and not _has_entity_overlap
+
                 _reply_body, ai_result = await _compose_reply()
+
+                # Авто-перегенерация: если draft выглядит как заготовка, требуем конкретику из письма.
+                if _reply_body and _looks_templated_email_reply(_reply_body, reply_text):
+                    logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: templated draft detected, retrying with stricter grounding")
+                    _retry_reason_tpl = (
+                        "Draft looked generic/template-like and ignored incoming details. "
+                        "Rewrite with concrete details from recipient email and no canned phrases."
+                    )
+                    _reply_body_retry, ai_result_retry = await _compose_reply(
+                        _retry_reason=_retry_reason_tpl,
+                        _temperature=0.2,
+                    )
+                    if _reply_body_retry and not _looks_templated_email_reply(_reply_body_retry, reply_text):
+                        _reply_body = _reply_body_retry
+                        ai_result = ai_result_retry or ai_result
 
                 logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: ai_result={(ai_result or '')[:80]!r}, _reply_body_len={len(_reply_body)}")
 
