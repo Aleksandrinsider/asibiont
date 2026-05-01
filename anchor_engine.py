@@ -15590,6 +15590,8 @@ class AnchorEngine:
                 "         ПРАВИЛЬНО: 'Beatrice нашла контакты — возьми оставшихся и отправь письма' → 'Olivia, Beatrice нашла...'\n"
                 "         НЕПРАВИЛЬНО: 'Olivia, возьми...' — имя будет продублировано!\n"
                 "       • НЕ используй 'делегируй X: ...' — ты координатор, ты сам назначаешь задачу напрямую.\n"
+                "       • НЕ упоминай этого же агента в 3-м лице: 'Beatrice потом отправит'.\n"
+                "         Пиши напрямую во 2-м лице: 'потом отправь'.\n"
                 "       • СТРУКТУРА (2–4 предложения):\n"
                 "           1) КОНТЕКСТ: что происходит / почему именно сейчас (1–2 предл.)\n"
                 "           2) ПОРУЧЕНИЕ: конкретное действие с деталями (1–2 предл., повелит. наклонение)\n"
@@ -17543,6 +17545,47 @@ class AnchorEngine:
                             _asi_assign_text = f'{_ag_name}, {_reason_part} {_task_brief_sentence}.'
                         else:
                             _asi_assign_text = f'{_ag_name}, {_task_brief_sentence}.'
+
+                        # ── Voice normalizer: убираем само-упоминание агента в 3-м лице ──
+                        # Пример: "Beatrice, ... Сохрани их — Beatrice потом отправит письма."
+                        #      -> "Beatrice, ... Сохрани их — потом отправь письма."
+                        import re as _re_voice_norm
+                        _agent_quoted = _re_voice_norm.escape(_ag_name)
+                        _asi_assign_text = _re_voice_norm.sub(
+                            rf'\b{_agent_quoted}\b\s+потом\s+',
+                            'потом ',
+                            _asi_assign_text,
+                            flags=_re_voice_norm.IGNORECASE,
+                        )
+                        _asi_assign_text = _re_voice_norm.sub(
+                            rf'\b{_agent_quoted}\b\s+',
+                            'ты ',
+                            _asi_assign_text,
+                            flags=_re_voice_norm.IGNORECASE,
+                        )
+
+                        _verb_3p_to_2p = {
+                            'сделает': 'сделай',
+                            'отправит': 'отправь',
+                            'напишет': 'напиши',
+                            'проверит': 'проверь',
+                            'найдет': 'найди',
+                            'найдёт': 'найди',
+                            'сохранит': 'сохрани',
+                            'обновит': 'обнови',
+                            'опубликует': 'опубликуй',
+                            'создаст': 'создай',
+                            'свяжется': 'свяжись',
+                            'проанализирует': 'проанализируй',
+                        }
+                        for _v3, _v2 in _verb_3p_to_2p.items():
+                            _asi_assign_text = _re_voice_norm.sub(
+                                rf'\bпотом\s+{_v3}\b',
+                                f'потом {_v2}',
+                                _asi_assign_text,
+                                flags=_re_voice_norm.IGNORECASE,
+                            )
+                        _asi_assign_text = _re_voice_norm.sub(r'\bты\s+потом\s+потом\b', 'потом', _asi_assign_text, flags=_re_voice_norm.IGNORECASE)
                     # УДАЛЕНА: вся логика инфинитив→императив трансформации (L15523-15660)
                     # Теперь LLM генерирует task_brief уже в правильной форме через self-check в промпте.
                 except Exception as _aac_err:
