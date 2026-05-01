@@ -1512,7 +1512,9 @@
     localStorage.setItem('asibiont_lang', lang);
     var path = window.location.pathname.replace(/^\/en\/?/, '/');
     if (path === '/') path = '';
-    window.location.href = lang === 'en' ? '/en' + (path || '/') : (path || '/');
+        var base = (lang === 'en' ? '/en' + (path || '/') : (path || '/'));
+        // Явно остаёмся на лендинге при переключении языка (даже если пользователь залогинен).
+        window.location.href = base + (base.indexOf('?') === -1 ? '?landing=1' : '&landing=1');
   };
   document.addEventListener('DOMContentLoaded', function() {
     apply(detectLang());
@@ -1632,14 +1634,15 @@ if (pwaBtn) {
             imgUrl = imgMatch ? imgMatch[1] : '';
         }
     var readMore = _bLang === 'en' ? 'Read →' : 'Читать →';
+        var blogBase = _bLang === 'en' ? '/en/blog/' : '/blog/';
     var card = document.createElement('div');
     card.className = 'blog-card';
     card.innerHTML =
-      (imgUrl ? '<a href="/blog/' + (p.slug || p.id) + '"><img class="blog-card-img" src="' + imgUrl + '" alt="" loading="lazy"></a>' : '') +
+            (imgUrl ? '<a href="' + blogBase + (p.slug || p.id) + '"><img class="blog-card-img" src="' + imgUrl + '" alt="" loading="lazy"></a>' : '') +
       '<div class="blog-card-date">' + dateStr + '</div>' +
-      '<div class="blog-card-title"><a href="/blog/' + (p.slug || p.id) + '">' + (p.title || '') + '</a></div>' +
+            '<div class="blog-card-title"><a href="' + blogBase + (p.slug || p.id) + '">' + (p.title || '') + '</a></div>' +
       '<div class="blog-card-excerpt">' + excerpt + '</div>' +
-      '<a href="/blog/' + (p.slug || p.id) + '" class="blog-card-more">' + readMore + '</a>';
+            '<a href="' + blogBase + (p.slug || p.id) + '" class="blog-card-more">' + readMore + '</a>';
     grid.appendChild(card);
   }
 

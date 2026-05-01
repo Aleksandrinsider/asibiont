@@ -986,9 +986,11 @@ async def login_handler(request):
         session.pop('history_cleared_timestamp', None)
         user_id = None
 
-    # Если пользователь уже залогинен, редиректим в dashboard
-    # (но не если он пришёл привязать Telegram к Discord-аккаунту)
-    if user_id and request.query.get('link_tg') != '1':
+    # Если пользователь уже залогинен, обычно редиректим в dashboard.
+    # Исключение: явный запрос лендинга (напр. переключение языка на публичной странице).
+    # (и также не редиректим в режиме link_tg привязки Telegram)
+    _stay_on_landing = request.query.get('landing') == '1'
+    if user_id and request.query.get('link_tg') != '1' and not _stay_on_landing:
         try:
             user_id = int(user_id)
             return web.HTTPFound('/dashboard')
