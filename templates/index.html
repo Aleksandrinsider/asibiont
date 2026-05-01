@@ -1616,15 +1616,21 @@ if (pwaBtn) {
   function _bRender(p, grid) {
     var d = p.created_at ? new Date(p.created_at) : null;
     var dateStr = d ? d.toLocaleDateString(_bLang === 'en' ? 'en-US' : 'ru-RU', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
-    var excerpt = (p.content || '')
-      .replace(/!\[[^\]]*\]\(([^)]+)\)/g, ' ')
-      .replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' ')
-      .replace(/[#*`_~>[\]()!]/g, '')
-      .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
-    if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
-    var imgMatch = (p.content || '').match(/!\[[^\]]*\]\(([^)]+)\)/) ||
-                   (p.content || '').match(/\[IMAGE:(https?:\/\/[^\]]+)\]/);
-    var imgUrl = imgMatch ? imgMatch[1] : '';
+        var excerpt = (p.excerpt || '').trim();
+        if (!excerpt) {
+            excerpt = (p.content || '')
+                .replace(/!\[[^\]]*\]\(([^)]+)\)/g, ' ')
+                .replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' ')
+                .replace(/[#*`_~>[\]()!]/g, '')
+                .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
+            if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
+        }
+        var imgUrl = p.image_url || '';
+        if (!imgUrl) {
+            var imgMatch = (p.content || '').match(/!\[[^\]]*\]\(([^)]+)\)/) ||
+                                         (p.content || '').match(/\[IMAGE:(https?:\/\/[^\]]+)\]/);
+            imgUrl = imgMatch ? imgMatch[1] : '';
+        }
     var readMore = _bLang === 'en' ? 'Read →' : 'Читать →';
     var card = document.createElement('div');
     card.className = 'blog-card';
@@ -1647,7 +1653,7 @@ if (pwaBtn) {
     var grid = document.getElementById('blog-grid');
     var btn = document.getElementById('blog-load-more');
     if (btn) btn.disabled = true;
-    fetch('/api/blog?per_page=' + _bPer + '&page=' + _bPage + '&lang=' + _bLang)
+        fetch('/api/blog?summary=1&per_page=' + _bPer + '&page=' + _bPage + '&lang=' + _bLang)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         _bTotal = data.total || _bTotal;
@@ -1658,7 +1664,7 @@ if (pwaBtn) {
       .catch(function() { if (btn) btn.disabled = false; });
   };
 
-  fetch('/api/blog?per_page=' + _bPer + '&page=1&lang=' + _bLang)
+    fetch('/api/blog?summary=1&per_page=' + _bPer + '&page=1&lang=' + _bLang)
     .then(function(r) { return r.json(); })
     .then(function(data) {
       var posts = data.posts || [];

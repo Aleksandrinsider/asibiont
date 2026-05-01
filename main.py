@@ -3394,12 +3394,18 @@ _BOT_SCAN_PATHS = ('/wp-admin', '/wordpress', '/wp-login', '/xmlrpc.php',
 async def logging_middleware(request, handler):
     """Log all incoming requests"""
     path = request.path
+    is_static_asset = (
+        path.startswith('/static/')
+        or path in ('/favicon.ico', '/sw.js', '/manifest.json', '/robots.txt', '/sitemap.xml')
+    )
     is_bot_probe = any(p in path for p in _BOT_SCAN_PATHS)
-    if not is_bot_probe:
+    # Static assets are high-volume and create heavy log IO on Railway.
+    # Keep warnings/errors, but skip per-request INFO logs for these paths.
+    if not is_bot_probe and not is_static_asset:
         logger.info(f"Incoming request: {request.method} {path} from {request.remote}")
     try:
         response = await handler(request)
-        if not is_bot_probe:
+        if not is_bot_probe and not is_static_asset:
             logger.info(f"Response: {request.method} {path} -> {response.status}")
         return response
     except web.HTTPException as e:
@@ -10812,6 +10818,7 @@ async def api_blog_handler(request):
         page, per_page = 1, 10
 
     lang = request.rel_url.query.get('lang', 'ru')
+    summary_only = request.rel_url.query.get('summary', '0') in ('1', 'true', 'yes')
 
     with Session() as session_db:
         from models import Note, User
@@ -10819,10 +10826,17 @@ async def api_blog_handler(request):
         total = query.count()
         notes = query.offset((page - 1) * per_page).limit(per_page).all()
 
+        # Avoid N+1 queries for author lookup
+        user_ids = {n.user_id for n in notes if n.user_id is not None}
+        users_map = {}
+        if user_ids:
+            users = session_db.query(User.id, User.username).filter(User.id.in_(user_ids)).all()
+            users_map = {uid: uname for uid, uname in users}
+
         posts = []
         for n in notes:
-            user = session_db.query(User).filter_by(id=n.user_id).first()
-            author = f"@{user.username}" if user and user.username else "AI-агент"
+            username = users_map.get(n.user_id)
+            author = f"@{username}" if username else "AI-агент"
             if lang == 'en':
                 display_title = n.title_en or n.title or 'Untitled'
                 display_content = n.content_en or n.content or ''
@@ -10858,6 +10872,34 @@ async def api_blog_handler(request):
                     )
                 else:
                     display_content = f"{_img_tag}\n\n{display_content}"
+
+            if summary_only:
+                import re as _re_api_blog_sum
+                _excerpt = (display_content or '')
+                _excerpt = _re_api_blog_sum.sub(r'!\[[^\]]*\]\([^)]+\)', ' ', _excerpt)
+                _excerpt = _re_api_blog_sum.sub(r'\[IMAGE:https?://[^\]]+\]', ' ', _excerpt)
+                _excerpt = _re_api_blog_sum.sub(r'<[^>]*>', ' ', _excerpt)
+                _excerpt = _re_api_blog_sum.sub(r'\s+', ' ', _excerpt).strip()
+                if len(_excerpt) > 180:
+                    _excerpt = _excerpt[:180].rsplit(' ', 1)[0].rstrip('.,;:') + '…'
+
+                _img_match = (
+                    _re_api_blog_sum.search(r'!\[[^\]]*\]\(([^)]+)\)', display_content or '')
+                    or _re_api_blog_sum.search(r'\[IMAGE:(https?://[^\]]+)\]', display_content or '')
+                )
+                _img_url = _img_match.group(1) if _img_match else ''
+
+                posts.append({
+                    'id': n.id,
+                    'slug': n.slug or str(n.id),
+                    'title': display_title,
+                    'excerpt': _excerpt,
+                    'image_url': _img_url,
+                    'author': author,
+                    'created_at': (n.created_at.isoformat() + 'Z') if n.created_at else None,
+                })
+                continue
+
             posts.append({
                 'id': n.id,
                 'slug': n.slug or str(n.id),
