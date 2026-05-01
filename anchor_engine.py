@@ -41,6 +41,7 @@ import aiohttp
 import pytz
 
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from models import (
     Session, User, UserProfile, Task, Goal, Interaction, Post,
@@ -5224,9 +5225,10 @@ class AnchorEngine:
                         _s_dyn.close()
                 except Exception:
                     _n_user_agents = 1
-                # coordinator (~150s) + N агентов × 200s + буфер 60s
-                # Минимум 420s чтобы один агент успел завершить coordinator+execution
-                _process_timeout_sec = min(_env_cap, max(420, 150 + _n_user_agents * 200 + 60))
+                # coordinator (~120s) + N агентов × 160s + буфер 60s
+                # Минимум по умолчанию 300s (настраивается через env), чтобы не держать lock слишком долго.
+                _min_timeout = int(os.getenv('ANCHOR_PROCESS_USER_MIN_TIMEOUT_SEC', '300'))
+                _process_timeout_sec = min(_env_cap, max(_min_timeout, 120 + _n_user_agents * 160 + 60))
                 logger.debug("[ANCHOR] User %d: dynamic timeout=%ds (%d agents)", user_id, _process_timeout_sec, _n_user_agents)
                 await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
@@ -6087,7 +6089,8 @@ class AnchorEngine:
             email_silent_anchors = []
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
-            _EMAIL_SILENT_MAX_PER_CYCLE = 3
+            # Не даём email-тихому контуру съедать весь бюджет _process_user.
+            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '2'))
             # Fairness: если есть новые отправки/ответы/поиск лидов, ограничиваем follow-up до 1 за цикл,
             # чтобы follow-up не вытеснял первые письма.
             _prefer_new_flow = [
@@ -24510,6 +24513,15 @@ class AnchorEngine:
         """
         _esa_text = None
         _email_timeout_disabled = False
+
+        def _is_stmt_timeout_error(err: Exception) -> bool:
+            _s = str(err or '').lower()
+            return (
+                'statement timeout' in _s
+                or 'querycanceled' in _s
+                or 'canceling statement due to statement timeout' in _s
+            )
+
         try:
             # Отключаем statement_timeout для ВСЕГО жизненного цикла email-операции.
             # SET LOCAL сбрасывается после commit(), а внутри этой функции есть несколько commit().
@@ -25689,6 +25701,31 @@ class AnchorEngine:
                 session.rollback()
             except Exception:
                 pass
+
+            # Спец-ветка: DB statement timeout (psycopg2 QueryCanceled / OperationalError)
+            # Не помечаем якорь delivered, а мягко откладываем повтор, чтобы не терять работу.
+            if isinstance(e, OperationalError) or _is_stmt_timeout_error(e):
+                try:
+                    _s_to = Session()
+                    try:
+                        _a_to = _s_to.query(Anchor).filter_by(id=anchor.id).first()
+                        if _a_to and not _a_to.delivered_at:
+                            _a_to.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+                            _to_log = AnchorDeliveryLog(
+                                user_id=_a_to.user_id,
+                                anchor_ids=json.dumps([_a_to.id]),
+                                message_text=f'[EMAIL_SILENT_TIMEOUT] {_a_to.anchor_type}: statement_timeout; snoozed 15m',
+                                anchor_types=json.dumps([_a_to.anchor_type]),
+                            )
+                            _s_to.add(_to_log)
+                            _s_to.commit()
+                            logger.warning(f"[ANCHOR] email_silent_anchor #{anchor.id}: statement_timeout -> snoozed 15m")
+                    finally:
+                        _s_to.close()
+                except Exception as _to_err:
+                    logger.warning(f"[ANCHOR] email_silent_anchor #{anchor.id}: timeout snooze fallback failed: {_to_err}")
+                return
+
             # Safety: mark anchor as delivered via NEW session so it isn't stuck PENDING forever.
             # Next scan cycle will create a fresh anchor if there's still work to do.
             try:
