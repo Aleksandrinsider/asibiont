@@ -17231,6 +17231,17 @@ class AnchorEngine:
                         _asi_assign_text,
                         flags=_re_post_inf.IGNORECASE,
                     )
+                    # Финальный анти-обрыв: убираем висячие предлоги/союзы в конце поручения.
+                    # Пример: "... из найденных ... в dp, с." -> "... из найденных ... в dp."
+                    _asi_assign_text = _re_post_inf.sub(
+                        r'[,:;\-–—]?\s+(?:в|на|по|за|к|о|во|до|от|из|для|при|без|под|над|об|у|с|со|ко|что|как|но|и|а)\s*[.!?]?\s*$',
+                        '.',
+                        _asi_assign_text,
+                        flags=_re_post_inf.IGNORECASE,
+                    )
+                    # Если после предыдущей замены остались двойные знаки — нормализуем.
+                    _asi_assign_text = _re_post_inf.sub(r'([.])\1+', r'\1', _asi_assign_text)
+                    _asi_assign_text = _re_post_inf.sub(r'([!?])\1+', r'\1', _asi_assign_text)
                     _asi_assign_text = _asi_assign_text.strip()
                 except Exception:
                     pass
