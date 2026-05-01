@@ -349,6 +349,19 @@ def _build_sender_role_line(session, user_id: int, sender_name: str) -> str:
         return ''
 
 
+def _detect_email_lang(text: str, default_lang: str = 'ru') -> str:
+    """Detect email text language for sign-off selection (ru/en)."""
+    _fallback = (default_lang or 'ru').lower()
+    if _fallback not in ('ru', 'en'):
+        _fallback = 'ru'
+    try:
+        from i18n import detect_lang_from_text as _detect_lang_from_text
+        _detected = _detect_lang_from_text(text or '')
+        return _detected if _detected in ('ru', 'en') else _fallback
+    except Exception:
+        return _fallback
+
+
 def _ensure_sender_signature(body: str, sender_name: str = '', session=None, user_id: int | None = None) -> tuple[str, bool]:
     """Ensure outgoing email has a complete sender signature without duplicates.
 
@@ -363,8 +376,11 @@ def _ensure_sender_signature(body: str, sender_name: str = '', session=None, use
 
     _role_line = _build_sender_role_line(session, user_id or 0, _sig_name)
 
+    _sig_lang = _detect_email_lang(_body, default_lang='ru')
+    _signoff = 'Best regards,' if _sig_lang == 'en' else 'С уважением,'
+
     if not _has_sig_markers:
-        _body = _body + f"\n\n— {_sig_name}"
+        _body = _body + f"\n\n{_signoff}\n{_sig_name}"
         if _role_line:
             _body += f"\n{_role_line}"
         return _body, True
@@ -379,6 +395,12 @@ def _ensure_sender_signature(body: str, sender_name: str = '', session=None, use
         ))
         if _incomplete_signoff:
             _body = _body + f"\n{_sig_name}"
+            if _role_line:
+                _body += f"\n{_role_line}"
+        else:
+            # Signature markers found, but no complete sign-off block with sender name.
+            # Add language-aligned sign-off to keep email style consistent.
+            _body = _body + f"\n\n{_signoff}\n{_sig_name}"
             if _role_line:
                 _body += f"\n{_role_line}"
 
@@ -14193,7 +14215,10 @@ async def send_outreach_email(
         if not subject or not body:
             # Универсальный fallback: не блокируем отправку из-за пропущенных полей,
             # а автозаполняем минимально корректные subject/body.
-            _lang_oe = (getattr(user, 'language', 'ru') or 'ru').lower()
+            _lang_oe = _detect_email_lang(
+                f"{subject or ''}\n\n{body or ''}",
+                default_lang=(getattr(user, 'language', 'ru') or 'ru').lower(),
+            )
             _name_hint = (recipient_name or recipient_company or '').strip()
             if not _name_hint and recipient_email and '@' in recipient_email:
                 _name_hint = recipient_email.split('@', 1)[0].replace('.', ' ').replace('_', ' ').title()
