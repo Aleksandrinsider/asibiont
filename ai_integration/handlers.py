@@ -1547,13 +1547,28 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         from models import Note
         import datetime as _dt_sn
 
-        _note_title = (title or content[:60]).strip()
-        # Стрипаем служебные префиксы, которые ИИ добавляет как «заголовок» заметки
-        import re as _re_note_pfx
-        _note_title = _re_note_pfx.sub(
-            r'^(?:черновик\s+поста|draft\s+post|blog\s+post|пост\s+для\s+блога|пост\s+в\s+блог|пост|post)\s*:\s*',
-            '', _note_title, flags=_re_note_pfx.IGNORECASE
-        ).strip()
+        # ✅ REFACTOR: Remove auto-truncation of note titles
+        # Old logic: _note_title = (title or content[:60]).strip()
+        # Problem: Forces titles into 60 chars even when full context needed
+        # 
+        # New logic: If title provided, use it fully. Otherwise derive from first sentence.
+        if title and title.strip():
+            _note_title = title.strip()
+        else:
+            # Derive from first sentence (usually more meaningful than first 60 chars)
+            import re as _re_title_derive
+            _sentences = _re_title_derive.split(r'(?<=[.!?])\s+', content.strip())
+            if _sentences:
+                _first_sent = _sentences[0].strip()
+                # Limit derived title to reasonable display length, but don't truncate in the middle of words
+                if len(_first_sent) > 200:
+                    # Find last complete word before 200 chars
+                    _cut = _first_sent[:200].rsplit(' ', 1)[0]
+                    _note_title = _cut.strip() if _cut else _first_sent[:200].strip()
+                else:
+                    _note_title = _first_sent
+            else:
+                _note_title = content.strip()[:200] if content.strip() else 'Заметка'
 
         # --- Rate limit: автопилот не должен спамить заметками ---
         _since_1h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=1)

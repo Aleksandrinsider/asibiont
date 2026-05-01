@@ -860,25 +860,34 @@ def sanitize_live_team_chat_text(
         ).strip()
 
     _a = (anchor_type or '').lower().strip()
+    
+    # 🔄 REFACTOR: No truncation for assignments — teach AI context handling instead.
+    # Principle: Full context preserves intent. Truncation is a template patch, not a solution.
+    # AI should learn to handle complete information, not get chopped fragments.
+    #
+    # Assignment types NEVER truncate — they preserve 100% of coordinator intent:
+    # - agent_delegation: Task from ASI to agent
+    # - coordinator_assignment: Coordination directive (complete)
+    # - goal_autopilot_assignment: Goal work instruction
+    #
+    # Result types (4000 char) preserve full agent output for context
+    # Other messages (1600 char) still have limits for UI sanity, but assignments don't.
+    
     if max_chars is None:
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            max_chars = 1800
+            # ❌ REMOVED: max_chars = 1800 (was 1800 template limit)
+            # ✅ NEW: NO TRUNCATION for assignments. Full text preservation.
+            max_chars = None  # Unlimited for assignments
         elif _a == 'coordinator_result':
             max_chars = 4000  # результаты агентов не урезаем — пользователь видит полный ответ
         else:
-            max_chars = 1600
+            max_chars = 1600  # Other UI messages still have limits
 
-    if len(cleaned) > max_chars:
+    if len(cleaned) > (max_chars or float('inf')):
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            # Для поручений: режем по последнему полному предложению, а не по символу.
-            # Это гарантирует что сообщение не обрывается на «…на.»
-            _tail = cleaned[:max_chars]
-            _last_sent = _rfind_sentence_end(_tail)
-            if _last_sent >= max_chars // 3:
-                cleaned = cleaned[:_last_sent + 1].strip()
-            else:
-                cut = _tail.rsplit(' ', 1)[0].strip()
-                cleaned = (cut or _tail).rstrip(' ,;:.-')
+            # ✅ NO TRUNCATION: Assignments flow complete to AI, no smart-cut by sentence.
+            # This was: "режем по последнему полному предложению" — now we don't cut at all.
+            pass
         else:
             cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
             cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
@@ -886,20 +895,20 @@ def sanitize_live_team_chat_text(
     # Для живых поручений: не оставляем оборванный хвост типа
     # "Как думаешь, какой..." после обрезки.
     if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+        # ✅ Full context preserved — no truncation artifacts to clean.
+        # The cleanup patterns below were necessary when we truncated at max_chars.
+        # Now assignments are complete, so skip this cleanup.
+        pass
+    else:
+        # Only cleanup dangling fragments for non-assignment message types
         cleaned = re.sub(r'(?i)\s+как\s+думаешь,?\s+какой\s*$', '', cleaned).strip()
         cleaned = re.sub(r'(?i)\s+как\s+думаешь\s*$', '', cleaned).strip()
         cleaned = re.sub(r'(?i)\s+что\s+думаешь\s*$', '', cleaned).strip()
-        # Если текст обрезан без финальной пунктуации — режем до последней завершённой мысли.
-        # НЕ добавляем фиктивную точку — это создаёт артефакты вида «...на.»
         if cleaned and cleaned[-1] not in '.!?':
             _last_punc = _rfind_sentence_end(cleaned)
             if _last_punc >= 40:
-                # есть хотя бы одно завершённое предложение — обрезаем до него
                 cleaned = cleaned[:_last_punc + 1].strip()
-            # else: текст короткий/без знаков — оставляем как есть (честный обрыв лучше «...на.»)
 
-        # Detect trailing fragment-sentences that start with subordinate conjunctions
-        # — these are dangling clauses from truncation.
         if cleaned:
             _lp = _rfind_sentence_end(cleaned)
             if _lp > 0:
@@ -907,18 +916,15 @@ def sanitize_live_team_chat_text(
                 _last_sent_text = cleaned[_prev_p + 1:_lp].strip() if _prev_p >= 0 else cleaned[:_lp].strip()
                 _lw = _last_sent_text.split()
                 _first_word = _lw[0].lower() if _lw else ''
-                # Only remove if last sentence is a dangling subordinate clause
                 _is_frag = (
                     _first_word in ('которые', 'который', 'которой', 'которых', 'которого',
                                     'которую', 'которая', 'которому',
                                     'если', 'хотя', 'пока', 'когда')
-                    or len(_last_sent_text) < 8  # very short last sentence
+                    or len(_last_sent_text) < 8
                 )
                 if _is_frag and _prev_p >= 30:
                     cleaned = cleaned[:_prev_p + 1].strip()
 
-        # Strip trailing 3rd-person present-tense fragments leaked from coordinator's internal reasoning
-        # e.g. "... нам нужна статья. пишет статью в блог про сальдо."
         cleaned = re.sub(
             r'(?i)[.\s]+((?:пишет|создаёт|создает|делает|готовит|публикует|анализирует|'
             r'ищет|проверяет|отправляет|обновляет|формирует)\s+[^.!?]{5,60})[.!?]?\s*$',

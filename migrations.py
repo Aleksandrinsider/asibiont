@@ -334,14 +334,14 @@ def _migrate_goals(session, inspector):
 
 
 def _migrate_notes(session, inspector):
-    """Create notes table if not exists"""
+    """Create notes table if not exists, expand title field for full context preservation"""
     if not inspector.has_table('notes'):
         try:
             session.execute(text("""
                 CREATE TABLE notes (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id),
-                    title VARCHAR(200),
+                    title VARCHAR(1000),
                     content TEXT NOT NULL,
                     source VARCHAR(20) DEFAULT 'manual',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -358,9 +358,9 @@ def _migrate_notes(session, inspector):
         # Add title column if it doesn't exist
         cols = [col['name'] for col in inspector.get_columns('notes')]
         _add_columns(session, 'notes', cols, {
-            'title': 'ALTER TABLE notes ADD COLUMN title VARCHAR(200)',
+            'title': 'ALTER TABLE notes ADD COLUMN title VARCHAR(1000)',
             'slug': 'ALTER TABLE notes ADD COLUMN slug VARCHAR(300)',
-            'title_en': 'ALTER TABLE notes ADD COLUMN title_en VARCHAR(500)',
+            'title_en': 'ALTER TABLE notes ADD COLUMN title_en VARCHAR(2000)',
             'content_en': 'ALTER TABLE notes ADD COLUMN content_en TEXT',
             'image_data': 'ALTER TABLE notes ADD COLUMN image_data BYTEA',
             'image_mime': "ALTER TABLE notes ADD COLUMN image_mime VARCHAR(20)",
@@ -400,6 +400,55 @@ def _migrate_notes(session, inspector):
         except Exception as _e:
             logger.warning(f"Migration: slug backfill failed: {_e}")
             session.rollback()
+
+
+def _migrate_notes_expand_title(session, inspector):
+    """Expand Note.title from VARCHAR(200) to VARCHAR(1000) to preserve full context
+    
+    Rationale: Assignment text should not be truncated. Full coordinator_assignment
+    messages need to reach AI without losing detail. This expands the title field
+    to accommodate full assignment directives.
+    """
+    if not inspector.has_table('notes'):
+        return
+    
+    cols = [col['name'] for col in inspector.get_columns('notes')]
+    if 'title' not in cols:
+        return
+    
+    # Get current column definition
+    col_info = [c for c in inspector.get_columns('notes') if c['name'] == 'title']
+    if not col_info:
+        return
+    
+    col_type = str(col_info[0]['type']).upper()
+    
+    # Check if already expanded
+    if 'VARCHAR(1000)' in col_type or 'TEXT' in col_type:
+        logger.debug("[MIGRATION] Note.title already expanded")
+        return
+    
+    try:
+        # Attempt to expand title and title_en fields
+        session.execute(text("ALTER TABLE notes ALTER COLUMN title TYPE VARCHAR(1000)"))
+        session.commit()
+        logger.info("[MIGRATION] ✅ Expanded notes.title to VARCHAR(1000)")
+    except Exception as e:
+        session.rollback()
+        logger.debug(f"[MIGRATION] Could not expand notes.title (might already be expanded): {e}")
+    
+    try:
+        if 'title_en' in cols:
+            col_en_info = [c for c in inspector.get_columns('notes') if c['name'] == 'title_en']
+            if col_en_info:
+                col_en_type = str(col_en_info[0]['type']).upper()
+                if 'VARCHAR(500)' in col_en_type or 'VARCHAR(2000)' not in col_en_type:
+                    session.execute(text("ALTER TABLE notes ALTER COLUMN title_en TYPE VARCHAR(2000)"))
+                    session.commit()
+                    logger.info("[MIGRATION] ✅ Expanded notes.title_en to VARCHAR(2000)")
+    except Exception as e:
+        session.rollback()
+        logger.debug(f"[MIGRATION] Could not expand notes.title_en: {e}")
 
 
 def _migrate_email_campaigns(session, inspector):
@@ -834,6 +883,7 @@ def run_migrations():
         _migrate_token_transactions(session, inspector)
         _migrate_goals(session, inspector)
         _migrate_notes(session, inspector)
+        _migrate_notes_expand_title(session, inspector)  # ✅ NEW: Expand Note.title for full context
         _migrate_email_campaigns(session, inspector)
         _migrate_email_contacts(session, inspector)
         _migrate_marketplace(session, inspector)
