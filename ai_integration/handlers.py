@@ -1520,10 +1520,24 @@ def _extract_image_style_from_memory(user) -> str:
     _IMG_KW = r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|стил|генерац|фото|photo|визуал|watercolor|акварел|painterly|palette|цвет'
     _CHANNEL_KW = r'telegram|discord|блог|blog|публикац|post|пост'
     _HEX_RE = _re_img.compile(r'#[0-9a-fA-F]{6}\b')
+    _NO_IMAGE_RX = _re_img.compile(
+        r'без\s+(?:картин|изображен|иллюстрац|фото)|'
+        r'не\s+(?:генерируй|добавляй|используй).{0,20}(?:картин|изображен|иллюстрац|фото)|'
+        r'no\s+image|without\s+image',
+        _re_img.IGNORECASE,
+    )
+    _STYLE_HINT_RX = _re_img.compile(
+        r'(?:в\s+стиле|style\s*[:=]|промпт\s*[:=]|промт\s*[:=]|prompt\s*[:=]|'
+        r'watercolor|акварел|painterly|palette|color\s+palette|#[0-9a-fA-F]{6})',
+        _re_img.IGNORECASE,
+    )
 
     def _style_from_text(_txt: str) -> str:
         _txt = (_txt or '').strip()
         if not _txt:
+            return ''
+        # Явные запреты картинок — это не стиль.
+        if _NO_IMAGE_RX.search(_txt):
             return ''
         if not _re_img.search(_IMG_KW, _txt, _re_img.IGNORECASE):
             return ''
@@ -1551,13 +1565,17 @@ def _extract_image_style_from_memory(user) -> str:
         )
         if _m2:
             return _m2.group(1).strip(' .;\n')[:280]
-        # 3. Фоллбек: весь текст правила (бывает когда правило = сам промт без префикса)
-        return _txt[:280]
+        # 3. Фоллбек: только если есть явные стилевые маркеры.
+        if _STYLE_HINT_RX.search(_txt):
+            return _txt[:280]
+        return ''
 
     def _score_rule(_txt: str) -> int:
         _t = (_txt or '').strip()
         if not _t:
             return 0
+        if _NO_IMAGE_RX.search(_t):
+            return -100
         _score = 0
         if _re_img.search(_IMG_KW, _t, _re_img.IGNORECASE):
             _score += 5
@@ -1567,6 +1585,8 @@ def _extract_image_style_from_memory(user) -> str:
             _score += 3
         if _re_img.search(r'watercolor|акварел|soft|muted|painterly|artistic|illustration', _t, _re_img.IGNORECASE):
             _score += 2
+        if _STYLE_HINT_RX.search(_t):
+            _score += 3
         # Небольшой штраф за явно текстовые правила без визуального контекста
         if _re_img.search(r'пиши|текст|эмод|хештег|длина|кратк|tone|emoji|hashtag|length', _t, _re_img.IGNORECASE):
             _score -= 1
