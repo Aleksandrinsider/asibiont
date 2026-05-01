@@ -1585,14 +1585,16 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 content = _re_img_rule.sub(r'\[IMAGE:[^\]]+\]', '', content, flags=_re_img_rule.IGNORECASE).strip()
                 logger.info(f"[SAVE_NOTE] Blog image skipped by user rule: {_matched_img_rule[:80]}")
             if content:
-                _style = _extract_image_style_from_memory(user) or \
-                    'watercolor painting, soft wet washes, paper grain'
+                # Старый дефолт: без принудительного базового стиля (no-color).
+                _style = (_extract_image_style_from_memory(user) or '').strip()
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker and not _skip_image_by_rule:
                     try:
                         # Всегда генерируем описание сцены из контента через AI — стиль как модификатор
-                        if _explicit_visual_prompt:
+                        if _explicit_visual_prompt and _style:
                             _img_style_sn = f"{_style}, {_explicit_visual_prompt}"
+                        elif _explicit_visual_prompt:
+                            _img_style_sn = _explicit_visual_prompt
                         else:
                             _img_style_sn = _style
                         try:
@@ -9162,10 +9164,12 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             _force_sync_image = _must_add_image or bool(_user_style_pref) or bool(_explicit_visual_prompt)
             if _force_sync_image:
                 try:
-                    _style_req = _user_style_pref or \
-                        'watercolor painting, soft wet washes, paper grain'
-                    if _explicit_visual_prompt:
+                    # Старый дефолт: не подставляем watercolor автоматически.
+                    _style_req = _user_style_pref
+                    if _explicit_visual_prompt and _style_req:
                         _img_style_req = f"{_style_req}, {_explicit_visual_prompt}"
+                    elif _explicit_visual_prompt:
+                        _img_style_req = _explicit_visual_prompt
                     else:
                         _img_style_req = _style_req
                     _img_prompt_req = content[:150].replace('\n', ' ').strip()
@@ -9247,15 +9251,18 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 try:
                     _bg_session = Session()
                     try:
-                        _style_bg = 'watercolor painting, soft wet washes, paper grain'
+                        # Старый дефолт: без принудительного watercolor, только user style/explicit prompt.
+                        _style_bg = ''
                         try:
                             _post_user_bg = _bg_session.query(User).filter_by(telegram_id=_user_id_bg).first()
                             if _post_user_bg:
-                                _style_bg = _extract_image_style_from_memory(_post_user_bg) or _style_bg
+                                _style_bg = (_extract_image_style_from_memory(_post_user_bg) or '').strip()
                         except Exception:
                             pass
-                        if _explicit_vp_bg:
+                        if _explicit_vp_bg and _style_bg:
                             _img_style_bg = f"{_style_bg}, {_explicit_vp_bg}"
+                        elif _explicit_vp_bg:
+                            _img_style_bg = _explicit_vp_bg
                         else:
                             _img_style_bg = _style_bg
                         # AI генерирует описание сцены
@@ -19447,9 +19454,8 @@ async def generate_image(
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
         # Объединяем базовый стиль запроса и пользовательский стиль из памяти.
-        # Раньше пользовательский стиль затирал входной style, из-за чего часть
-        # визуальных требований (базовый + user rule) терялась.
-        _PLATFORM_DEFAULT_STYLE = 'watercolor painting, soft wet washes, paper grain'
+        # Базовый дефолт возвращён к старому no-color (без принудительного watercolor).
+        _PLATFORM_DEFAULT_STYLE = ''
         _base_style = (style or '').strip()
         _user_style = _extract_image_style_from_memory(user) or None
         if _base_style and _user_style:
