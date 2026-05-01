@@ -1130,7 +1130,7 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
-MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '50'))
+MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '120'))
 # Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
@@ -1145,7 +1145,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 500  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES
+MAX_AUTOPILOT_MSG_PER_DAY = int(os.getenv('MAX_AUTOPILOT_MSG_PER_DAY', '2000'))  # Предохранитель, основной контроль — gap
 MAX_FEED_PER_DAY = 10
 MAX_CHANNEL_PER_DAY = 10  # постов в канал в день
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -1158,7 +1158,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 15  # Минимальный интервал между автопилот-сообщениями
+MIN_AUTOPILOT_GAP_MINUTES = int(os.getenv('MIN_AUTOPILOT_GAP_MINUTES', '5'))  # Минимальный интервал между автопилот-сообщениями
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # ── Cache for integration hypothesis (avoid extra AI call every coordinator cycle) ──
@@ -5238,9 +5238,10 @@ class AnchorEngine:
                 _cnt = self._timeout_counts.get(user_id, 0) + 1
                 self._timeout_counts[user_id] = _cnt
                 if _cnt >= 3:
-                    # Backoff: 30 минут после 3+ таймаутов
-                    self._timeout_backoff_until[user_id] = _time_cb.monotonic() + 1800
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after {_process_timeout_sec}s ({_cnt}x) — circuit breaker ON for 30min")
+                    # Backoff: мягкий (по умолчанию 10 минут), настраивается через env
+                    _cb_backoff_sec = int(os.getenv('ANCHOR_TIMEOUT_BACKOFF_SEC', '600'))
+                    self._timeout_backoff_until[user_id] = _time_cb.monotonic() + _cb_backoff_sec
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after {_process_timeout_sec}s ({_cnt}x) — circuit breaker ON for {_cb_backoff_sec}s")
                 else:
                     logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after {_process_timeout_sec}s ({_cnt}/3) — lock released")
                 # Закрываем подвешенные AI-сессии
@@ -5969,9 +5970,10 @@ class AnchorEngine:
                     if _ap_time.tzinfo is None:
                         _ap_time = _ap_time.replace(tzinfo=timezone.utc)
                     _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
-                    if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
+                    _soft_min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 2)
+                    if _ap_gap < _soft_min_gap:
                         _ap_gap_ok = False
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ review deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ review deferred (last delivered {_ap_gap:.0f}m ago, min={_soft_min_gap}m)")
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
 
@@ -20973,7 +20975,8 @@ class AnchorEngine:
                 if _ap_time.tzinfo is None:
                     _ap_time = _ap_time.replace(tzinfo=timezone.utc)
                 _gap = (now_utc - _ap_time).total_seconds() / 60
-                if _gap < MIN_AUTOPILOT_GAP_MINUTES:
+                _soft_min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 2)
+                if _gap < _soft_min_gap:
                     return []
         except Exception as _e:
             logger.debug("suppressed: %s", _e)

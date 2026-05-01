@@ -3212,21 +3212,11 @@ class HybridAutonomousAgent:
                         logger.warning("[EXEC] %s SKIPPED: %s", tool_name, (_block_err or 'no content')[:100])
                         continue
 
-                    # === БЛОК add_task в автопилоте: агент должен ВЫПОЛНЯТЬ работу сам ===
+                    # Мягкий режим: add_task в автопилоте разрешён (как фиксация следующего шага),
+                    # не блокируем выполнение жёстко.
                     if tool_name == 'add_task' and '[АВТОПИЛОТ]' in (user_message or ''):
                         _new_title_ap = (params.get('title') or '')[:80]
-                        logger.warning("[EXEC] add_task BLOCKED in autopilot: '%s' — agent must execute, not delegate to user", _new_title_ap)
-                        results.append({
-                            "tool": tool_name, "success": False,
-                            "result": (
-                                "В автопилоте ты работаешь самостоятельно — пользователь сейчас не в чате. "
-                                "Выполни эту работу сам прямо сейчас: "
-                                "вызови нужный инструмент (web_search, send_outreach_email, create_post и т.д.) "
-                                "и покажи РЕЗУЛЬТАТ."
-                            ),
-                            "reason": reason
-                        })
-                        continue
+                        logger.info("[EXEC] add_task allowed in autopilot: '%s'", _new_title_ap)
 
                     # === Дедупликация add_task: не создаём задачи с очень похожим названием ===
                     if tool_name == 'add_task':
@@ -4722,14 +4712,14 @@ class HybridAutonomousAgent:
 
             # ===== Tool calling loop =====
             all_execution_results = []
-            MAX_ITERATIONS = 5
+            MAX_ITERATIONS = int(os.getenv('AUTOPILOT_MAX_ITERATIONS', '7'))
             # 5 параллельных инструментов/итерацию: больше работы за один API-вызов → меньше round-trips → меньше токенов
-            MAX_TOOLS_PER_ITERATION = 7
+            MAX_TOOLS_PER_ITERATION = int(os.getenv('AUTOPILOT_MAX_TOOLS_PER_ITERATION', '10'))
             seen_tools = set()  # Для предотвращения дублей
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз; start_email_campaign разрешён повторно
-            multi_limit_tools = {'add_task': 5, 'update_profile': 2, 'create_goal': 3, 'run_agent_action': 8, 'send_email': 5, 'delegate_task': 5}  # лимиты per turn
+            multi_limit_tools = {'add_task': 12, 'update_profile': 6, 'create_goal': 8, 'run_agent_action': 16, 'send_email': 12, 'delegate_task': 12}  # мягкие лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
 
@@ -5467,6 +5457,8 @@ class HybridAutonomousAgent:
                 _ag_name_final = (_ag_ctx.get('name') or '').strip()
             if _ag_name_final:
                 final = _normalize_agent_gender_grammar(final, _ag_name_final)
+            # Мягкая правка частой фразы (качество текста, без изменения логики).
+            final = re.sub(r'(?i)\bкартинка\s+готов\.?', 'Изображение готово.', final or '')
         except Exception as _gfix_err:
             logger.debug("[GENDER_FIX] skipped: %s", _gfix_err)
 
@@ -5775,7 +5767,7 @@ class HybridAutonomousAgent:
 
     async def generate_system_message(self, user_id, mode, instruction,
                                        extra_context=None, max_tokens=500,
-                                       max_iterations=4):
+                                       max_iterations=6):
         """Генерация системного сообщения (напоминание, проактивное, поздравление)
         через тот же мозг с tool calling, но без сохранения в историю диалога.
 
@@ -5785,7 +5777,7 @@ class HybridAutonomousAgent:
             instruction: текст задания для AI (что сгенерировать)
             extra_context: дополнительный контекст (ситуация, красные флаги и т.д.)
             max_tokens: лимит токенов (короткие сообщения = меньше)
-            max_iterations: макс. итераций tool calling (4 для баланса скорость/глубина)
+            max_iterations: макс. итераций tool calling (по умолчанию 6 для более надёжного доведения задачи)
 
         Returns:
             str — готовый текст сообщения
@@ -5974,16 +5966,15 @@ class HybridAutonomousAgent:
             _UNSAFE_PROFILE = {'update_profile'}
             exclude_tools = set()
             if mode == 'reminder':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _UNSAFE_PROFILE
+                exclude_tools = _UNSAFE_PROFILE
             elif mode == 'task_assist':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _UNSAFE_PROFILE
+                exclude_tools = _UNSAFE_PROFILE
             elif mode == 'result_check':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task',
-                                 'edit_task', 'reschedule_task'} | _UNSAFE_PROFILE
+                exclude_tools = {'edit_task', 'reschedule_task'} | _UNSAFE_PROFILE
             elif mode == 'proactive':
-                exclude_tools = {'delegate_task'} | _UNSAFE_PROFILE
+                exclude_tools = _UNSAFE_PROFILE
             elif mode == 'anchor':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _UNSAFE_PROFILE
+                exclude_tools = _UNSAFE_PROFILE
 
             # ===== Tool calling loop (облегчённый) =====
             all_execution_results = []
@@ -9345,11 +9336,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _intg_count = len(_intg_hint)
     if _is_autopilot_task:
         if _is_outreach_goal:
-            _max_iters = min(5 + _intg_count, 8)  # outreach: больше итераций для нескольких писем
+            _max_iters = min(6 + _intg_count, int(os.getenv('AUTOPILOT_DIRECTOR_MAX_ITERS', '12')))
         else:
-            _max_iters = min(3 + _intg_count, 5)  # макс 5: 5 интеграций уже = 8 → cap 5
+            _max_iters = min(4 + _intg_count, int(os.getenv('AUTOPILOT_DIRECTOR_MAX_ITERS', '12')))
     else:
-        _max_iters = 4
+        _max_iters = int(os.getenv('AUTOPILOT_DIRECTOR_BASE_ITERS', '6'))
     _ACTION_EVIDENCE_TOOLS = {
         'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
         'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
@@ -10021,16 +10012,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _CONSULTATIVE_PATTERNS = (
                 'что делаем', 'какой вариант', 'какой путь', 'какой вариант идем', 'какой вариант идём',
                 'или, если хочешь', 'если хочешь, могу', 'как поступим', 'что выберем',
-                'ничего не делегировано', 'не делегировано', 'сейчас ничего не делегировано',
+                'ничего не делегировано', 'не делегировано',
                 'which option', 'what should we do', 'which way should we go',
             )
-            _looks_like_idle_agent_stall = (
-                bool(_meta_lc)
-                and ('делегир' in _meta_lc or 'агент' in _meta_lc)
-                and ('ничего не делегировано' in _meta_lc or 'если хочешь, могу' in _meta_lc)
-            )
             _is_consultative_stall = (
-                (_is_autopilot_task or _looks_like_idle_agent_stall)
+                _is_autopilot_task
                 and _iter == 0
                 and not _tool_calls
                 and _tool_call_count == 0
@@ -10044,20 +10030,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 )
                 _messages.append({"role": "assistant", "content": _content})
                 _messages.append({"role": "user", "content": (
-                    "СТОП. Не задавай пользователю встречные вопросы и не предлагай варианты, "
-                    "когда уже дана конкретная задача. "
-                    "ОБЯЗАТЕЛЬНО прямо сейчас вызови инструмент и выполни ближайшее действие. "
-                    "Если агент свободен/ничего не делегировано — СРАЗУ поставь ему конкретную задачу через delegate_task, "
-                    "а не спрашивай разрешение. "
-                    "Если первый инструмент недоступен — выбери альтернативный доступный инструмент "
-                    "и продолжи выполнение без вопроса пользователю."
+                    "Действуй проактивно: когда задача уже понятна, не останавливайся на вопросах вида "
+                    "'если хочешь, могу...'. Сначала выполни ближайший практический шаг через инструмент. "
+                    "Если видишь, что агент свободен и у него нет делегированных задач — предпочтительно "
+                    "сразу дать ему 1 конкретную задачу через delegate_task (если это уместно по контексту). "
+                    "Если инструмент недоступен — выбери альтернативу и продолжай без лишнего диалога."
                 )})
                 try:
                     _ac_resp = await asyncio.wait_for(
                         _agent_inst.call_ai(
                             _messages,
                             use_tools=True,
-                            tool_choice="required",
+                            tool_choice="auto",
                             exclude_tools=_exclude_for_agent,
                             max_tokens=1200,
                             api_timeout=API_TIMEOUT_LONG,
@@ -10307,7 +10291,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                 )
                                 # Заменяем последние сообщения и продолжаем с инструментами
                                 _messages.append(_retry_msg)
-                                _tc_limit = 3
+                                _tc_limit = 8
                                 for _tc in _retry_tools[:_tc_limit]:
                                     _tname = _tc.get('function', {}).get('name', '')
                                     try:
@@ -10358,7 +10342,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
         # Агент вызвал инструменты — выполняем
         # Повышенный лимит инструментов за итерацию: меньше искусственных остановок.
-        _tc_limit = 20 if _is_autopilot_task else 10
+        _tc_limit = 30 if _is_autopilot_task else 15
         _messages.append(_msg)
         for _tc in _tool_calls[:_tc_limit]:
             _tname = _tc.get('function', {}).get('name', '')
@@ -10802,8 +10786,6 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _atask = _re_fin.sub(
                     r'^' + _re_fin.escape(_aname) + r'[\s,:.!]+',
                     '', _atask, flags=_re_fin.IGNORECASE,
-                # Лексическая правка частой ошибки LLM в статусе генерации изображения.
-                final = re.sub(r'(?i)\bкартинка\s+готов\.?', 'Изображение готово.', final or '')
                 ).strip()
                 if _aname and _atask:
                     # ── DELEGATE quality guard (финальный парсинг) ──

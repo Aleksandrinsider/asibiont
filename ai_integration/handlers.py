@@ -5477,10 +5477,12 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         if not user:
             return "Пользователь не найден."
         
-        # Проверяем количество активных целей (лимит 20)
+        # Проверяем количество активных целей (мягкий лимит через env)
+        import os as _os_goal
+        _max_active_goals = int(_os_goal.getenv('MAX_ACTIVE_GOALS', '100'))
         active_goals = session.query(Goal).filter_by(user_id=user.id, status='active').count()
-        if active_goals >= 20:
-            return " У тебя уже 20 активных целей. Заверши или отмени старые перед созданием новых."
+        if active_goals >= _max_active_goals:
+            return f" У тебя уже {_max_active_goals} активных целей. Заверши или отмени старые перед созданием новых."
 
         # ПРОВЕРКА ДУБЛЕЙ: цель с похожим названием уже существует — не создаём
         _stop_g = {'для', 'или', 'что', 'как', 'это', 'при', 'через', 'чтобы', 'the', 'and', 'for', 'with', 'that'}
@@ -6032,12 +6034,14 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         if not changes:
             return f"Укажи что обновить: progress (0-100), status (active/completed/paused/cancelled), или notes."
 
-        # Rate-limit: notes-only обновления не чаще раза в 30 минут
+        # Rate-limit: notes-only обновления не чаще configurable интервала
         if changes == ["добавлена заметка"]:
             try:
                 from models import AgentActivityLog as _AAL_rl
                 from datetime import timedelta as _td_rl
-                _cutoff_rl = datetime.now() - _td_rl(minutes=30)
+                import os as _os_rl
+                _notes_update_cooldown_min = int(_os_rl.getenv('GOAL_NOTES_UPDATE_COOLDOWN_MIN', '10'))
+                _cutoff_rl = datetime.now() - _td_rl(minutes=_notes_update_cooldown_min)
                 _recent_rl = session.query(_AAL_rl).filter(
                     _AAL_rl.user_id == user.id,
                     _AAL_rl.ref_id == matched.id,
@@ -6046,7 +6050,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 ).first()
                 if _recent_rl:
                     return (
-                        f"ℹ️ Цель '{matched.title}': заметка уже обновлялась менее 30 минут назад. "
+                        f"ℹ️ Цель '{matched.title}': заметка уже обновлялась менее {_notes_update_cooldown_min} минут назад. "
                         f"Не нужно добавлять одни и те же заметки повторно — это шум в логах."
                     )
             except Exception as _rl_e:
@@ -18023,10 +18027,12 @@ async def send_email(
         if _is_generic_email(to_clean):
             return f"⛔ {to_clean} — фейковый или generic email. Найди реальный email получателя через поиск или контакты."
 
-        # ── GUARD: дубликат — не слать тому же адресату чаще 1 раза за 4 часа ──
+        # ── GUARD: дубликат — не слать тому же адресату чаще configurable окна ──
         try:
             from models import EmailOutreach as _EO_dup
-            _dup_cut = datetime.now(timezone.utc) - timedelta(hours=4)
+            import os as _os_dup
+            _dedup_hours = int(_os_dup.getenv('SEND_EMAIL_DUPLICATE_WINDOW_HOURS', '1'))
+            _dup_cut = datetime.now(timezone.utc) - timedelta(hours=_dedup_hours)
             _dup_sess = session
             _dup_close = False
             if _dup_sess is None:
@@ -18042,7 +18048,7 @@ async def send_email(
                 if _dup_close:
                     _dup_sess.close()
             if _dup_cnt > 0:
-                return f"⛔ {to_clean} уже получал письмо менее 4ч назад. Подожди или выбери другого получателя."
+                return f"⛔ {to_clean} уже получал письмо менее {_dedup_hours}ч назад. Подожди или выбери другого получателя."
         except Exception as _dup_e:
             logger.debug("send_email dup check: %s", _dup_e)
 
@@ -20087,9 +20093,11 @@ async def start_delegation_campaign(
             if _new_goal_words and _ex_goal_words and len(_new_goal_words & _ex_goal_words) >= 3:
                 return f"⚠️ Кампания с похожей целью уже существует: «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign для обновления."
 
-        # Лимит активных кампаний
-        if len(existing) >= 5:
-            return " Максимум 5 активных кампаний делегирования. Заверши или отмени старые."
+        # Лимит активных кампаний (мягкий, configurable)
+        import os as _os_dc
+        _max_delegation_campaigns = int(_os_dc.getenv('MAX_ACTIVE_DELEGATION_CAMPAIGNS', '20'))
+        if len(existing) >= _max_delegation_campaigns:
+            return f" Максимум {_max_delegation_campaigns} активных кампаний делегирования. Заверши или отмени старые."
 
         # Очищаем название от служебных префиксов, которые агент иногда добавляет
         _clean_name = name
