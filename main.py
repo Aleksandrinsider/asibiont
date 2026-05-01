@@ -10770,11 +10770,8 @@ async def blog_post_handler(request):
         lang = 'en' if request.path.startswith('/en') else 'ru'
         # Use EN translation if available and requested
         if lang == 'en':
-            display_title = note.title_en or note.title or 'Untitled'
-            display_content = note.content_en or note.content or ''
             import re as _re_en_chk
             _en_looks_ru = bool(_re_en_chk.search(r'[А-Яа-яЁё]{6,}', (note.content_en or '')[:600]))
-            # Lazy translation: trigger if EN not yet available or content_en is stale (no image)
             _needs_en_trans = (
                 note.title_en is None
                 or not note.content_en
@@ -10782,14 +10779,29 @@ async def blog_post_handler(request):
                 or ('replicate.delivery' in (note.content or '') and 'replicate.delivery' not in (note.content_en or ''))
             )
             if _needs_en_trans:
+                # For single post page, try translating now to avoid RU fallback on EN URL.
                 try:
-                    import asyncio as _aio_lazy_bp
                     from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr_bp
-                    _aio_lazy_bp.get_running_loop().create_task(
-                        _lazy_tr_bp(note.id, note.title or '', note.content or '')
-                    )
+                    await _lazy_tr_bp(note.id, note.title or '', note.content or '')
+                    session_db.refresh(note)
                 except Exception:
-                    pass
+                    try:
+                        import asyncio as _aio_lazy_bp
+                        from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr_bp
+                        _aio_lazy_bp.get_running_loop().create_task(
+                            _lazy_tr_bp(note.id, note.title or '', note.content or '')
+                        )
+                    except Exception:
+                        pass
+
+            _en_looks_ru_after = bool(_re_en_chk.search(r'[А-Яа-яЁё]{6,}', (note.content_en or '')[:600]))
+            _has_en_content = bool(note.content_en) and not _en_looks_ru_after
+            if _has_en_content:
+                display_title = note.title_en or 'Untitled'
+                display_content = note.content_en or ''
+            else:
+                display_title = note.title_en or 'Translating to English...'
+                display_content = 'English version is being prepared. Please refresh in a few moments.'
         else:
             display_title = note.title or 'Без заголовка'
             display_content = note.content or ''
@@ -10844,11 +10856,8 @@ async def api_blog_handler(request):
             username = users_map.get(n.user_id)
             author = f"@{username}" if username else "AI-агент"
             if lang == 'en':
-                display_title = n.title_en or n.title or 'Untitled'
-                display_content = n.content_en or n.content or ''
                 import re as _re_en_chk_api
                 _en_looks_ru = bool(_re_en_chk_api.search(r'[А-Яа-яЁё]{6,}', (n.content_en or '')[:600]))
-                # Lazy translation: trigger if EN not yet available or stale (missing image)
                 _needs_en = (
                     n.title_en is None
                     or not n.content_en
@@ -10864,6 +10873,12 @@ async def api_blog_handler(request):
                         )
                     except Exception:
                         pass
+                    # Never show RU body on EN routes.
+                    display_title = n.title_en or 'Translating to English...'
+                    display_content = 'English version is being prepared. Please refresh shortly.'
+                else:
+                    display_title = n.title_en or 'Untitled'
+                    display_content = n.content_en or ''
             else:
                 display_title = n.title or 'Без заголовка'
                 display_content = n.content or ''
