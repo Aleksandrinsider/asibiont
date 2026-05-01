@@ -1326,18 +1326,28 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
         from ai_integration.api_client import get_api_client
         _api_client = get_api_client()
         from models import Session, Note
+        import re as _re_lang
 
-        # Определяем язык оригинала — если >60% ASCII букв → английский
-        _alpha_chars = [c for c in (title + ' ' + content[:500]) if c.isalpha()]
-        _ascii_ratio = sum(1 for c in _alpha_chars if ord(c) < 128) / max(len(_alpha_chars), 1)
-        _is_en_original = _ascii_ratio > 0.6
+        # Определяем язык оригинала надёжнее: наличие кириллицы приоритетнее,
+        # иначе EN/ASCII ratio fallback.
+        _probe = (title or '') + ' ' + (content or '')[:1200]
+        _cyr_count = len(_re_lang.findall(r'[А-Яа-яЁё]', _probe))
+        _lat_count = len(_re_lang.findall(r'[A-Za-z]', _probe))
+        if _cyr_count >= 8:
+            _is_en_original = False
+        elif _cyr_count == 0 and _lat_count >= 20:
+            _is_en_original = True
+        else:
+            _alpha_chars = [c for c in _probe if c.isalpha()]
+            _ascii_ratio = sum(1 for c in _alpha_chars if ord(c) < 128) / max(len(_alpha_chars), 1)
+            _is_en_original = _ascii_ratio > 0.7
 
         # Limit content passed to API to avoid huge token cost
         content_truncated = content[:4000] if len(content) > 4000 else content
 
         # Extract image markdown lines before translation — preserve URL as-is
         import re as _re_img_tr
-        _img_line_match = _re_img_tr.match(r'(!\[[^\]]*\]\(https?://[^)]+\))\s*\n?([\s\S]*)', content_truncated)
+        _img_line_match = _re_img_tr.match(r'(!\[[^\]]*\]\([^)]+\))\s*\n?([\s\S]*)', content_truncated)
         if _img_line_match:
             _img_prefix = _img_line_match.group(1)  # e.g. ![Иллюстрация](https://...)
             content_for_translate = _img_line_match.group(2).strip()
@@ -1382,7 +1392,34 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
         if not result or not isinstance(result, dict):
             import logging as _log
             _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Failed to parse translation for note_id={note_id}")
-            return
+            # Fallback: plain-text translation with explicit TITLE/CONTENT format
+            _target = 'Russian' if _is_en_original else 'English'
+            _fallback_prompt = (
+                f"Translate blog post to { _target }.\n"
+                f"Return EXACT format:\n"
+                f"TITLE: <translated title>\n"
+                f"CONTENT:\n<translated markdown content>\n\n"
+                f"TITLE: {title}\n\n"
+                f"CONTENT:\n{content_for_translate}"
+            )
+            _fb_raw = await _api_client.deepseek_analyze(
+                prompt=_fallback_prompt,
+                system_prompt="You are a professional translator. Preserve markdown. No explanations.",
+                temperature=0.2,
+                max_tokens=3000,
+                parse_json=False,
+                timeout=90,
+            )
+            _fb_text = _fb_raw if isinstance(_fb_raw, str) else str(_fb_raw or '')
+            _m_title = _re_img_tr.search(r'^\s*TITLE:\s*(.+)$', _fb_text, _re_img_tr.MULTILINE)
+            _m_content = _re_img_tr.search(r'\bCONTENT:\s*([\s\S]+)$', _fb_text)
+            if _m_title and _m_content:
+                result = {
+                    'title': _m_title.group(1).strip(),
+                    'content': _m_content.group(1).strip(),
+                }
+            else:
+                return
 
         translated_title = result.get('title', '').strip()
         translated_content = result.get('content', '').strip()

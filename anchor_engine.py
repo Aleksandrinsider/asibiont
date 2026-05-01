@@ -3752,6 +3752,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _alt = _alternatives.get(_max_ch[0], 'другой канал')
             _diverse_hint = f"\n  💡 Доминирует «{_dominant}» ({_max_ch[1]}+ раз) → попробуй: {_alt}\n"
 
+        # Жёсткий анти-луп для outreach-целей: одни посты без писем не двигают конверсию.
+        if _goal_type == 'outreach' and _channel_counts['posts'] >= 2 and _channel_counts['email'] == 0:
+            _diverse_hint += (
+                "\n  ⛔ OUTREACH-ЛУП: уже опубликовано 2+ поста без единого письма. "
+                "Следующий шаг ОБЯЗАТЕЛЕН через email-канал: "
+                "send_outreach_email (если есть контакты) ИЛИ "
+                "web_search/find_relevant_contacts_for_task → save_email_contact → send_outreach_email.\n"
+            )
+
         if _ch_lines_ps:
             _personalized_strategy_block = (
                 "\n\n📊 ИСПОЛЬЗОВАННЫЕ КАНАЛЫ (этот сеанс):\n"
@@ -6413,7 +6422,8 @@ class AnchorEngine:
                     await self._dispatch_agent_for_anchor(user, _ca, session)
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
-        if not is_night and has_proactive_tokens and _time_left() > 20:
+        _email_pending_now = bool(email_silent_anchors and not _email_blocked_by_rule)
+        if not is_night and has_proactive_tokens and _time_left() > 20 and not _email_pending_now:
           try:
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
             if feed_posts and post_count < MAX_FEED_PER_DAY:
@@ -6446,7 +6456,10 @@ class AnchorEngine:
             except Exception:
                 pass
         elif post_anchors:
-            logger.info(f"[ANCHOR] User {user_id}: ⛔ posts blocked (night hours)")
+            if _email_pending_now:
+                logger.info(f"[ANCHOR] User {user_id}: ⏭ posts deferred — pending email_silent anchors have priority")
+            else:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ posts blocked (night hours)")
 
         # ── 3e. EMAIL SILENT — автономная отправка/follow-up (ВСЕГДА, без сообщений юзеру) ──
         # Email outreach/follow-up — тихие операции, не будят пользователя → работают 24/7
@@ -12658,8 +12671,9 @@ class AnchorEngine:
                     Anchor.anchor_type == 'email_outreach_send',
                     Anchor.delivered_at.is_(None),
                     Anchor.suppress_until.is_(None) | (Anchor.suppress_until <= datetime.now(timezone.utc)),
-                    # Не блокируем агентов если anchor старше 2ч (завис)
-                    Anchor.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
+                    # Не блокируем агентов если batch-якорь не обработан дольше ~25 минут.
+                    # Иначе при зависшем silent-процессе агенты перестают отправлять вручную.
+                    Anchor.created_at >= datetime.now(timezone.utc) - timedelta(minutes=25),
                 ).first() is not None
             except Exception:
                 pass

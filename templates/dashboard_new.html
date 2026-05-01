@@ -3682,7 +3682,11 @@ except Exception as e:
                 code: `import urllib.request, re, html, os
 _raw  = os.environ.get('RSS_URLS', '') or os.environ.get('RSS_URL', '')
 URLS  = [u.strip() for u in re.split(r'[\\n,]+', _raw) if u.strip().startswith('http')]
-COUNT = int(os.environ.get('RSS_COUNT', '5') or '5')
+_count_raw = (os.environ.get('RSS_COUNT', '') or os.environ.get('AGENT_PARAM_LIMIT', '') or '5').strip()
+try:
+    COUNT = max(1, min(int(_count_raw), 200))
+except Exception:
+    COUNT = 5
 def _cdata_or_plain(raw):
     raw = raw.strip()
     m = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw, re.DOTALL)

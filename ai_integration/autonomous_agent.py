@@ -2967,7 +2967,12 @@ class HybridAutonomousAgent:
                                 _budget = max(300, 1800 // len(_sections))
                                 _compact_parts.append(f"[{_sname}]\n{_scontent[:_budget]}")
                             out = '\n\n'.join(_compact_parts)
-                out = out[:2000]
+                # Для RSS вывод может быть длинным (десятки заголовков),
+                # поэтому даём больший лимит, чем для остальных интеграций.
+                _rss_actions = {'check_news', 'read_rss', 'check_news_and_markets', 'check_markets', 'fetch_rss', 'get_feed'}
+                _max_out = 8000 if (action or '').lower() in _rss_actions else 2000
+                if len(out) > _max_out:
+                    out = out[:_max_out].rstrip() + f"\n... (обрезано, показано {_max_out} символов)"
             except _aio_ea.TimeoutError:
                 proc.kill()
                 try:

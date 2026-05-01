@@ -10770,10 +10770,13 @@ async def blog_post_handler(request):
         if lang == 'en':
             display_title = note.title_en or note.title or 'Untitled'
             display_content = note.content_en or note.content or ''
+            import re as _re_en_chk
+            _en_looks_ru = bool(_re_en_chk.search(r'[А-Яа-яЁё]{6,}', (note.content_en or '')[:600]))
             # Lazy translation: trigger if EN not yet available or content_en is stale (no image)
             _needs_en_trans = (
                 note.title_en is None
                 or not note.content_en
+                or _en_looks_ru
                 or ('replicate.delivery' in (note.content or '') and 'replicate.delivery' not in (note.content_en or ''))
             )
             if _needs_en_trans:
@@ -10841,10 +10844,13 @@ async def api_blog_handler(request):
             if lang == 'en':
                 display_title = n.title_en or n.title or 'Untitled'
                 display_content = n.content_en or n.content or ''
+                import re as _re_en_chk_api
+                _en_looks_ru = bool(_re_en_chk_api.search(r'[А-Яа-яЁё]{6,}', (n.content_en or '')[:600]))
                 # Lazy translation: trigger if EN not yet available or stale (missing image)
                 _needs_en = (
                     n.title_en is None
                     or not n.content_en
+                    or _en_looks_ru
                     or ('replicate.delivery' in (n.content or '') and 'replicate.delivery' not in (n.content_en or ''))
                 )
                 if _needs_en:
