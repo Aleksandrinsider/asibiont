@@ -5750,13 +5750,17 @@ except Exception as e:
                 hint: 'oauth.yandex.ru → приложение с правом metrika:read. ID счётчика — в адресной строке Метрики.',
                 code: `import urllib.request, json, os
 TOKEN   = os.environ.get('YANDEX_METRIKA_TOKEN', '')
-COUNTER = os.environ.get('YANDEX_METRIKA_COUNTER', '')
+COUNTER = (os.environ.get('YANDEX_METRIKA_COUNTER', '') or
+        os.environ.get('YANDEX_METRIKA_COUNTER_ID', '') or
+        os.environ.get('METRIKA_COUNTER_ID', ''))
 import datetime
 date_to   = datetime.date.today().isoformat()
 date_from = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+if not COUNTER:
+    raise RuntimeError('Не указан ID счётчика: YANDEX_METRIKA_COUNTER (или ..._COUNTER_ID)')
 url = ('https://api-metrika.yandex.net/stat/v1/data?id=' + COUNTER +
        '&metrics=ym:s:visits,ym:s:users,ym:s:bounceRate&date1=' + date_from +
-       '&date2=' + date_to + '&limit=1')
+    '&date2=' + date_to)
 try:
     req = urllib.request.Request(url, headers={'Authorization': 'OAuth ' + TOKEN})
     with urllib.request.urlopen(req, timeout=10) as r:

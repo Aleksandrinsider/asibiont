@@ -213,7 +213,7 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     ("ga4_api_secret не",
      "💡 Google Analytics 4 не подключён. Добавь GA4_PROPERTY_ID + GA4_API_SECRET в настройки агента"),
     ("yandex_metrika не",
-     "💡 Яндекс.Метрика не подключена. oauth.yandex.ru → добавь YANDEX_METRIKA_TOKEN + YANDEX_METRIKA_COUNTER_ID в настройки агента"),
+     "💡 Яндекс.Метрика не подключена. oauth.yandex.ru → добавь YANDEX_METRIKA_TOKEN + YANDEX_METRIKA_COUNTER (или YANDEX_METRIKA_COUNTER_ID) в настройки агента"),
     # OpenAI / Anthropic / другие LLM
     ("openai_api_key не",
      "💡 OpenAI не подключён. platform.openai.com/api-keys → добавь OPENAI_API_KEY в настройки агента"),
@@ -772,7 +772,7 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'label': 'Yandex Metrika',
         'keywords': ('яндекс метрика', 'yandex metrika', 'метрика', 'посещаемость сайта'),
         'presence': ('yandex_metrika', 'metrika_', 'metrika_token'),
-        'setup': 'METRIKA_TOKEN/METRIKA_COUNTER_ID',
+        'setup': 'YANDEX_METRIKA_TOKEN/YANDEX_METRIKA_COUNTER (или ..._COUNTER_ID)',
     },
     {
         'label': 'GA4 (Google Analytics)',
