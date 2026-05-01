@@ -563,11 +563,10 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         # Log agent activity
         try:
             from models import AgentActivityLog
-            short_title = content[:80] + ('...' if len(content) > 80 else '')
             log_entry = AgentActivityLog(
                 user_id=user.id,
                 activity_type='post_newsfeed',
-                title=short_title,
+                title=content,
                 content=content,
                 target='Лента новостей',
                 status='published',
@@ -717,7 +716,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                         tg_log = AgentActivityLog(
                             user_id=user.id,
                             activity_type='post_telegram',
-                            title=content[:80] + ('...' if len(content) > 80 else ''),
+                            title=content,
                             content=content,
                             target=user.telegram_channel or 'Telegram-канал',
                             status='published',
@@ -754,7 +753,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                                 dc_log = AgentActivityLog(
                                     user_id=user.id,
                                     activity_type='post_discord',
-                                    title=content[:80] + ('...' if len(content) > 80 else ''),
+                                    title=content,
                                     content=content,
                                     target='Discord канал',
                                     status='published',
