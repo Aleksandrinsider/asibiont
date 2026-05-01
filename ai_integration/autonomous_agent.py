@@ -10078,13 +10078,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'готово', 'done', 'completed', 'sent', 'saved', 'found',
             )
             _looks_like_action_claim = any(_kw in _claim_lc for _kw in _ACTION_CLAIM_KW)
+            _task_lc_claim = (task or '').lower()
+            _action_oriented_task = any(_kw in _task_lc_claim for _kw in (
+                'отправ', 'send', 'publish', 'опублик', 'размест', 'найди', 'find',
+                'сохрани', 'save', 'проверь', 'check', 'создай', 'create',
+            ))
             _is_claim_without_tools = (
-                _is_autopilot_task
+                (_is_autopilot_task or _action_oriented_task)
                 and bool(_claim_lc)
                 and _looks_like_action_claim
                 and not _tool_calls
                 and _tool_call_count == 0
-                and _iter <= 1
+                and _iter <= 2
             )
             if _is_claim_without_tools:
                 logger.warning(
@@ -11187,6 +11192,20 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # если короткий/шаблонный — noise-фильтр в _dispatch_agent_for_anchor отсечёт
     if _is_autopilot_task and not _tools_used and len((_final_text or '').strip()) < 100:
         _final_text = ''  # слишком короткий текст без действий = noise
+
+    # Универсальный guard: без единого tool-call нельзя утверждать, что действие выполнено.
+    if not _tools_used and _final_text:
+        _ft_lc_nt = _final_text.lower()
+        _NO_TOOL_ACTION_CLAIMS = (
+            'задача выполнена', 'письма ушли', 'письмо ушло', 'пост опублик',
+            'отправил', 'отправила', 'отправлено', 'сохранил', 'сохранила',
+            'нашёл', 'нашла', 'готово', 'done', 'completed', 'sent', 'published',
+        )
+        if any(_p in _ft_lc_nt for _p in _NO_TOOL_ACTION_CLAIMS):
+            logger.warning('[DIRECTOR-EXEC] no-tool action claim stripped from final text')
+            _final_text = (
+                'Действие не подтверждено инструментом. Повторяю выполнение через tool-вызов.'
+            )
 
     # Шаблонные ответы с инструментами: "Выполнил поиск." — тоже noise
     if _is_autopilot_task and _final_text:
