@@ -1898,15 +1898,27 @@ class OfficeEngine:
                     _known_tools.update(_re_td.findall(r'\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b', _task_lower))
                     _known_tools -= {'user_id', 'task_id', 'goal_id', 'agent_id'}  # исключаем не-инструменты
                     _task_tools = {t for t in _known_tools if t in _task_lower and len(t) >= 5}
+                    _email_flow_tools = {
+                        'start_email_campaign', 'check_emails', 'reply_to_outreach_email',
+                        'send_follow_up_email', 'send_outreach_email', 'negotiate_by_email',
+                    }
+                    _is_email_flow_task = bool(_task_tools & _email_flow_tools)
 
                     if _task_tools:
                         _tool_repeat_count = 0
+                        _last_tool_repeat_at = None
                         for _aal_row in _recent_aal:
                             _old_text = ((_aal_row.title or '') + ' ' + (_aal_row.content or '')).lower()
                             if any(t in _old_text for t in _task_tools):
                                 _tool_repeat_count += 1
+                                if _last_tool_repeat_at is None or ((_aal_row.created_at or _dup_cutoff) > _last_tool_repeat_at):
+                                    _last_tool_repeat_at = _aal_row.created_at or _dup_cutoff
                         # Динамический порог на основе outcome
                         _base_threshold = 3
+                        # Для email-потока порог выше: это повторяющиеся операционные задачи,
+                        # они должны назначаться регулярно (check_emails/reply/follow-up/start campaign).
+                        if _is_email_flow_task:
+                            _base_threshold = 8
                         if _tool_repeat_count >= 2:
                             try:
                                 _outcomes = _s_dup.query(AgentActivityLog).filter(
@@ -1925,7 +1937,19 @@ class OfficeEngine:
                                     _base_threshold = 2  # инструмент проваливается
                             except Exception:
                                 pass
-                        if _tool_repeat_count >= _base_threshold:
+                        _skip_by_tool_dedup = _tool_repeat_count >= _base_threshold
+                        # Для email-flow блокируем только если это реально спам-зацикл: очень частые повторы.
+                        if _is_email_flow_task and _skip_by_tool_dedup:
+                            try:
+                                _is_too_frequent = (
+                                    _last_tool_repeat_at is not None
+                                    and (_now - _last_tool_repeat_at).total_seconds() < 90 * 60
+                                )
+                            except Exception:
+                                _is_too_frequent = False
+                            _skip_by_tool_dedup = _is_too_frequent
+
+                        if _skip_by_tool_dedup:
                             logger.info(
                                 "[OFFICE-L2] TOOL-DEDUP: user=%d, %s tool=%s repeated %dx in 24h (threshold=%d) — skip: %s",
                                 user_db_id, _aname, _task_tools, _tool_repeat_count, _base_threshold, _atask[:60],
@@ -1941,7 +1965,7 @@ class OfficeEngine:
                             _overlap = len(_task_words & _old_words) / min(len(_task_words), len(_old_words))
                             if _overlap > 0.5:
                                 _high_overlap_count += 1
-                    if _high_overlap_count >= 2:
+                    if _high_overlap_count >= 2 and not _is_email_flow_task:
                         logger.info("[OFFICE-L2] TEACH-MISS antiloop: user=%d, %s has %d similar tasks in 24h — skipping: %s",
                                     user_db_id, _aname, _high_overlap_count, _atask[:60])
                         continue
