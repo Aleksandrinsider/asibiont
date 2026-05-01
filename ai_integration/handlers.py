@@ -1585,8 +1585,8 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 content = _re_img_rule.sub(r'\[IMAGE:[^\]]+\]', '', content, flags=_re_img_rule.IGNORECASE).strip()
                 logger.info(f"[SAVE_NOTE] Blog image skipped by user rule: {_matched_img_rule[:80]}")
             if content:
-                # Старый дефолт: без принудительного базового стиля (no-color).
-                _style = (_extract_image_style_from_memory(user) or '').strip()
+                # Дефолт если нет user-стиля: базовый watercolor.
+                _style = (_extract_image_style_from_memory(user) or 'watercolor illustration, soft artistic style, muted tones, painterly texture').strip()
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker and not _skip_image_by_rule:
                     try:
@@ -9164,8 +9164,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             _force_sync_image = _must_add_image or bool(_user_style_pref) or bool(_explicit_visual_prompt)
             if _force_sync_image:
                 try:
-                    # Старый дефолт: не подставляем watercolor автоматически.
-                    _style_req = _user_style_pref
+                    # Дефолт если нет user-стиля: базовый watercolor.
+                    _style_req = _user_style_pref or 'watercolor illustration, soft artistic style, muted tones, painterly texture'
                     if _explicit_visual_prompt and _style_req:
                         _img_style_req = f"{_style_req}, {_explicit_visual_prompt}"
                     elif _explicit_visual_prompt:
@@ -9251,8 +9251,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 try:
                     _bg_session = Session()
                     try:
-                        # Старый дефолт: без принудительного watercolor, только user style/explicit prompt.
-                        _style_bg = ''
+                        # Дефолт если нет user-стиля: базовый watercolor.
+                        _style_bg = 'watercolor illustration, soft artistic style, muted tones, painterly texture'
                         try:
                             _post_user_bg = _bg_session.query(User).filter_by(telegram_id=_user_id_bg).first()
                             if _post_user_bg:
@@ -19454,8 +19454,8 @@ async def generate_image(
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
         # Объединяем базовый стиль запроса и пользовательский стиль из памяти.
-        # Базовый дефолт возвращён к старому no-color (без принудительного watercolor).
-        _PLATFORM_DEFAULT_STYLE = ''
+        # Базовый дефолт: используется если нет user-стиля и не задан явный стиль.
+        _PLATFORM_DEFAULT_STYLE = 'watercolor illustration, soft artistic style, muted tones, painterly texture'
         _base_style = (style or '').strip()
         _user_style = _extract_image_style_from_memory(user) or None
         if _base_style and _user_style:
