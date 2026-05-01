@@ -397,12 +397,6 @@ def _ensure_sender_signature(body: str, sender_name: str = '', session=None, use
             _body = _body + f"\n{_sig_name}"
             if _role_line:
                 _body += f"\n{_role_line}"
-        else:
-            # Signature markers found, but no complete sign-off block with sender name.
-            # Add language-aligned sign-off to keep email style consistent.
-            _body = _body + f"\n\n{_signoff}\n{_sig_name}"
-            if _role_line:
-                _body += f"\n{_role_line}"
 
     return _body, _has_sig_markers
 
