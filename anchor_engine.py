@@ -17321,6 +17321,21 @@ class AnchorEngine:
                         target_name=_ag_name,
                     )
                     _assign_chat_text = _sanitize_proactive_text(_assign_chat_stage1)
+                    # Если канал пользователя подключён, вычищаем ложные сообщения вида
+                    # "X не может опубликовать в Telegram / нет доступа к telegram".
+                    if getattr(user, 'telegram_channel', None):
+                        _assign_chat_text = re.sub(
+                            r'(?is)\b(?:[а-яёa-z0-9_@\-]+\s+)?не\s+может\s+[^.!?\n]{0,140}'
+                            r'(?:publish_to_telegram|telegram|телеграм|тг)[^.!?\n]{0,140}[.!?]?\s*',
+                            '',
+                            _assign_chat_text,
+                        ).strip()
+                        _assign_chat_text = re.sub(
+                            r'(?is)\b(?:у\s+[^\s]{1,20}\s+)?нет\s+доступа\s+[^.!?\n]{0,140}'
+                            r'(?:publish_to_telegram|telegram|телеграм|тг|канал)[^.!?\n]{0,140}[.!?]?\s*',
+                            '',
+                            _assign_chat_text,
+                        ).strip()
                     _assign_sentence_count = len(re.findall(r'[.!?]+', _assign_chat_stage1 or ''))
                     if (
                         _assign_chat_stage1
@@ -17575,6 +17590,8 @@ class AnchorEngine:
                     _expanded = False
                     if _tool_hint and _tool_hint not in _base_tools:
                         _ag_keys_low = (_target_ag.user_api_keys or '').lower()
+                        _user_has_tg_channel = bool(getattr(user, 'telegram_channel', None))
+                        _user_has_discord_webhook = bool(getattr(user, 'discord_webhook', None))
                         # Мапа: tool → какой ключ нужен
                         _TOOL_INTG = {
                             'check_emails': ('gmail_user=', 'imap_', 'yandex_user=', 'mailru_user='),
@@ -17587,10 +17604,20 @@ class AnchorEngine:
                             'publish_to_discord': ('discord_webhook',),
                         }
                         _needed_keys = _TOOL_INTG.get(_tool_hint, ())
-                        if _needed_keys and any(k in _ag_keys_low for k in _needed_keys):
+                        _agent_has_needed = bool(_needed_keys and any(k in _ag_keys_low for k in _needed_keys))
+                        _user_channel_covers = (
+                            (_tool_hint == 'publish_to_telegram' and _user_has_tg_channel)
+                            or (_tool_hint == 'publish_to_discord' and _user_has_discord_webhook)
+                        )
+                        if _agent_has_needed or _user_channel_covers:
                             _base_tools.append(_tool_hint)
                             _expanded = True
-                            logger.info("[COORD] dynamic tool expansion: %s gets %s (integration match)", _ag_name, _tool_hint)
+                            logger.info(
+                                "[COORD] dynamic tool expansion: %s gets %s (%s)",
+                                _ag_name,
+                                _tool_hint,
+                                "agent integration" if _agent_has_needed else "user channel/webhook",
+                            )
                     # Всегда добавляем универсальные инструменты если их нет
                     for _ut in ('web_search', 'research_topic', 'save_email_contact', 'save_note'):
                         if _ut not in _base_tools:
