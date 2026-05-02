@@ -3383,7 +3383,7 @@ async def session_error_middleware(request, handler):
         response.del_cookie('AIOHTTP_SESSION', domain=None, path='/')
         return response
     except Exception as e:
-        logger.error(f"Session error: {e}")
+        logger.error(f"Session error [{type(e).__name__}] on {request.method} {request.path}: {e}", exc_info=True)
         raise
 
 
