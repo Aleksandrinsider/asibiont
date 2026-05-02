@@ -78,7 +78,11 @@ def _detect_gender(first_name: str) -> str:
     return 'male'
 
 
-async def _generate_text_with_ai(prompt: str) -> str:
+async def _generate_text_with_ai(
+    prompt: str,
+    system_prompt: str | None = None,
+    max_tokens: int = 400,
+) -> str:
     """Прямой вызов AI API для генерации текста (без агентского пайплайна).
     
     Используется для генерации постов и другого контента,
@@ -92,11 +96,11 @@ async def _generate_text_with_ai(prompt: str) -> str:
     data = {
         "model": DEEPSEEK_MODEL,
         "messages": [
-            {"role": "system", "content": "Ты — ghostwriter. Пишешь короткие живые посты от первого лица. Голос: искренний, человечный, как заметка в личный блог. Выдавай только текст поста. Старайся каждый раз находить свежую тему, фразу и структуру."},
+            {"role": "system", "content": system_prompt or "Ты — ghostwriter. Пиши естественный текст по инструкциям пользователя. Выдавай только готовый текст без пояснений."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.92,
-        "max_tokens": 400
+        "max_tokens": max_tokens
     }
 
     async with _safe_http() as session:
@@ -295,6 +299,7 @@ async def generate_progress_post(user_id, session):
             Post.user_id == user.id
         ).order_by(Post.created_at.desc()).limit(5).all()
         recent_texts = [p.content for p in recent_posts if p.content]
+        _recent_avg_len = int(sum(len(t) for t in recent_texts) / len(recent_texts)) if recent_texts else 0
 
         # Profile info
         user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
@@ -304,6 +309,46 @@ async def generate_progress_post(user_id, session):
         user_interests = profile.interests or ''
         user_skills = profile.skills or ''
         user_goals = profile.goals or ''
+
+        def _extract_post_preferences_from_memory(_user_obj) -> dict:
+            """Read user post-format preferences from memory/rules (soft learning)."""
+            import json as _json_pref
+            _rules: list[str] = []
+            try:
+                _mem_raw = decrypt_data(getattr(_user_obj, 'memory', None) or '') if getattr(_user_obj, 'memory', None) else '{}'
+                if _mem_raw and _mem_raw.strip().startswith('{'):
+                    _m = _json_pref.loads(_mem_raw)
+                    _rules.extend([r for r in _m.get('rules', []) if isinstance(r, str) and r.strip()])
+            except Exception:
+                pass
+            try:
+                _ltm_raw = decrypt_data(getattr(_user_obj, 'long_term_memory', None) or '') if getattr(_user_obj, 'long_term_memory', None) else '{}'
+                if _ltm_raw and _ltm_raw.strip().startswith('{'):
+                    _ltm = _json_pref.loads(_ltm_raw)
+                    _rules.extend([r for r in _ltm.get('rules', []) if isinstance(r, str) and r.strip()])
+                    _sl = _ltm.get('self_learning', {}) if isinstance(_ltm, dict) else {}
+                    _prefs = _sl.get('preferences', {}) if isinstance(_sl, dict) else {}
+                    _pf = _prefs.get('post_format') if isinstance(_prefs, dict) else None
+                    if isinstance(_pf, str) and _pf.strip():
+                        _rules.append(_pf.strip())
+            except Exception:
+                pass
+
+            _blob = ' | '.join(r.lower() for r in _rules)
+            _long_pref = any(k in _blob for k in ('длинн', 'развернут', 'подробн', 'seo', 'статья', 'long form', 'long-form', 'длинный пост'))
+            _short_pref = any(k in _blob for k in ('коротк', 'кратк', '1-2 предлож', '2-4 предлож', 'short post', 'brief'))
+            _format = 'long' if _long_pref and not _short_pref else ('short' if _short_pref and not _long_pref else 'normal')
+            return {
+                'format': _format,
+                'rules_preview': _rules[:5],
+            }
+
+        _post_prefs = _extract_post_preferences_from_memory(user)
+        # Soft self-learning from recent writing behavior if no explicit rule exists.
+        if _post_prefs.get('format') == 'normal' and _recent_avg_len > 700:
+            _post_prefs['format'] = 'long'
+        elif _post_prefs.get('format') == 'normal' and 0 < _recent_avg_len < 260:
+            _post_prefs['format'] = 'short'
 
         # Random tone variation to keep posts diverse
         tone = random.choice([
@@ -335,7 +380,7 @@ async def generate_progress_post(user_id, session):
         # Build prompt
         city_part = f", {user_city}" if user_city else ""
 
-        context = f"""Пишешь короткий пост в соцсеть от лица реального человека. Стиль: {tone}.
+        context = f"""Пишешь пост для личного блога от лица реального человека. Стиль: {tone}.
 
 О человеке:
 - Имя: {user_name}{city_part}
@@ -368,14 +413,25 @@ async def generate_progress_post(user_id, session):
             context += f"\nЗа неделю закрыто задач: {week_completed_count}\n"
 
         if recent_texts:
-            context += f"\n� ПРЕДЫДУЩИЕ ПОСТЫ — старайся найти свежую тему:\n"
+            context += f"\nПРЕДЫДУЩИЕ ПОСТЫ — старайся найти свежую тему:\n"
             for i, s in enumerate(recent_texts, 1):
                 context += f"---\nПост {i}: {s}\n"
             context += "---\nНапиши про СОВЕРШЕННО ДРУГУЮ тему. Если предыдущие посты про работу — напиши про жизнь. Если про тренды — напиши про личное. Если про цели — напиши про настроение.\n"
 
+        if _post_prefs['rules_preview']:
+            context += "\nПравила пользователя по стилю/формату постов (в приоритете):\n"
+            for _r in _post_prefs['rules_preview']:
+                context += f"- {_r}\n"
+
+        _format_rule = "— от первого лица, 2-4 предложения, максимум 400 символов"
+        if _post_prefs['format'] == 'long':
+            _format_rule = "— от первого лица, развернутый формат 6-10 предложений (ориентир: 900-1700 символов), как цельная мини-статья"
+        elif _post_prefs['format'] == 'normal':
+            _format_rule = "— от первого лица, 3-6 предложений, содержательно и без воды"
+
         context += f"""
 Напиши пост. СТРОГИЕ правила:
-— от первого лица, 2-4 предложения, максимум 400 символов
+{_format_rule}
 — живой разговорный текст, как запись в личном блоге — не пресс-релиз
 — БЕЗ буллетов, нумерации, хештегов, CTA
 — {'женский род: «выбрала», «сделала», «заметила», «решила»' if user_gender == 'female' else 'мужской род: «выбрал», «сделал», «заметил», «решил»'}
@@ -389,11 +445,15 @@ async def generate_progress_post(user_id, session):
 
         # Call AI
         try:
-            response = await _generate_text_with_ai(context)
+            _sys = "Ты — ghostwriter. Пиши от первого лица живо и естественно, строго следуя пользовательским правилам формата из запроса."
+            _max_tokens = 900 if _post_prefs['format'] == 'long' else (550 if _post_prefs['format'] == 'normal' else 400)
+            response = await _generate_text_with_ai(context, system_prompt=_sys, max_tokens=_max_tokens)
 
             if response and len(response) > 20:
                 post_content = response.strip().strip('"').strip("'")
-                logger.info(f"[AUTO POST] Generated post for {user_id} (tone={tone}): {post_content[:100]}")
+                logger.info(
+                    f"[AUTO POST] Generated post for {user_id} (tone={tone}, len={len(post_content)}): {post_content[:100]}"
+                )
                 return post_content
             else:
                 logger.warning(f"AI response too short for {user_id}, using fallback")
