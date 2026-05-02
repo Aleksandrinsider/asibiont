@@ -261,7 +261,7 @@
 </head>
 <body>
 <div class="blog-container">
-    <a href="/" class="back-link">{% if lang == 'en' %}← Home{% else %}← На главную{% endif %}</a>
+    <a href="{% if lang == 'en' %}/en/?landing=1{% else %}/?landing=1{% endif %}" class="back-link">{% if lang == 'en' %}← Home{% else %}← На главную{% endif %}</a>
 
     {% if post %}
     <!-- SINGLE POST VIEW (SSR for SEO) -->

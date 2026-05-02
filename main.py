@@ -10736,6 +10736,7 @@ async def blog_post_handler(request):
     Принимает: /blog/882-moya-statya  (slug) или /blog/882  (legacy ID → redirect).
     """
     raw = request.match_info.get('post_id', '')
+    _lang_prefix = '/en' if request.path.startswith('/en') else ''
 
     # Если чисто числовой ID — lookup и redirect на slug URL
     if raw.isdigit():
@@ -10746,12 +10747,12 @@ async def blog_post_handler(request):
             if not note:
                 raise web.HTTPNotFound()
             if note.slug:
-                raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
+                raise web.HTTPMovedPermanently(location=f'{_lang_prefix}/blog/{note.slug}')
             # slug ещё не сгенерирован — генерируем и сохраняем
             from ai_integration.handlers import _make_blog_slug
             note.slug = _make_blog_slug(note.title or 'post', note.id)
             session_db.commit()
-            raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
+            raise web.HTTPMovedPermanently(location=f'{_lang_prefix}/blog/{note.slug}')
 
     # Slug-формат: «882-moya-statya» — извлекаем ID из начала
     import re as _re_bp
@@ -10767,10 +10768,10 @@ async def blog_post_handler(request):
             raise web.HTTPNotFound()
         # Если slug изменился или не совпадает — canonical redirect
         if note.slug and note.slug != raw:
-            raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
+            raise web.HTTPMovedPermanently(location=f'{_lang_prefix}/blog/{note.slug}')
         user = session_db.query(User).filter_by(id=note.user_id).first()
         author = f"@{user.username}" if user and user.username else "AI-агент"
-        lang = 'en' if request.path.startswith('/en') else 'ru'
+        lang = 'en' if _lang_prefix else 'ru'
         # Use EN translation if available and requested
         if lang == 'en':
             import re as _re_en_chk
@@ -13931,7 +13932,9 @@ async def login_handler_en(request):
     if user_id:
         try:
             user_id = int(user_id)
-            return web.HTTPFound('/dashboard')
+            # ?landing=1 lets logged-in users see the landing page (e.g. coming from the blog)
+            if request.rel_url.query.get('landing') != '1':
+                return web.HTTPFound('/dashboard')
         except (ValueError, TypeError):
             pass
     bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'asibiont_bot')
