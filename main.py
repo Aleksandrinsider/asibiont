@@ -3405,18 +3405,53 @@ async def session_error_middleware(request, handler):
 
 # Paths commonly probed by bots/scanners — suppress noisy 404 logs for these
 _BOT_SCAN_PATHS = ('/wp-admin', '/wordpress', '/wp-login', '/xmlrpc.php',
-                   '/.env', '/phpmyadmin', '/admin/config', '/setup-config')
+                   '/.env', '/phpmyadmin', '/admin/config', '/setup-config',
+                   '/error', '/error/')
+_BOT_SCAN_UA_MARKERS = (
+    'tlm-audit-scanner',
+    'sqlmap',
+    'nikto',
+    'masscan',
+    'zgrab',
+    'acunetix',
+    'nessus',
+)
+
+
+def _is_scanner_probe(path, user_agent):
+    _path = (path or '').lower()
+    _ua = (user_agent or '').lower()
+    path_probe = any(_path.startswith(p) for p in _BOT_SCAN_PATHS)
+    ua_probe = any(m in _ua for m in _BOT_SCAN_UA_MARKERS)
+    return path_probe or ua_probe
+
+
+@web.middleware
+async def scanner_guard_middleware(request, handler):
+    """Early-drop scanner probes before they touch app handlers/DB."""
+    path = request.path
+    user_agent = request.headers.get('User-Agent', '')
+    if _is_scanner_probe(path, user_agent):
+        client_ip = request.headers.get('X-Forwarded-For', request.remote or '0.0.0.0')
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        logger.warning(
+            f"[SCANNER_BLOCK] {client_ip} {request.method} {path} ua={(user_agent or '-')[:120]}"
+        )
+        return web.Response(status=404, text='Not Found')
+    return await handler(request)
 
 
 @web.middleware
 async def logging_middleware(request, handler):
     """Log all incoming requests"""
     path = request.path
+    user_agent = request.headers.get('User-Agent', '')
     is_static_asset = (
         path.startswith('/static/')
         or path in ('/favicon.ico', '/sw.js', '/manifest.json', '/robots.txt', '/sitemap.xml')
     )
-    is_bot_probe = any(p in path for p in _BOT_SCAN_PATHS)
+    is_bot_probe = _is_scanner_probe(path, user_agent)
     # Static assets are high-volume and create heavy log IO on Railway.
     # Keep warnings/errors, but skip per-request INFO logs for these paths.
     if not is_bot_probe and not is_static_asset:
@@ -3550,6 +3585,7 @@ async def rate_limit_middleware(request, handler):
     return await handler(request)
 
 
+app.middlewares.append(scanner_guard_middleware)
 app.middlewares.append(rate_limit_middleware)
 app.middlewares.append(cors_middleware)
 app.middlewares.append(redirect_to_root_middleware)
