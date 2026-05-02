@@ -2859,13 +2859,8 @@ async def delegate_task(
                 _sent = [s.strip() for s in _ren.split(r'(?<=[.!?])\s+', _txt) if s.strip()]
                 _txt = ' '.join(_sent[:2]).strip() if _sent else _txt
                 _txt = _truncate_by_word(_txt, 280)
-                _txt_l = _txt.lower()
-                _is_fem = _is_fem_agent(_agent_name)
-                _prefix = 'Вот что я нашла: ' if _is_fem else 'Вот что я нашел: '
-                if not _txt_l.startswith(('вот что', 'нашла', 'нашел', 'проверила', 'проверил', 'сделала', 'сделал', 'нашли')):
-                    # Капитализируем первую букву если она строчная (перед добавлением префикса)
-                    _txt_clean = (_txt[:1].upper() + _txt[1:]) if _txt and _txt[:1].islower() else _txt
-                    _txt = _prefix + _txt_clean
+                # Капитализируем первую букву — без искусственного префикса "Вот что я нашла"
+                _txt = (_txt[:1].upper() + _txt[1:]) if _txt and _txt[:1].islower() else _txt
                 return sanitize_live_team_chat_text(_txt.strip(), anchor_type='agent_delegation', speaker_name=_agent_name)
 
             _subscribed_ids = [r[0] for r in session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id).all()]
