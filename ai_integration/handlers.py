@@ -2776,7 +2776,7 @@ async def delegate_task(
                 _title_line = _content_lines[0] if _content_lines else ''
                 # Склеиваем до 2-3 предложений для показа контекста (не только первая строка)
                 _multi = ' '.join(_content_lines).strip()
-                _base = _multi or _strip_structured_text(_task_text, _max_len=320)
+                _base = _multi or _strip_structured_text(_task_text, _max_len=600)
                 # Обрезаем структурные разделители — но ТОЛЬКО если они НЕ в начале строки
                 # (чтобы не уничтожать задачи типа "На основе анализа трендов разработай...")
                 _split_m = _ren.split(
@@ -2793,8 +2793,8 @@ async def delegate_task(
                 _generic = f'{_agent_name}, продолжи работу по текущей задаче.'
                 if not _base:
                     return _generic
-                # Показываем до 300 символов — достаточно для 2-3 информативных предложений
-                _base = _truncate_by_word(_base, 300)
+                # Показываем до 600 символов — достаточно для полного контекста поручения
+                _base = _truncate_by_word(_base, 600)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
                 # Эвристика: глагол (инфинитив/императив) или существительное?
