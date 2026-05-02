@@ -3416,11 +3416,31 @@ _BOT_SCAN_UA_MARKERS = (
     'acunetix',
     'nessus',
 )
+_TRUSTED_CRAWLER_UA_MARKERS = (
+    'googlebot',
+    'adsbot-google',
+    'mediapartners-google',
+    'google-inspectiontool',
+    'yandexbot',
+    'yandexmobilebot',
+    'bingbot',
+    'bingpreview',
+    'duckduckbot',
+    'applebot',
+    'baiduspider',
+)
+
+
+def _is_trusted_crawler(user_agent):
+    _ua = (user_agent or '').lower()
+    return any(m in _ua for m in _TRUSTED_CRAWLER_UA_MARKERS)
 
 
 def _is_scanner_probe(path, user_agent):
     _path = (path or '').lower()
     _ua = (user_agent or '').lower()
+    if _is_trusted_crawler(_ua):
+        return False
     path_probe = any(_path.startswith(p) for p in _BOT_SCAN_PATHS)
     ua_probe = any(m in _ua for m in _BOT_SCAN_UA_MARKERS)
     return path_probe or ua_probe
