@@ -5048,10 +5048,10 @@ class AnchorEngine:
                 )
                 if _stuck:
                     for _st in _stuck:
-                        _st.status = 'failed'
+                        _st.status = 'recovered'
                         _st.result = (_st.result or '') + ' [recovered: process restart]'
                     _s_rec.commit()
-                    logger.info("[ANCHOR] Recovery: marked %d stuck in_progress entries as failed", len(_stuck))
+                    logger.info("[ANCHOR] Recovery: marked %d stuck in_progress entries as recovered", len(_stuck))
             finally:
                 _s_rec.close()
         except Exception as _rec_err:
@@ -5081,10 +5081,10 @@ class AnchorEngine:
                         )
                         if _stuck2:
                             for _st2 in _stuck2:
-                                _st2.status = 'failed'
+                                _st2.status = 'recovered'
                                 _st2.result = (_st2.result or '') + ' [recovered: periodic stuck cleanup]'
                             _s_rec2.commit()
-                            logger.info("[ANCHOR] Periodic recovery: marked %d stuck in_progress entries as failed", len(_stuck2))
+                            logger.info("[ANCHOR] Periodic recovery: marked %d stuck in_progress entries as recovered", len(_stuck2))
                         # Дополнительно: зависшие agent_task (задачи делегирования) старше 30 минут
                         _stuck_agent_tasks = (
                             _s_rec2.query(_RecAAL2)
@@ -5097,10 +5097,10 @@ class AnchorEngine:
                         )
                         if _stuck_agent_tasks:
                             for _st3 in _stuck_agent_tasks:
-                                _st3.status = 'failed'
+                                _st3.status = 'recovered'
                                 _st3.result = (_st3.result or '') + ' [recovered: agent_task stuck cleanup]'
                             _s_rec2.commit()
-                            logger.info("[ANCHOR] Periodic recovery: marked %d stuck agent_task entries as failed", len(_stuck_agent_tasks))
+                            logger.info("[ANCHOR] Periodic recovery: marked %d stuck agent_task entries as recovered", len(_stuck_agent_tasks))
                         # Авто-закрытие задач от агентов, зависших в pending/in_progress >24ч
                         from models import Task as _RecTask
                         _stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
