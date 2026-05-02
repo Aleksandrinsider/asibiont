@@ -53,6 +53,66 @@ def _decrypt_keys(raw: str) -> str:
     except Exception:
         return raw
 
+
+def _extract_github_owner_repo(url_like: str) -> tuple[str, str] | None:
+    """Извлекает owner/repo из github URL или url-like строки.
+    Примеры: github.com/org/repo, https://github.com/org/repo/issues"""
+    if not url_like:
+        return None
+    _m = re.search(r'github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)', str(url_like), flags=re.IGNORECASE)
+    if not _m:
+        return None
+    owner = (_m.group(1) or '').strip().strip('/').strip('.').lower()
+    repo = (_m.group(2) or '').strip().strip('/').strip('.')
+    if repo.lower().endswith('.git'):
+        repo = repo[:-4]
+    if not owner or not repo:
+        return None
+    return owner, repo
+
+
+async def _verify_github_repos_exist(urls: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """Проверяет существование GitHub-репозиториев.
+    Returns: (existing, missing, unverified) как canonical github.com/owner/repo."""
+    _pairs: dict[str, tuple[str, str]] = {}
+    for _u in urls or []:
+        _parsed = _extract_github_owner_repo(_u)
+        if not _parsed:
+            continue
+        _owner, _repo = _parsed
+        _key = f"{_owner}/{_repo}"
+        _pairs[_key] = (_owner, _repo)
+
+    if not _pairs:
+        return [], [], []
+
+    existing: list[str] = []
+    missing: list[str] = []
+    unverified: list[str] = []
+    _timeout = aiohttp.ClientTimeout(total=8, connect=4, sock_read=6)
+    _headers = {
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'ASI-Biont/anti-hallucination',
+    }
+
+    async with aiohttp.ClientSession(timeout=_timeout, headers=_headers) as _sess:
+        for _key, (_owner, _repo) in _pairs.items():
+            _canon = f"github.com/{_owner}/{_repo}"
+            try:
+                _api_url = f"https://api.github.com/repos/{_owner}/{_repo}"
+                async with _sess.get(_api_url) as _resp:
+                    if _resp.status in (200, 301):
+                        existing.append(_canon)
+                    elif _resp.status == 404:
+                        missing.append(_canon)
+                    else:
+                        # 403/429 и прочие неоднозначные статусы не считаем отсутствием
+                        unverified.append(_canon)
+            except Exception:
+                unverified.append(_canon)
+
+    return existing, missing, unverified
+
 # ── Integration hint patterns: (substring_in_tool_result_lower, user_recommendation) ─────
 # Используются в _extract_intg_hints() для детектирования ограничений инструментов
 # и автоматической простановки рекомендаций в ответ агента.
@@ -10402,28 +10462,25 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _targs['delegated_to_username'] = _targs.pop('agent_name')
                 if 'task' in _targs and 'title' not in _targs:
                     _targs['title'] = _targs.pop('task')
-            # ── GUARD: пост содержит GitHub-URL — проверяем что репозитории реально создавались ──
-            # _fix_tool_params помечает __gh_urls_in_content__ если нашёл github.com/org/repo в тексте.
-            # Если http_api_request / run_agent_action НЕ вызывались ранее в этом цикле —
-            # GitHub-репо выдуман, блокируем пост и требуем сначала создать ресурс.
+            # ── GUARD: проверяем, что GitHub-URL в посте указывают на существующие репозитории ──
+            # Блокируем только подтверждённо несуществующие ссылки (404), чтобы не публиковать
+            # выдуманные репозитории. Неопределимые кейсы (rate-limit/сеть) не блокируем жёстко.
             if (_tname in ('create_post', 'publish_to_telegram', 'publish_to_discord')
-                    and _targs.get('__gh_urls_in_content__')
-                    and _is_autopilot_task):
+                    and _targs.get('__gh_urls_in_content__')):
                 _gh_urls_detected = _targs.pop('__gh_urls_in_content__', [])
                 _prior_set = set(_tools_used[:-1])
                 _has_gh_create = bool(_prior_set & {'http_api_request', 'run_agent_action'})
-                if not _has_gh_create:
+                _gh_existing, _gh_missing, _gh_unverified = await _verify_github_repos_exist(_gh_urls_detected)
+                if _gh_missing:
                     logger.warning(
-                        "[DIRECTOR-EXEC] FAKE-REPO guard: %s claims github.com URLs %s without creating them",
-                        agent.get('name'), _gh_urls_detected,
+                        "[DIRECTOR-EXEC] FAKE-REPO guard: %s references missing repos %s",
+                        agent.get('name'), _gh_missing,
                     )
                     _tc_result = json.dumps({
                         "error": (
                             f"⛔ Пост заблокирован: содержит GitHub-репозитори{'и' if len(_gh_urls_detected) > 1 else 'й'} "
-                            f"({', '.join(_gh_urls_detected[:3])}) которые не были созданы через инструменты в этой сессии. "
-                            "СНАЧАЛА создай репозиторий через http_api_request(url='https://api.github.com/user/repos', "
-                            "method='POST', auth_key='GITHUB_TOKEN', body={...}), ПОТОМ пиши пост о нём. "
-                            "Если создать репозиторий невозможно — напиши пост без ссылки на несуществующий ресурс."
+                            f"({', '.join(_gh_missing[:3])}) которые не существуют (GitHub вернул 404). "
+                            "Проверь owner/repo и исправь ссылку. Если репозитория нет — не упоминай его в публикации."
                         )
                     }, ensure_ascii=False)
                     _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
@@ -10432,6 +10489,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 else:
                     # Репо создавалось — убираем служебный флаг из аргументов
                     _targs.pop('__gh_urls_in_content__', None)
+                    if _gh_unverified:
+                        logger.warning("[DIRECTOR-EXEC] GitHub verify incomplete for %s: %s", agent.get('name'), _gh_unverified)
+                    logger.info(
+                        "[DIRECTOR-EXEC] GitHub verify: existing=%d, unverified=%d, created_in_session=%s",
+                        len(_gh_existing), len(_gh_unverified), _has_gh_create,
+                    )
             elif _targs.get('__gh_urls_in_content__'):
                 _targs.pop('__gh_urls_in_content__', None)
             # ── Обычные инструменты ───────────────────────────────────────────────────────────
