@@ -129,6 +129,7 @@ async def start_discord_bot():
     _discord_bot = bot
 
     async def runner():
+        nonlocal bot
         _retry = 0
         while True:
             try:
