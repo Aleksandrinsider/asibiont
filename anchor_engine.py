@@ -26405,7 +26405,8 @@ class AnchorEngine:
                     "3. Пост может быть О ЧЁМ УГОДНО: достижения, мысли, поиск людей, экспертное мнение, "
                     "итоги дня, просьба о помощи, инсайты, открытия, планы — выбери самое полезное\n"
                     "4. Даже 1 сигнал — достаточно для поста. Навыки или интересы из профиля = хороший повод для экспертного поста\n"
-                    "5. Естественный, живой стиль. 3-6 предложений. БЕЗ эмодзи, без хештегов, без призывов к действию\n"
+                    "5. SEO-формат: 1700-2200 символов (минимум 1500). Структура: сильный лид + 3-5 смысловых блоков + короткий вывод/CTA. "
+                    "Пиши естественно, живо, без воды. БЕЗ эмодзи и хештегов.\n"
                     f"6. НЕ ВЫДУМЫВАЙ факты. Основывайся ТОЛЬКО на реальных сигналах ниже. {_no_hallucinate}\n"
                     "7. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
                 )
@@ -26468,7 +26469,7 @@ class AnchorEngine:
                     {"role": "user", "content": user_prompt}
                 ],
                 "temperature": 0.65,
-                "max_tokens": 600
+                "max_tokens": 1400 if mode == 'feed' else 600
             }
 
             async with _safe_http() as aio_session:
@@ -26502,6 +26503,45 @@ class AnchorEngine:
             post_text = text.strip().strip('"').strip("'")
             if len(post_text) < 20:
                 return None
+
+            # Для feed требуем SEO-длину: если черновик короткий, делаем один pass на расширение.
+            if mode == 'feed' and len(post_text) < 1500:
+                try:
+                    _expand_system = (
+                        "Ты SEO-редактор. Расширь черновик до 1700-2200 символов (минимум 1500), "
+                        "сохранив факты из исходника. Ничего не выдумывай. "
+                        "Структура: лид + 3-5 блоков + короткий вывод/CTA. "
+                        "Без эмодзи и хештегов. Верни только готовый текст."
+                    )
+                    _expand_user = (
+                        f"Черновик поста (слишком короткий, {len(post_text)} символов):\n\n"
+                        f"{post_text}\n\n"
+                        "Расширь его до SEO-формата по правилам выше."
+                    )
+                    _expand_data = {
+                        "model": "deepseek-chat",
+                        "messages": [
+                            {"role": "system", "content": _expand_system},
+                            {"role": "user", "content": _expand_user}
+                        ],
+                        "temperature": 0.6,
+                        "max_tokens": 1400,
+                    }
+                    async with _safe_http() as _expand_session:
+                        async with _expand_session.post(
+                            url, headers=headers, json=_expand_data,
+                            timeout=aiohttp.ClientTimeout(total=90)
+                        ) as _expand_resp:
+                            if _expand_resp.status == 200:
+                                _expand_json = await _expand_resp.json()
+                                _expanded = (_expand_json['choices'][0]['message']['content'] or '').strip().strip('"').strip("'")
+                                if len(_expanded) >= 1500:
+                                    post_text = _expanded
+                                    logger.info(f"[ANCHOR] feed SEO expand ok: {len(post_text)} chars")
+                                else:
+                                    logger.info(f"[ANCHOR] feed SEO expand still short: {len(_expanded)} chars, keeping draft {len(post_text)}")
+                except Exception as _exp_err:
+                    logger.debug(f"[ANCHOR] feed SEO expand failed: {_exp_err}")
 
             return post_text
 
