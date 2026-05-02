@@ -6420,7 +6420,10 @@ class AnchorEngine:
                             async with self._ai_semaphore:
                                 try:
                                     await asyncio.wait_for(
-                                        self._dispatch_agent_for_anchor(user, _goal_review_anchors[0], session),
+                                        self._dispatch_agent_for_anchor(
+                                            user, _goal_review_anchors[0], session,
+                                            outer_timeout_sec=int(_ap_dispatch_budget),
+                                        ),
                                         timeout=_ap_dispatch_budget,
                                     )
                                 except asyncio.TimeoutError:
@@ -6433,7 +6436,10 @@ class AnchorEngine:
                         async with self._ai_semaphore:
                             try:
                                 await asyncio.wait_for(
-                                    self._dispatch_agent_for_anchor(user, _chat_review_anchors[0], session),
+                                    self._dispatch_agent_for_anchor(
+                                        user, _chat_review_anchors[0], session,
+                                        outer_timeout_sec=int(_chat_dispatch_budget),
+                                    ),
                                     timeout=_chat_dispatch_budget,
                                 )
                             except asyncio.TimeoutError:
@@ -6459,7 +6465,10 @@ class AnchorEngine:
                 async with self._ai_semaphore:
                     try:
                         await asyncio.wait_for(
-                            self._dispatch_agent_for_anchor(user, _ca, session),
+                            self._dispatch_agent_for_anchor(
+                                user, _ca, session,
+                                outer_timeout_sec=int(_ca_dispatch_budget),
+                            ),
                             timeout=_ca_dispatch_budget,
                         )
                     except asyncio.TimeoutError:
@@ -6714,12 +6723,14 @@ class AnchorEngine:
     # EVENT-DRIVEN AGENT DISPATCH
     # ═══════════════════════════════════════════════════════
 
-    async def _dispatch_agent_for_anchor(self, user, anchor, session):
+    async def _dispatch_agent_for_anchor(self, user, anchor, session, *, outer_timeout_sec: int | None = None):
         """Прямой dispatch: запускает AI-агента для конкретного якоря и помечает доставленным.
         
         Используется для автопилота целей: агент получает задачу, выполняет действия
         (создаёт задачи, отправляет письма, исследует), результат сохраняется в activity log.
         session может быть None — тогда открывается своя сессия (не блокирует основной пул).
+        outer_timeout_sec: реальный бюджет вызывающего wait_for — используется для
+          корректного масштабирования внутренних таймаутов координатора и агента.
         """
         # Всегда используем собственную короткую сессию для guard/throttle/delivered_at
         # чтобы не держать основную сессию открытой во время долгих AI-вызовов
@@ -7276,12 +7287,17 @@ class AnchorEngine:
                     if len(_coord_real) >= 1:
                         try:
                             # timeout = coordinator plan (~90s) + N agents × 120s + buffer
-                            # Масштабируется по числу агентов, но не превышает _process_user wrapper
-                            _outer_wrap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
+                            # Масштабируется по числу агентов. Ограничиваем реальным бюджетом
+                            # (outer_timeout_sec передаётся из _process_user_inner через wait_for).
+                            _outer_wrap = (
+                                outer_timeout_sec
+                                if outer_timeout_sec and outer_timeout_sec > 60
+                                else int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
+                            )
                             _n_coord_agents = len(_coord_real)
                             _coord_timeout = min(
-                                max(300, 90 + _n_coord_agents * 120 + 60),
-                                _outer_wrap - 30,
+                                max(200, 90 + _n_coord_agents * 120 + 60),
+                                _outer_wrap - 60,  # резерв 60s для post-coord delivery
                             )
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
@@ -10074,13 +10090,19 @@ class AnchorEngine:
 
                     _raw = None
                     _ai_err = None
+                    # Динамический таймаут агента: если outer_timeout_sec передан из _process_user_inner
+                    # через wait_for-бюджет → используем не более половины оставшегося бюджета
+                    # на попытку (2 попытки × timeout/попытку ≤ outer_timeout_sec - запас 30s).
+                    _agent_exec_timeout = 150  # default safe per-attempt
+                    if outer_timeout_sec and outer_timeout_sec > 60:
+                        _agent_exec_timeout = max(60, min(150, (outer_timeout_sec - 30) // 2))
                     for _try_idx in (1, 2):
                         try:
                             _raw = await asyncio.wait_for(
                                 _exec_agent_for_director(
                                     agent_data, _task_trimmed, user.telegram_id,
                                 ),
-                                timeout=180,
+                                timeout=_agent_exec_timeout,
                             )
                             _ai_err = None
                             break
