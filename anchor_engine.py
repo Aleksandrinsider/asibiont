@@ -6416,14 +6416,28 @@ class AnchorEngine:
                                     pass
                         else:
                             logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
+                            _ap_dispatch_budget = max(30, _time_left() - 15)
                             async with self._ai_semaphore:
-                                await self._dispatch_agent_for_anchor(user, _goal_review_anchors[0], session)
+                                try:
+                                    await asyncio.wait_for(
+                                        self._dispatch_agent_for_anchor(user, _goal_review_anchors[0], session),
+                                        timeout=_ap_dispatch_budget,
+                                    )
+                                except asyncio.TimeoutError:
+                                    logger.warning(f"[ANCHOR] User {user_id}: ⏱ goal autopilot dispatch timeout ({_ap_dispatch_budget:.0f}s budget)")
                             _processed_goal = True
 
                     if _chat_review_anchors and not _processed_goal:
                         logger.info(f"[ANCHOR] User {user_id}: 💬 Processing chat AI review (today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
+                        _chat_dispatch_budget = max(30, _time_left() - 15)
                         async with self._ai_semaphore:
-                            await self._dispatch_agent_for_anchor(user, _chat_review_anchors[0], session)
+                            try:
+                                await asyncio.wait_for(
+                                    self._dispatch_agent_for_anchor(user, _chat_review_anchors[0], session),
+                                    timeout=_chat_dispatch_budget,
+                                )
+                            except asyncio.TimeoutError:
+                                logger.warning(f"[ANCHOR] User {user_id}: ⏱ chat AI review dispatch timeout ({_chat_dispatch_budget:.0f}s budget)")
 
         # ── 3a. DIALOG DELIVERY — после автопилота, до posts/email ──
         # Перемещён после автопилота: медленные AI-вызовы для dialog-якорей
@@ -6441,8 +6455,15 @@ class AnchorEngine:
         # Маршрутизируем через _dispatch_agent_for_anchor → агент получает tools.
         if custom_agent_anchors and has_proactive_tokens and _time_left() > 30:
             for _ca in custom_agent_anchors[:1]:
+                _ca_dispatch_budget = max(30, _time_left() - 15)
                 async with self._ai_semaphore:
-                    await self._dispatch_agent_for_anchor(user, _ca, session)
+                    try:
+                        await asyncio.wait_for(
+                            self._dispatch_agent_for_anchor(user, _ca, session),
+                            timeout=_ca_dispatch_budget,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[ANCHOR] User {user_id}: ⏱ custom agent dispatch timeout ({_ca_dispatch_budget:.0f}s budget)")
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         _email_pending_now = bool(email_silent_anchors and not _email_blocked_by_rule)
