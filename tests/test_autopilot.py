@@ -442,6 +442,35 @@ def test_sanitize_assignment_drops_dangling_tail():
     assert out.endswith(('.', '!', '?'))
 
 
+def test_sanitize_assignment_repairs_spaced_blog_url():
+    """Поручение должно чинить URL вида 'asibiont. com/blog/...'."""
+    from ai_integration.utils import sanitize_live_team_chat_text
+
+    raw = (
+        "Проверь статью и дай краткий вывод: "
+        "https://asibiont. com/blog/2544-tri-makro-signala-maya-kotorye-menyayut-pravila-igry-dlya-startapov"
+    )
+    out = sanitize_live_team_chat_text(
+        raw,
+        anchor_type='coordinator_assignment',
+        speaker_name='ASI',
+        target_name='Pablo',
+    )
+    assert "asibiont. com" not in out
+    assert "https://asibiont.com/blog/2544-tri-makro-signala-maya-kotorye-menyayut-pravila-igry-dlya-startapov" in out
+
+
+def test_normalize_task_title_repairs_spaced_domain():
+    """Нормализация title не должна ломать URL с пробелом после точки в домене."""
+    from ai_integration.utils import normalize_task_title
+
+    raw = "Разбери статью: https://asibiont. com/blog/2544-tri-makro-signala"
+    title, overflow = normalize_task_title(raw, agent_name='Pablo', max_len=200)
+    assert "asibiont. com" not in title
+    assert "https://asibiont.com/blog/2544-tri-makro-signala" in title
+    assert overflow == ""
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. Goal CRUD integrity
 # ══════════════════════════════════════════════════════════════════════════════

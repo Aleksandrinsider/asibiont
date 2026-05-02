@@ -308,6 +308,33 @@ _TASK_DESC_STRIP_PATS = [
 ]
 
 
+def repair_common_url_breaks(text: str) -> str:
+    """Repair common LLM-introduced URL breaks without changing unrelated text."""
+    if not text:
+        return text or ''
+
+    fixed = text
+
+    # Normalize malformed scheme separators: "https : //" -> "https://"
+    fixed = re.sub(r'(?i)\b(https?)\s*:\s*/\s*/\s*', r'\1://', fixed)
+
+    # Fix split domain+TLD: "asibiont. com" -> "asibiont.com"
+    fixed = re.sub(
+        r'(?i)\b([a-z0-9-]+)\s*\.\s*'
+        r'(com|ru|net|org|io|ai|dev|app|co|me|info|biz|xyz|pro|site|online|tech)\b',
+        r'\1.\2',
+        fixed,
+    )
+
+    # Fix spaces between domain and path: "example.com /blog" -> "example.com/blog"
+    fixed = re.sub(r'(?i)\b((?:https?://)?[a-z0-9.-]+\.[a-z]{2,})\s+/', r'\1/', fixed)
+
+    # Fix spaces after slashes for common URL paths
+    fixed = re.sub(r'(?i)(https?://[^\s/]+(?:/[^\s/]*)?)\s+/\s*', r'\1/', fixed)
+
+    return fixed
+
+
 def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 200) -> tuple:
     """Нормализует заголовок задачи. Возвращает (short_title, overflow_for_description).
 
@@ -327,7 +354,7 @@ def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 
     if not raw_title or not raw_title.strip():
         return (f"Задача агента {agent_name}" if agent_name else 'Задача'), ''
 
-    text = raw_title.strip()
+    text = repair_common_url_breaks(raw_title.strip())
 
     # 1. Удаляем мусорные системные префиксы (повторяем до стабилизации)
     for _pass in range(3):
@@ -401,6 +428,8 @@ def clean_technical_details(text, preserve_tool_names: bool = False):
     logger = logging.getLogger(__name__)
     original_text = text
     import re
+
+    text = repair_common_url_breaks(text)
 
     # Нормализуем URL блога: модель иногда пишет asibiont.com/blog/... без схемы.
     # Оставляем существующие http/https как есть, иначе добавляем https://.
@@ -787,6 +816,7 @@ def sanitize_live_team_chat_text(
     if _pure_live and _a in _FULL_AI_TEXT_ANCHORS:
         cleaned_live = text.replace('\r\n', '\n').replace('\r', '\n').strip()
         cleaned_live = re.sub(r'\n{3,}', '\n\n', cleaned_live)
+        cleaned_live = repair_common_url_breaks(cleaned_live)
         if speaker_name:
             cleaned_live = re.sub(
                 rf'^\s*{re.escape(speaker_name)}\s*,?\s*',

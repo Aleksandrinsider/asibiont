@@ -839,6 +839,10 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     if not text:
         return text or ''
     import re as _re_san
+    try:
+        from ai_integration.utils import repair_common_url_breaks as _repair_common_url_breaks
+    except Exception:
+        _repair_common_url_breaks = None
     global _TOOL_NAMES_RE
     if _TOOL_NAMES_RE is None:
         _tool_names = [
@@ -854,6 +858,8 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
         _pattern = r'\b(?:(?:через|с помощью|используя|действие)\s+)?(?:инструмент\s+)?(?:' + _tool_alt + r')\b[,;]?\s*'
         _TOOL_NAMES_RE = _re_san.compile(_pattern, _re_san.IGNORECASE)
     t = _TOOL_NAMES_RE.sub('', text)
+    if _repair_common_url_breaks:
+        t = _repair_common_url_breaks(t)
     # Strip report-style section headers (e.g. "Что обнаружил:", "Дальше думаю так:", "Итог:")
     # These make the agent sound like a bureaucratic form, not a live person.
     _section_headers = (
@@ -1043,6 +1049,8 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     # Capitalize very first character of the whole text if lowercase
     if t and t[0].islower():
         t = t[0].upper() + t[1:]
+    if _repair_common_url_breaks:
+        t = _repair_common_url_breaks(t)
     return t.strip()
 
 
@@ -6438,39 +6446,39 @@ class AnchorEngine:
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         _email_pending_now = bool(email_silent_anchors and not _email_blocked_by_rule)
-                if not is_night and has_proactive_tokens and _time_left() > 20 and not _email_pending_now:
-                    _cycle_post_texts = []
-          try:
-            feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
-            if feed_posts and post_count < MAX_FEED_PER_DAY:
-                for pa in feed_posts[:1]:
-                    async with self._ai_semaphore:
-                        await asyncio.wait_for(
-                                                        self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
-
-            # ── 3d. CHANNEL POSTS — публикуем до остатка дневного лимита за раз ──
-            channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
-            if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
-                _ch_slots = max(1, MAX_CHANNEL_PER_DAY - channel_count)
-                for pa in channel_posts[:_ch_slots]:
-                    async with self._ai_semaphore:
-                        await asyncio.wait_for(
-                            self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
-
-            # ── 3e. DISCORD POSTS — публикуем до остатка дневного лимита за раз ──
-            discord_posts = [a for a in post_anchors if a.anchor_type == 'discord_post']
-            if discord_posts and discord_count < MAX_CHANNEL_PER_DAY:
-                _dc_slots = max(1, MAX_CHANNEL_PER_DAY - discord_count)
-                for pa in discord_posts[:_dc_slots]:
-                    async with self._ai_semaphore:
-                        await asyncio.wait_for(
-                            self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
-          except Exception as _post_err:
-            logger.error(f"[ANCHOR] User {user_id}: post processing error: {_post_err}")
+        if not is_night and has_proactive_tokens and _time_left() > 20 and not _email_pending_now:
+            _cycle_post_texts = []
             try:
-                session.rollback()
-            except Exception:
-                pass
+                feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
+                if feed_posts and post_count < MAX_FEED_PER_DAY:
+                    for pa in feed_posts[:1]:
+                        async with self._ai_semaphore:
+                            await asyncio.wait_for(
+                                self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
+
+                # ── 3d. CHANNEL POSTS — публикуем до остатка дневного лимита за раз ──
+                channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
+                if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
+                    _ch_slots = max(1, MAX_CHANNEL_PER_DAY - channel_count)
+                    for pa in channel_posts[:_ch_slots]:
+                        async with self._ai_semaphore:
+                            await asyncio.wait_for(
+                                self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
+
+                # ── 3e. DISCORD POSTS — публикуем до остатка дневного лимита за раз ──
+                discord_posts = [a for a in post_anchors if a.anchor_type == 'discord_post']
+                if discord_posts and discord_count < MAX_CHANNEL_PER_DAY:
+                    _dc_slots = max(1, MAX_CHANNEL_PER_DAY - discord_count)
+                    for pa in discord_posts[:_dc_slots]:
+                        async with self._ai_semaphore:
+                            await asyncio.wait_for(
+                                self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
+            except Exception as _post_err:
+                logger.error(f"[ANCHOR] User {user_id}: post processing error: {_post_err}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
         elif post_anchors:
             if _email_pending_now:
                 logger.info(f"[ANCHOR] User {user_id}: ⏭ posts deferred — pending email_silent anchors have priority")
