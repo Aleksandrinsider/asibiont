@@ -7365,7 +7365,7 @@ async def on_startup(app):
     if bot and not LOCAL:
         # Не переустанавливаем webhook чаще чем раз в 5 минут (защита от Telegram flood limit)
         import time as _t_mod
-        _webhook_guard = getattr(globals(), '_webhook_last_attempt', 0)
+        _webhook_guard = globals().get('_webhook_last_attempt', 0)
         _now = _t_mod.time()
         if _now - _webhook_guard < 300:  # 5 минут
             logger.info("[WEBHOOK] Skipped (attempted %d seconds ago); next attempt in %d seconds", int(_now - _webhook_guard), int(300 - (_now - _webhook_guard)))
@@ -7385,8 +7385,21 @@ async def on_startup(app):
                     if _attempt >= 4:
                         logger.warning(f"[WEBHOOK] failed to set webhook after retries: {e}")
                         break
-                    # 2s, 4s, 8s, 16s: быстрее восстанавливается после кратких сетевых сбоев.
-                    _sleep = min(16, 2 * (2 ** _attempt))
+                    # Для Telegram flood control используем retry_after (если есть),
+                    # иначе обычный экспоненциальный backoff: 2s, 4s, 8s, 16s.
+                    _retry_after = None
+                    try:
+                        _retry_after = int(getattr(e, 'retry_after', 0) or 0)
+                    except Exception:
+                        _retry_after = 0
+                    if _retry_after <= 0:
+                        try:
+                            _m = re.search(r'Retry in\s+(\d+)\s+seconds?', str(e), flags=re.IGNORECASE)
+                            if _m:
+                                _retry_after = int(_m.group(1))
+                        except Exception:
+                            _retry_after = 0
+                    _sleep = _retry_after if _retry_after > 0 else min(16, 2 * (2 ** _attempt))
                     await asyncio.sleep(_sleep)
                     logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/5 after error: {e}")
             if not _set_ok:
