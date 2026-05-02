@@ -1617,7 +1617,11 @@ if (pwaBtn) {
 
 // ── Blog: загрузка 6 постов с кнопкой «Ещё 6» ──
 (function() {
-  var _bLang = (document.documentElement.lang || 'ru').substring(0, 2);
+    var _lsLang = '';
+    try { _lsLang = (localStorage.getItem('asibiont_lang') || '').toLowerCase(); } catch (e) { _lsLang = ''; }
+    var _bLang = (_lsLang === 'en' || _lsLang === 'ru')
+        ? _lsLang
+        : (document.documentElement.lang || 'ru').substring(0, 2);
   var _bPage = 1;
   var _bTotal = 0;
   var _bPer = 6;
