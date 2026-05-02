@@ -6438,14 +6438,15 @@ class AnchorEngine:
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         _email_pending_now = bool(email_silent_anchors and not _email_blocked_by_rule)
-        if not is_night and has_proactive_tokens and _time_left() > 20 and not _email_pending_now:
+                if not is_night and has_proactive_tokens and _time_left() > 20 and not _email_pending_now:
+                    _cycle_post_texts = []
           try:
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
             if feed_posts and post_count < MAX_FEED_PER_DAY:
                 for pa in feed_posts[:1]:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
-                            self._process_post_anchor(user, pa, session), timeout=60)
+                                                        self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
 
             # ── 3d. CHANNEL POSTS — публикуем до остатка дневного лимита за раз ──
             channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
@@ -6454,7 +6455,7 @@ class AnchorEngine:
                 for pa in channel_posts[:_ch_slots]:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
-                            self._process_post_anchor(user, pa, session), timeout=60)
+                            self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
 
             # ── 3e. DISCORD POSTS — публикуем до остатка дневного лимита за раз ──
             discord_posts = [a for a in post_anchors if a.anchor_type == 'discord_post']
@@ -6463,7 +6464,7 @@ class AnchorEngine:
                 for pa in discord_posts[:_dc_slots]:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
-                            self._process_post_anchor(user, pa, session), timeout=60)
+                            self._process_post_anchor(user, pa, session, cycle_post_texts=_cycle_post_texts), timeout=60)
           except Exception as _post_err:
             logger.error(f"[ANCHOR] User {user_id}: post processing error: {_post_err}")
             try:
@@ -24057,7 +24058,7 @@ class AnchorEngine:
     # AI DECISION LAYER
     # ═══════════════════════════════════════════════════════
 
-    async def _process_post_anchor(self, user, anchor, session):
+    async def _process_post_anchor(self, user, anchor, session, cycle_post_texts=None):
         """Обрабатывает постовый якорь: AI создаёт пост, публикует в ленту/канал."""
         try:
             # ── ЗАЩИТА ОТ ДУБЛЕЙ (race condition при деплое) ──
@@ -24066,6 +24067,26 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] Post anchor #{anchor.id} already delivered by another process, skip")
                 return
             anchor = fresh
+
+            def _is_similar_to_cycle(_txt: str) -> bool:
+                """Дедуп в рамках одного _process_user цикла: блокирует второй похожий пост."""
+                try:
+                    if not cycle_post_texts:
+                        return False
+                    _new_words = set((_txt or '').lower().split())
+                    if not _new_words:
+                        return False
+                    for _old_txt in cycle_post_texts:
+                        _old_words = set((_old_txt or '').lower().split())
+                        if not _old_words:
+                            continue
+                        _inter = len(_new_words & _old_words)
+                        _union = len(_new_words | _old_words)
+                        if _union > 0 and (_inter / _union) >= 0.55:
+                            return True
+                except Exception:
+                    return False
+                return False
 
             # Проверяем и списываем токены (в той же сессии для атомарности)
             from token_service import spend_tokens, has_enough_tokens
@@ -24097,6 +24118,14 @@ class AnchorEngine:
                 # ── DEDUP: проверяем похожесть с последними постами пользователя ──
                 if self._is_post_duplicate(user, post_text, session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — feed post too similar to existing, skip")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
+                if _is_similar_to_cycle(post_text):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — feed post too similar in same cycle, skip")
                     try:
                         session.delete(anchor)
                         session.commit()
@@ -24136,6 +24165,8 @@ class AnchorEngine:
                 )
                 session.add(activity_log)
                 session.commit()
+                if cycle_post_texts is not None:
+                    cycle_post_texts.append(post_text)
 
                 # Авто-публикация в Discord (если webhook настроен)
                 try:
@@ -24203,6 +24234,14 @@ class AnchorEngine:
                     except Exception:
                         session.rollback()
                     return
+                if _is_similar_to_cycle(post_text):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — channel post too similar in same cycle, skip")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
 
                 # Публикуем в канал
                 published = False
@@ -24223,6 +24262,8 @@ class AnchorEngine:
                 )
                 session.add(log)
                 session.commit()
+                if cycle_post_texts is not None:
+                    cycle_post_texts.append(post_text)
 
                 # Уведомляем пользователя
                 if self.bot:
@@ -24259,6 +24300,14 @@ class AnchorEngine:
                 # ── DEDUP: проверяем похожесть с последними постами ──
                 if self._is_post_duplicate(user, post_text, session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — discord post too similar, skip")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
+                if _is_similar_to_cycle(post_text):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — discord post too similar in same cycle, skip")
                     try:
                         session.delete(anchor)
                         session.commit()
@@ -24302,6 +24351,8 @@ class AnchorEngine:
                 )
                 session.add(log)
                 session.commit()
+                if cycle_post_texts is not None:
+                    cycle_post_texts.append(post_text)
 
                 # Уведомляем пользователя
                 if self.bot:
