@@ -5613,7 +5613,7 @@ class AnchorEngine:
                 _min_timeout = int(os.getenv('ANCHOR_PROCESS_USER_MIN_TIMEOUT_SEC', '300'))
                 _process_timeout_sec = min(_env_cap, max(_min_timeout, 120 + _n_user_agents * 160 + 60))
                 logger.debug("[ANCHOR] User %d: dynamic timeout=%ds (%d agents)", user_id, _process_timeout_sec, _n_user_agents)
-                await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
+                await asyncio.wait_for(self._process_user(user_id, _process_timeout_sec), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
                 self._timeout_backoff_until.pop(user_id, None)
@@ -5640,7 +5640,7 @@ class AnchorEngine:
             except Exception as e:
                 logger.error(f"[ANCHOR] Error processing user {user_id}: {e}")
 
-    async def _process_user(self, user_id: int):
+    async def _process_user(self, user_id: int, outer_timeout_sec: int | None = None):
         """Полный цикл для одного пользователя: scan → evaluate → deliver"""
         session = Session()
         try:
@@ -5664,7 +5664,7 @@ class AnchorEngine:
                 logger.debug(f"[ANCHOR] User {user_id}: advisory lock unavailable ({_lock_err}), proceeding without lock")
 
             try:
-                await self._process_user_inner(user_id, session)
+                await self._process_user_inner(user_id, session, outer_timeout_sec)
                 # Commit освобождает xact_lock автоматически
                 if use_xact_lock:
                     session.commit()
@@ -5691,14 +5691,14 @@ class AnchorEngine:
                 pass
             session.close()
 
-    async def _process_user_inner(self, user_id: int, session):
+    async def _process_user_inner(self, user_id: int, session, outer_timeout_sec: int | None = None):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
         # ── DEADLINE TRACKING ──
-        # Внешний _process_user_safe имеет timeout=ANCHOR_PROCESS_USER_TIMEOUT_SEC (default 300s).
+        # Внешний _process_user_safe задаёт dynamic timeout per-user.
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
         # чтобы НЕ допускать CancelledError от asyncio.wait_for.
         import time as _time_inner
-        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
+        _outer_timeout_sec = int(outer_timeout_sec) if outer_timeout_sec else int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
         _inner_budget_sec = max(30, _outer_timeout_sec - 30)
         _deadline = _time_inner.monotonic() + _inner_budget_sec
 
