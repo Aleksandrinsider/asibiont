@@ -5608,10 +5608,12 @@ class AnchorEngine:
                         _s_dyn.close()
                 except Exception:
                     _n_user_agents = 1
-                # coordinator (~120s) + N агентов × 160s + буфер 60s
+                # coordinator (~120s) + N агентов × 280s + буфер 90s
+                # 280s/агент покрывает worst-case retry: (80s + 2s sleep + 130s) coordinator
+                # + (80+2+130) агент = 424s → 490s с буфером безопасно вмещает всё.
                 # Минимум по умолчанию 300s (настраивается через env), чтобы не держать lock слишком долго.
                 _min_timeout = int(os.getenv('ANCHOR_PROCESS_USER_MIN_TIMEOUT_SEC', '300'))
-                _process_timeout_sec = min(_env_cap, max(_min_timeout, 120 + _n_user_agents * 160 + 60))
+                _process_timeout_sec = min(_env_cap, max(_min_timeout, 120 + _n_user_agents * 280 + 90))
                 logger.debug("[ANCHOR] User %d: dynamic timeout=%ds (%d agents)", user_id, _process_timeout_sec, _n_user_agents)
                 await asyncio.wait_for(self._process_user(user_id, _process_timeout_sec), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик

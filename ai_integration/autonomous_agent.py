@@ -6467,6 +6467,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
             # таймауте убивает другие активные запросы → Unclosed connection.
             _is_conn_broken = isinstance(e, (aiohttp.ServerDisconnectedError,
                                              aiohttp.ClientConnectorError,
+                                             aiohttp.ClientPayloadError,
                                              ConnectionResetError))
             if _is_conn_broken:
                 _sess_to_close = _QUICK_AI_SESSION
