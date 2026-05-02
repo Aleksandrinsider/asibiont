@@ -7374,7 +7374,10 @@ async def on_startup(app):
             _set_ok = False
             for _attempt in range(5):
                 try:
-                    await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
+                    await asyncio.wait_for(
+                        bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None),
+                        timeout=18,
+                    )
                     logger.info(f"✅ Webhook set to: {webhook_url}")
                     _set_ok = True
                     break
@@ -7382,8 +7385,8 @@ async def on_startup(app):
                     if _attempt >= 4:
                         logger.warning(f"[WEBHOOK] failed to set webhook after retries: {e}")
                         break
-                    # 5s, 10s, 20s, 30s: лучше переживает краткие сетевые деградации платформы.
-                    _sleep = min(30, 5 * (2 ** _attempt))
+                    # 2s, 4s, 8s, 16s: быстрее восстанавливается после кратких сетевых сбоев.
+                    _sleep = min(16, 2 * (2 ** _attempt))
                     await asyncio.sleep(_sleep)
                     logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/5 after error: {e}")
             if not _set_ok:

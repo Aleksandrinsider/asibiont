@@ -975,6 +975,7 @@ class ExternalAPIClient:
         
         session = await self._get_session()
         
+        _fail_recorded = False
         try:
             url = "https://api.openweathermap.org/data/2.5/weather"
             params = {
@@ -1015,12 +1016,14 @@ class ExternalAPIClient:
                 except (asyncio.TimeoutError, aiohttp.ClientError) as _net_err:
                     if _attempt >= 2:
                         self._weather_record_fail()
+                        _fail_recorded = True
                         raise
                     await asyncio.sleep(0.8 * (_attempt + 1))
                     logger.warning(f"[WEATHER] transient network error (attempt {_attempt+1}/3): {_net_err}")
                     
         except Exception as e:
-            self._weather_record_fail()
+            if not _fail_recorded:
+                self._weather_record_fail()
             _rec_err('openweathermap', f'Exception: {e}')
             logger.error(f"[WEATHER] Error: {e}")
             return None

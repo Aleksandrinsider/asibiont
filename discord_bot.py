@@ -72,56 +72,61 @@ async def start_discord_bot():
         logger.error("discord.py not installed — run: pip install discord.py")
         return
 
-    intents = discord.Intents.default()
-    intents.message_content = True
-    intents.dm_messages = True
+    def _build_bot() -> discord.Client:
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.dm_messages = True
 
-    bot = discord.Client(intents=intents)
-    _discord_bot = bot
+        bot_local = discord.Client(intents=intents)
 
-    @bot.event
-    async def on_ready():
-        logger.info(f"✅ Discord bot connected as {bot.user} (id={bot.user.id})")
+        @bot_local.event
+        async def on_ready():
+            logger.info(f"✅ Discord bot connected as {bot_local.user} (id={bot_local.user.id})")
 
-    @bot.event
-    async def on_message(message: discord.Message):
-        global _processing_lock
-        if _processing_lock is None:
-            _processing_lock = asyncio.Lock()
+        @bot_local.event
+        async def on_message(message: discord.Message):
+            global _processing_lock
+            if _processing_lock is None:
+                _processing_lock = asyncio.Lock()
 
-        # Ignore self
-        if message.author == bot.user:
-            return
-
-        # Only handle DMs
-        if not isinstance(message.channel, discord.DMChannel):
-            return
-
-        # ── Dedup guard (reconnect / gateway replay) ──
-        # Use lock to prevent two coroutines processing the same message.id simultaneously
-        async with _processing_lock:
-            if message.id in _processed_msg_ids:
-                logger.debug(f"[DISCORD] Skipping duplicate msg {message.id}")
+            # Ignore self
+            if message.author == bot_local.user:
                 return
-            _processed_msg_ids.add(message.id)
-            if len(_processed_msg_ids) > _DEDUP_MAX:
-                to_drop = sorted(_processed_msg_ids)[:_DEDUP_MAX // 2]
-                _processed_msg_ids.difference_update(to_drop)
 
-        discord_user_id = message.author.id
-        text = message.content.strip()
-        if not text:
-            return
+            # Only handle DMs
+            if not isinstance(message.channel, discord.DMChannel):
+                return
 
-        logger.info(f"[DISCORD] DM from {message.author} ({discord_user_id}): {text[:80]}")
+            # ── Dedup guard (reconnect / gateway replay) ──
+            # Use lock to prevent two coroutines processing the same message.id simultaneously
+            async with _processing_lock:
+                if message.id in _processed_msg_ids:
+                    logger.debug(f"[DISCORD] Skipping duplicate msg {message.id}")
+                    return
+                _processed_msg_ids.add(message.id)
+                if len(_processed_msg_ids) > _DEDUP_MAX:
+                    to_drop = sorted(_processed_msg_ids)[:_DEDUP_MAX // 2]
+                    _processed_msg_ids.difference_update(to_drop)
 
-        # Indicate typing
-        async with message.channel.typing():
-            reply = await _handle_discord_message(discord_user_id, message.author, text)
+            discord_user_id = message.author.id
+            text = message.content.strip()
+            if not text:
+                return
 
-        # Split long messages (Discord max 2000 chars)
-        for chunk in _split_message(reply):
-            await message.channel.send(chunk)
+            logger.info(f"[DISCORD] DM from {message.author} ({discord_user_id}): {text[:80]}")
+
+            # Indicate typing
+            async with message.channel.typing():
+                reply = await _handle_discord_message(discord_user_id, message.author, text)
+
+            # Split long messages (Discord max 2000 chars)
+            for chunk in _split_message(reply):
+                await message.channel.send(chunk)
+
+        return bot_local
+
+    bot = _build_bot()
+    _discord_bot = bot
 
     async def runner():
         _retry = 0
@@ -134,7 +139,8 @@ async def start_discord_bot():
             except Exception as e:
                 _retry += 1
                 _is_timeout = isinstance(e, (asyncio.TimeoutError, aiohttp.ClientError, TimeoutError))
-                if _is_timeout and _retry <= 5:
+                _is_closed_session = 'Session is closed' in str(e)
+                if (_is_timeout or _is_closed_session) and _retry <= 5:
                     _delay = min(30, 2 * _retry)
                     logger.warning(f"Discord bot transient network error (retry {_retry}/5 in {_delay}s): {e}")
                     try:
@@ -142,6 +148,8 @@ async def start_discord_bot():
                             await bot.close()
                     except Exception:
                         pass
+                    bot = _build_bot()
+                    _discord_bot = bot
                     await asyncio.sleep(_delay)
                     continue
                 logger.error(f"Discord bot error: {e}", exc_info=True)
