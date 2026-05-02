@@ -30,8 +30,14 @@ import hashlib
 import hmac
 import html as html_module
 import json
+import binascii
 import warnings
 from dotenv import load_dotenv
+
+try:
+    from cryptography.fernet import InvalidToken as _FernetInvalidToken
+except Exception:
+    _FernetInvalidToken = None
 
 # Load environment variables
 load_dotenv()
@@ -3375,7 +3381,7 @@ async def session_error_middleware(request, handler):
     except web.HTTPException:
         # Normal HTTP responses (404, 403, etc.) — pass through without logging
         raise
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError, binascii.Error) as e:
         logger.error(f"Corrupted session cookie detected: {e}, clearing cookie")
         # Create response without session cookie
         response = web.Response(status=302)
@@ -3383,6 +3389,16 @@ async def session_error_middleware(request, handler):
         response.del_cookie('AIOHTTP_SESSION', domain=None, path='/')
         return response
     except Exception as e:
+        # EncryptedCookieStorage can raise InvalidToken for stale/tampered cookies.
+        if _FernetInvalidToken is not None and isinstance(e, _FernetInvalidToken):
+            logger.error("Corrupted encrypted session cookie detected (InvalidToken), clearing cookie")
+            response = web.Response(status=302)
+            response.headers['Location'] = request.path
+            response.del_cookie('AIOHTTP_SESSION', domain=None, path='/')
+            return response
+        if isinstance(e, (ConnectionResetError, BrokenPipeError)):
+            logger.debug(f"Client disconnected during {request.method} {request.path}: {e}")
+            raise
         logger.error(f"Session error [{type(e).__name__}] on {request.method} {request.path}: {e}", exc_info=True)
         raise
 
