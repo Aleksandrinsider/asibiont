@@ -10731,6 +10731,21 @@ async def blog_handler(request):
     return aiohttp_jinja2.render_template('blog.html', request, {'post': None, 'lang': lang})
 
 
+def _looks_mostly_russian(text: str) -> bool:
+    """Detect mostly-Russian body text while ignoring markdown noise (images/links/URLs)."""
+    if not text:
+        return False
+    import re as _re_lang
+    _sample = text[:2000]
+    _sample = _re_lang.sub(r'!\[[^\]]*\]\([^)]+\)', ' ', _sample)
+    _sample = _re_lang.sub(r'\[[^\]]+\]\([^)]+\)', ' ', _sample)
+    _sample = _re_lang.sub(r'https?://\S+', ' ', _sample)
+    _sample = _re_lang.sub(r'<[^>]+>', ' ', _sample)
+    _cyr = len(_re_lang.findall(r'[А-Яа-яЁё]', _sample))
+    _lat = len(_re_lang.findall(r'[A-Za-z]', _sample))
+    return _cyr >= 120 and _cyr > (_lat * 1.2)
+
+
 async def blog_post_handler(request):
     """Отдельная страница поста блога (SSR для SEO).
     Принимает: /blog/882-moya-statya  (slug) или /blog/882  (legacy ID → redirect).
@@ -10774,8 +10789,7 @@ async def blog_post_handler(request):
         lang = 'en' if _lang_prefix else 'ru'
         # Use EN translation if available and requested
         if lang == 'en':
-            import re as _re_en_chk
-            _en_looks_ru = bool(_re_en_chk.search(r'[А-Яа-яЁё]{6,}', (note.content_en or '')[:600]))
+            _en_looks_ru = _looks_mostly_russian(note.content_en or '')
             _needs_en_trans = (
                 note.title_en is None
                 or not note.content_en
@@ -10798,14 +10812,14 @@ async def blog_post_handler(request):
                     except Exception:
                         pass
 
-            _en_looks_ru_after = bool(_re_en_chk.search(r'[А-Яа-яЁё]{6,}', (note.content_en or '')[:600]))
+            _en_looks_ru_after = _looks_mostly_russian(note.content_en or '')
             _has_en_content = bool(note.content_en) and not _en_looks_ru_after
             if _has_en_content:
                 display_title = note.title_en or 'Untitled'
                 display_content = note.content_en or ''
             else:
-                display_title = note.title_en or 'Translating to English...'
-                display_content = 'English version is being prepared. Please refresh in a few moments.'
+                display_title = note.title_en or note.title or 'Untitled'
+                display_content = note.content_en or note.content or 'English version is being prepared. Please refresh in a few moments.'
         else:
             display_title = note.title or 'Без заголовка'
             display_content = note.content or ''
@@ -10860,8 +10874,7 @@ async def api_blog_handler(request):
             username = users_map.get(n.user_id)
             author = f"@{username}" if username else "AI-агент"
             if lang == 'en':
-                import re as _re_en_chk_api
-                _en_looks_ru = bool(_re_en_chk_api.search(r'[А-Яа-яЁё]{6,}', (n.content_en or '')[:600]))
+                _en_looks_ru = _looks_mostly_russian(n.content_en or '')
                 _needs_en = (
                     n.title_en is None
                     or not n.content_en
@@ -10877,9 +10890,8 @@ async def api_blog_handler(request):
                         )
                     except Exception:
                         pass
-                    # Never show RU body on EN routes.
-                    display_title = n.title_en or 'Translating to English...'
-                    display_content = 'English version is being prepared. Please refresh shortly.'
+                    display_title = n.title_en or n.title or 'Untitled'
+                    display_content = n.content_en or n.content or 'English version is being prepared. Please refresh shortly.'
                 else:
                     display_title = n.title_en or 'Untitled'
                     display_content = n.content_en or ''
