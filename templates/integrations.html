@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="{{ lang|default('ru') }}">
 <head>
     <meta charset="UTF-8">
@@ -6,16 +6,16 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>{% if lang == 'en' %}Incoming Webhooks — ASI Biont | Connect any service to your AI agent{% else %}Входящие вебхуки — ASI Biont | Подключите любой сервис к AI-агенту{% endif %}</title>
-    <meta name="description" content="{% if lang == 'en' %}Connect any external service to your ASI Biont AI agent via incoming webhooks. CRM, GitHub, payment systems — the agent receives events and notifies you in Telegram.{% else %}Подключите любой внешний сервис к AI-агенту ASI Biont через входящие вебхуки. CRM, GitHub, платёжные системы — агент получает события и уведомляет вас в Telegram.{% endif %}">
+    <title>{% if lang == 'en' %}Incoming Webhooks вЂ” ASI Biont | Connect any service to your AI agent{% else %}Р’С…РѕРґСЏС‰РёРµ РІРµР±С…СѓРєРё вЂ” ASI Biont | РџРѕРґРєР»СЋС‡РёС‚Рµ Р»СЋР±РѕР№ СЃРµСЂРІРёСЃ Рє AI-Р°РіРµРЅС‚Сѓ{% endif %}</title>
+    <meta name="description" content="{% if lang == 'en' %}Connect any external service to your ASI Biont AI agent via incoming webhooks. CRM, GitHub, payment systems вЂ” the agent receives events and notifies you in Telegram.{% else %}РџРѕРґРєР»СЋС‡РёС‚Рµ Р»СЋР±РѕР№ РІРЅРµС€РЅРёР№ СЃРµСЂРІРёСЃ Рє AI-Р°РіРµРЅС‚Сѓ ASI Biont С‡РµСЂРµР· РІС…РѕРґСЏС‰РёРµ РІРµР±С…СѓРєРё. CRM, GitHub, РїР»Р°С‚С‘Р¶РЅС‹Рµ СЃРёСЃС‚РµРјС‹ вЂ” Р°РіРµРЅС‚ РїРѕР»СѓС‡Р°РµС‚ СЃРѕР±С‹С‚РёСЏ Рё СѓРІРµРґРѕРјР»СЏРµС‚ РІР°СЃ РІ Telegram.{% endif %}">
     <meta name="author" content="ASI Biont">
     <meta name="robots" content="index, follow">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/integrations">
-    <meta property="og:title" content="{% if lang == 'en' %}Incoming Webhooks — ASI Biont{% else %}Входящие вебхуки — ASI Biont{% endif %}">
-    <meta property="og:description" content="{% if lang == 'en' %}Connect any external service to your AI agent via webhooks.{% else %}Подключите любой внешний сервис к AI-агенту через вебхуки.{% endif %}">
+    <meta property="og:title" content="{% if lang == 'en' %}Incoming Webhooks вЂ” ASI Biont{% else %}Р’С…РѕРґСЏС‰РёРµ РІРµР±С…СѓРєРё вЂ” ASI Biont{% endif %}">
+    <meta property="og:description" content="{% if lang == 'en' %}Connect any external service to your AI agent via webhooks.{% else %}РџРѕРґРєР»СЋС‡РёС‚Рµ Р»СЋР±РѕР№ РІРЅРµС€РЅРёР№ СЃРµСЂРІРёСЃ Рє AI-Р°РіРµРЅС‚Сѓ С‡РµСЂРµР· РІРµР±С…СѓРєРё.{% endif %}">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-preview.png">
 
     <link rel="icon" type="image/svg+xml" href="/static/asibiont.svg">
@@ -156,112 +156,112 @@
 </head>
 <body>
     <div class="faq-container">
-        <a href="/dashboard" style="display:inline-block;color:#59636E;text-decoration:none;font-size:13px;margin-bottom:24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">{% if lang == 'en' %}< Back{% else %}< На главную{% endif %}</a>
+        <a href="/dashboard" style="display:inline-block;color:#59636E;text-decoration:none;font-size:13px;margin-bottom:24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">{% if lang == 'en' %}< Back{% else %}< РќР° РіР»Р°РІРЅСѓСЋ{% endif %}</a>
 
-        <h1>{% if lang == 'en' %}Incoming Webhooks{% else %}Входящие вебхуки{% endif %}</h1>
-        <p class="faq-subtitle">{% if lang == 'en' %}Connect any external service to your AI agent — CRM, GitHub, payment systems, your own server{% else %}Подключите любой внешний сервис к AI-агенту — CRM, GitHub, платёжные системы, ваш сервер{% endif %}</p>
+        <h1>{% if lang == 'en' %}Incoming Webhooks{% else %}Р’С…РѕРґСЏС‰РёРµ РІРµР±С…СѓРєРё{% endif %}</h1>
+        <p class="faq-subtitle">{% if lang == 'en' %}Connect any external service to your AI agent вЂ” CRM, GitHub, payment systems, your own server{% else %}РџРѕРґРєР»СЋС‡РёС‚Рµ Р»СЋР±РѕР№ РІРЅРµС€РЅРёР№ СЃРµСЂРІРёСЃ Рє AI-Р°РіРµРЅС‚Сѓ вЂ” CRM, GitHub, РїР»Р°С‚С‘Р¶РЅС‹Рµ СЃРёСЃС‚РµРјС‹, РІР°С€ СЃРµСЂРІРµСЂ{% endif %}</p>
 
         <div class="faq-item open">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}What are incoming webhooks?{% else %}Что такое входящие вебхуки?{% endif %}</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}What are incoming webhooks?{% else %}Р§С‚Рѕ С‚Р°РєРѕРµ РІС…РѕРґСЏС‰РёРµ РІРµР±С…СѓРєРё?{% endif %}</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
                     {% if lang == 'en' %}
-                        Any external service can send events to your AI agent. The agent receives the payload and sends you a notification in Telegram. GitHub can notify about a new pull request, your CRM about a new lead, your payment system about a successful payment — and the agent immediately creates a task or sends a message.
+                        Any external service can send events to your AI agent. The agent receives the payload and sends you a notification in Telegram. GitHub can notify about a new pull request, your CRM about a new lead, your payment system about a successful payment вЂ” and the agent immediately creates a task or sends a message.
                     {% else %}
-                        Любой внешний сервис может отправлять события вашему AI-агенту. Агент получает данные и присылает вам уведомление в Telegram. GitHub сообщит о новом pull request, CRM — о новом лиде, платёжная система — об успешной оплате, и агент тут же создаст задачу или отправит сообщение.
+                        Р›СЋР±РѕР№ РІРЅРµС€РЅРёР№ СЃРµСЂРІРёСЃ РјРѕР¶РµС‚ РѕС‚РїСЂР°РІР»СЏС‚СЊ СЃРѕР±С‹С‚РёСЏ РІР°С€РµРјСѓ AI-Р°РіРµРЅС‚Сѓ. РђРіРµРЅС‚ РїРѕР»СѓС‡Р°РµС‚ РґР°РЅРЅС‹Рµ Рё РїСЂРёСЃС‹Р»Р°РµС‚ РІР°Рј СѓРІРµРґРѕРјР»РµРЅРёРµ РІ Telegram. GitHub СЃРѕРѕР±С‰РёС‚ Рѕ РЅРѕРІРѕРј pull request, CRM вЂ” Рѕ РЅРѕРІРѕРј Р»РёРґРµ, РїР»Р°С‚С‘Р¶РЅР°СЏ СЃРёСЃС‚РµРјР° вЂ” РѕР± СѓСЃРїРµС€РЅРѕР№ РѕРїР»Р°С‚Рµ, Рё Р°РіРµРЅС‚ С‚СѓС‚ Р¶Рµ СЃРѕР·РґР°СЃС‚ Р·Р°РґР°С‡Сѓ РёР»Рё РѕС‚РїСЂР°РІРёС‚ СЃРѕРѕР±С‰РµРЅРёРµ.
                     {% endif %}
                 </div>
             </div>
         </div>
 
         <div class="faq-item open">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}How to set up a webhook?{% else %}Как настроить вебхук?{% endif %}</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}How to set up a webhook?{% else %}РљР°Рє РЅР°СЃС‚СЂРѕРёС‚СЊ РІРµР±С…СѓРє?{% endif %}</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
                     <ol class="steps">
-                        <li>{% if lang == 'en' %}Find your agent ID in the agent settings in the dashboard.{% else %}Найдите ID вашего агента в настройках агента в дашборде.{% endif %}</li>
+                        <li>{% if lang == 'en' %}Find your agent ID in the agent settings in the dashboard.{% else %}РќР°Р№РґРёС‚Рµ ID РІР°С€РµРіРѕ Р°РіРµРЅС‚Р° РІ РЅР°СЃС‚СЂРѕР№РєР°С… Р°РіРµРЅС‚Р° РІ РґР°С€Р±РѕСЂРґРµ.{% endif %}</li>
                         <li>
-                            {% if lang == 'en' %}Get a webhook token via API:{% else %}Получите токен вебхука через API:{% endif %}
+                            {% if lang == 'en' %}Get a webhook token via API:{% else %}РџРѕР»СѓС‡РёС‚Рµ С‚РѕРєРµРЅ РІРµР±С…СѓРєР° С‡РµСЂРµР· API:{% endif %}
                             <pre>GET https://asibiont.com/api/agent-webhook-token/{agent_id}?action=regenerate</pre>
-                            {% if lang == 'en' %}Response:{% else %}Ответ:{% endif %}
+                            {% if lang == 'en' %}Response:{% else %}РћС‚РІРµС‚:{% endif %}
                             <pre>{"token": "abc123...", "url": "https://asibiont.com/api/agent-webhook/42/abc123..."}</pre>
                         </li>
                         <li>
-                            {% if lang == 'en' %}Configure the external service to send POST requests to:{% else %}Настройте внешний сервис отправлять POST-запросы на:{% endif %}
+                            {% if lang == 'en' %}Configure the external service to send POST requests to:{% else %}РќР°СЃС‚СЂРѕР№С‚Рµ РІРЅРµС€РЅРёР№ СЃРµСЂРІРёСЃ РѕС‚РїСЂР°РІР»СЏС‚СЊ POST-Р·Р°РїСЂРѕСЃС‹ РЅР°:{% endif %}
                             <pre>POST https://asibiont.com/api/agent-webhook/{agent_id}/{token}</pre>
-                            {% if lang == 'en' %}Request body (JSON, any fields):{% else %}Тело запроса (JSON, любые поля):{% endif %}
+                            {% if lang == 'en' %}Request body (JSON, any fields):{% else %}РўРµР»Рѕ Р·Р°РїСЂРѕСЃР° (JSON, Р»СЋР±С‹Рµ РїРѕР»СЏ):{% endif %}
                             <pre>{
   "event": "new_order",
   "order_id": 12345,
   "amount": 9900,
-  "customer": "Иван Петров"
+  "customer": "РРІР°РЅ РџРµС‚СЂРѕРІ"
 }</pre>
                         </li>
-                        <li>{% if lang == 'en' %}The agent receives the event, creates a task, and sends you a notification in Telegram.{% else %}Агент получит событие, создаст задачу и пришлёт вам уведомление в Telegram.{% endif %}</li>
+                        <li>{% if lang == 'en' %}The agent receives the event, creates a task, and sends you a notification in Telegram.{% else %}РђРіРµРЅС‚ РїРѕР»СѓС‡РёС‚ СЃРѕР±С‹С‚РёРµ, СЃРѕР·РґР°СЃС‚ Р·Р°РґР°С‡Сѓ Рё РїСЂРёС€Р»С‘С‚ РІР°Рј СѓРІРµРґРѕРјР»РµРЅРёРµ РІ Telegram.{% endif %}</li>
                     </ol>
                 </div>
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}Is the webhook secure?{% else %}Насколько это безопасно?{% endif %}</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}Is the webhook secure?{% else %}РќР°СЃРєРѕР»СЊРєРѕ СЌС‚Рѕ Р±РµР·РѕРїР°СЃРЅРѕ?{% endif %}</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
                     {% if lang == 'en' %}
-                        The token is verified via constant-time comparison (timing-safe) — this prevents timing attacks. You can regenerate the token at any time by calling the same endpoint with <code>?action=regenerate</code>. The old token becomes invalid immediately.
+                        The token is verified via constant-time comparison (timing-safe) вЂ” this prevents timing attacks. You can regenerate the token at any time by calling the same endpoint with <code>?action=regenerate</code>. The old token becomes invalid immediately.
                     {% else %}
-                        Токен проверяется через защищённое сравнение (timing-safe) — это исключает timing-атаки. Вы можете перегенерировать токен в любой момент, снова вызвав endpoint с <code>?action=regenerate</code>. Старый токен сразу становится недействительным.
+                        РўРѕРєРµРЅ РїСЂРѕРІРµСЂСЏРµС‚СЃСЏ С‡РµСЂРµР· Р·Р°С‰РёС‰С‘РЅРЅРѕРµ СЃСЂР°РІРЅРµРЅРёРµ (timing-safe) вЂ” СЌС‚Рѕ РёСЃРєР»СЋС‡Р°РµС‚ timing-Р°С‚Р°РєРё. Р’С‹ РјРѕР¶РµС‚Рµ РїРµСЂРµРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ С‚РѕРєРµРЅ РІ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚, СЃРЅРѕРІР° РІС‹Р·РІР°РІ endpoint СЃ <code>?action=regenerate</code>. РЎС‚Р°СЂС‹Р№ С‚РѕРєРµРЅ СЃСЂР°Р·Сѓ СЃС‚Р°РЅРѕРІРёС‚СЃСЏ РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅС‹Рј.
                     {% endif %}
                 </div>
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}Which services can send webhooks?{% else %}Какие сервисы можно подключить?{% endif %}</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}Which services can send webhooks?{% else %}РљР°РєРёРµ СЃРµСЂРІРёСЃС‹ РјРѕР¶РЅРѕ РїРѕРґРєР»СЋС‡РёС‚СЊ?{% endif %}</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    {% if lang == 'en' %}Any service that supports outgoing webhooks (POST requests):{% else %}Любой сервис, поддерживающий исходящие вебхуки (POST-запросы):{% endif %}
+                    {% if lang == 'en' %}Any service that supports outgoing webhooks (POST requests):{% else %}Р›СЋР±РѕР№ СЃРµСЂРІРёСЃ, РїРѕРґРґРµСЂР¶РёРІР°СЋС‰РёР№ РёСЃС…РѕРґСЏС‰РёРµ РІРµР±С…СѓРєРё (POST-Р·Р°РїСЂРѕСЃС‹):{% endif %}
                     <ul style="padding-left: 20px; margin: 8px 0;">
-                        <li>GitHub / GitLab — {% if lang == 'en' %}pull requests, issues, deployments{% else %}pull requests, issues, деплои{% endif %}</li>
-                        <li>{% if lang == 'en' %}Payment systems{% else %}Платёжные системы{% endif %} (Stripe, ЮKassa, Robokassa)</li>
-                        <li>{% if lang == 'en' %}CRM systems{% else %}CRM-системы{% endif %} (AmoCRM, Bitrix24, HubSpot)</li>
-                        <li>{% if lang == 'en' %}Your own server or script{% else %}Ваш собственный сервер или скрипт{% endif %}</li>
+                        <li>GitHub / GitLab вЂ” {% if lang == 'en' %}pull requests, issues, deployments{% else %}pull requests, issues, РґРµРїР»РѕРё{% endif %}</li>
+                        <li>{% if lang == 'en' %}Payment systems{% else %}РџР»Р°С‚С‘Р¶РЅС‹Рµ СЃРёСЃС‚РµРјС‹{% endif %} (Stripe, Р®Kassa, Robokassa)</li>
+                        <li>{% if lang == 'en' %}CRM systems{% else %}CRM-СЃРёСЃС‚РµРјС‹{% endif %} (AmoCRM, Bitrix24, HubSpot)</li>
+                        <li>{% if lang == 'en' %}Your own server or script{% else %}Р’Р°С€ СЃРѕР±СЃС‚РІРµРЅРЅС‹Р№ СЃРµСЂРІРµСЂ РёР»Рё СЃРєСЂРёРїС‚{% endif %}</li>
                         <li>Zapier, Make (Integromat), n8n</li>
-                        <li>{% if lang == 'en' %}Any monitoring or alert system{% else %}Любая система мониторинга или алертов{% endif %}</li>
+                        <li>{% if lang == 'en' %}Any monitoring or alert system{% else %}Р›СЋР±Р°СЏ СЃРёСЃС‚РµРјР° РјРѕРЅРёС‚РѕСЂРёРЅРіР° РёР»Рё Р°Р»РµСЂС‚РѕРІ{% endif %}</li>
                     </ul>
                 </div>
             </div>
         </div>
 
         <div class="faq-item">
-            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}What format does the request body need to be?{% else %}Какой формат тела запроса нужен?{% endif %}</div>
+            <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">{% if lang == 'en' %}What format does the request body need to be?{% else %}РљР°РєРѕР№ С„РѕСЂРјР°С‚ С‚РµР»Р° Р·Р°РїСЂРѕСЃР° РЅСѓР¶РµРЅ?{% endif %}</div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
                     {% if lang == 'en' %}
-                        JSON with any fields. The agent receives the entire payload and converts it into a readable notification. There are no required fields — send whatever your service provides. The <code>Content-Type</code> header should be <code>application/json</code>.
+                        JSON with any fields. The agent receives the entire payload and converts it into a readable notification. There are no required fields вЂ” send whatever your service provides. The <code>Content-Type</code> header should be <code>application/json</code>.
                     {% else %}
-                        JSON с любыми полями. Агент получит весь payload и преобразует его в читаемое уведомление. Обязательных полей нет — можно отправлять то, что предоставляет ваш сервис. Заголовок <code>Content-Type</code> должен быть <code>application/json</code>.
+                        JSON СЃ Р»СЋР±С‹РјРё РїРѕР»СЏРјРё. РђРіРµРЅС‚ РїРѕР»СѓС‡РёС‚ РІРµСЃСЊ payload Рё РїСЂРµРѕР±СЂР°Р·СѓРµС‚ РµРіРѕ РІ С‡РёС‚Р°РµРјРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ. РћР±СЏР·Р°С‚РµР»СЊРЅС‹С… РїРѕР»РµР№ РЅРµС‚ вЂ” РјРѕР¶РЅРѕ РѕС‚РїСЂР°РІР»СЏС‚СЊ С‚Рѕ, С‡С‚Рѕ РїСЂРµРґРѕСЃС‚Р°РІР»СЏРµС‚ РІР°С€ СЃРµСЂРІРёСЃ. Р—Р°РіРѕР»РѕРІРѕРє <code>Content-Type</code> РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ <code>application/json</code>.
                     {% endif %}
                 </div>
             </div>
         </div>
 
         <div class="faq-cta">
-            <p>{% if lang == 'en' %}Ready to connect your services?{% else %}Готовы подключить свои сервисы?{% endif %}</p>
+            <p>{% if lang == 'en' %}Ready to connect your services?{% else %}Р“РѕС‚РѕРІС‹ РїРѕРґРєР»СЋС‡РёС‚СЊ СЃРІРѕРё СЃРµСЂРІРёСЃС‹?{% endif %}</p>
             <a href="https://t.me/asibiont_bot">Telegram</a>
-            <a href="/dashboard" class="secondary">{% if lang == 'en' %}Dashboard{% else %}Дашборд{% endif %}</a>
+            <a href="/dashboard" class="secondary">{% if lang == 'en' %}Dashboard{% else %}Р”Р°С€Р±РѕСЂРґ{% endif %}</a>
         </div>
 
         <div class="footer-links" style="text-align:center;margin-top:24px;padding-top:24px;padding-bottom:24px;color:#6C727F;font-size:13px;">
-            <a href="/" style="color:#59636E;text-decoration:none;margin-right:16px;">Главная</a>
-            <a href="/blog" style="color:#59636E;text-decoration:none;margin-right:16px;">Блог</a>
+            <a href="/" style="color:#59636E;text-decoration:none;margin-right:16px;">Р“Р»Р°РІРЅР°СЏ</a>
+            <a href="/blog" style="color:#59636E;text-decoration:none;margin-right:16px;">Р‘Р»РѕРі</a>
             <a href="/faq" style="color:#59636E;text-decoration:none;margin-right:16px;">FAQ</a>
-            <a href="/subscription-tiers" style="color:#59636E;text-decoration:none;margin-right:16px;">Тарифы</a>
-            <a href="https://t.me/aleksandrinsider" target="_blank" style="color:#59636E;text-decoration:none;margin-right:16px;">Поддержка</a>
-            <a href="/privacy" style="color:#59636E;text-decoration:none;margin-right:16px;">Соглашение</a>
-            <a href="/terms" style="color:#59636E;text-decoration:none;margin-right:16px;">Правила</a>
-            <a href="/arena" style="color:#59636E;text-decoration:none;margin-right:16px;">Арена AI</a>
-            <a href="/integrations" style="color:#1F2328;text-decoration:none;font-weight:600;">Вебхуки</a>
+            <a href="/subscription-tiers" style="color:#59636E;text-decoration:none;margin-right:16px;">РўР°СЂРёС„С‹</a>
+            <a href="https://t.me/aleksandrinsider" target="_blank" style="color:#59636E;text-decoration:none;margin-right:16px;">РџРѕРґРґРµСЂР¶РєР°</a>
+            <a href="/privacy" style="color:#59636E;text-decoration:none;margin-right:16px;">РЎРѕРіР»Р°С€РµРЅРёРµ</a>
+            <a href="/terms" style="color:#59636E;text-decoration:none;margin-right:16px;">РџСЂР°РІРёР»Р°</a>
+            <a href="/arena" style="color:#59636E;text-decoration:none;margin-right:16px;">РђСЂРµРЅР° AI</a>
+            <a href="/integrations" style="color:#1F2328;text-decoration:none;font-weight:600;">Р’РµР±С…СѓРєРё</a>
             <div style="margin-top:8px;">2026 ASI Biont</div>
         </div>
     </div>
@@ -358,7 +358,7 @@
       var a = item.querySelector('.faq-answer-inner');
       if (!a) return;
       if (i === 1) {
-        // Setup steps — rebuild HTML
+        // Setup steps вЂ” rebuild HTML
         var s = t.setupSteps;
         a.innerHTML = '<ol class="steps">'
           + '<li>' + s[0] + '</li>'
@@ -397,7 +397,6 @@
     })(window, document,'script','https://mc.yandex.ru/metrika/tag.js', 'ym');
 
     ym(107270723, 'init', {
-        ssr:true,
         clickmap:true,
         trackLinks:true,
         accurateTrackBounce:true,
