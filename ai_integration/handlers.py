@@ -9783,6 +9783,7 @@ async def edit_note(new_content: str, user_id: int, note_id: int = None, new_tit
         session: DB сессия
     """
     close_session = False
+    from models import Note
     if session is None:
         session = Session()
         close_session = True

@@ -6010,12 +6010,13 @@ class AnchorEngine:
         for _sa in deliverable:
             if _sa.anchor_type in REVIEW_SILENT_TYPES:
                 _tr = _sa.triggered_at
-                if _tr and (_tr.tzinfo is None and _tr < _stuck_threshold.replace(tzinfo=None)
-                            or _tr.tzinfo is not None and _tr < _stuck_threshold):
+                if _tr:
+                    _tr_cmp = _tr.replace(tzinfo=timezone.utc) if _tr.tzinfo is None else _tr.astimezone(timezone.utc)
+                    if _tr_cmp < _stuck_threshold:
                     # Ставим delivered_at = created_at, а НЕ now() — чтобы gap-check
                     # не считал это свежей доставкой и не блокировал следующий dispatch
-                    _sa.delivered_at = _sa.created_at or datetime.now(timezone.utc)
-                    _stuck_cleared += 1
+                        _sa.delivered_at = _sa.created_at or datetime.now(timezone.utc)
+                        _stuck_cleared += 1
         if _stuck_cleared:
             try:
                 session.commit()
@@ -6757,6 +6758,7 @@ class AnchorEngine:
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 0"))
                         _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
                         _s.commit()
                         return True
@@ -25363,18 +25365,29 @@ class AnchorEngine:
                             _draft_failures.append(f'{d_obj.id}:compose_empty')
                             continue
 
-                        # Парсим JSON
-                        import json as _json_compose
-                        text = ai_result.strip()
-                        if '```' in text:
-                            for part in text.split('```'):
-                                part = part.strip()
-                                if part.startswith('json'):
-                                    part = part[4:].strip()
-                                if part.startswith('{'):
-                                    text = part
-                                    break
-                        parsed = _json_compose.loads(text)
+                        # Парсим JSON устойчиво: fenced blocks, лишний текст, битый хвост.
+                        import json as _json_compose, re as _re_compose
+
+                        def _parse_email_compose_json(_raw_text: str) -> dict:
+                            _txt = (_raw_text or '').strip()
+                            if '```' in _txt:
+                                for _part in _txt.split('```'):
+                                    _part = _part.strip()
+                                    if _part.startswith('json'):
+                                        _part = _part[4:].strip()
+                                    if _part.startswith('{'):
+                                        _txt = _part
+                                        break
+                            try:
+                                return _json_compose.loads(_txt)
+                            except Exception:
+                                pass
+                            _match = _re_compose.search(r'\{[\s\S]*\}', _txt)
+                            if _match:
+                                return _json_compose.loads(_match.group(0))
+                            raise ValueError('compose json parse failed')
+
+                        parsed = _parse_email_compose_json(ai_result)
                         subject = parsed.get('subject', '')
                         body = parsed.get('body', '')
 
@@ -25426,13 +25439,7 @@ class AnchorEngine:
                                         timeout=60,
                                     )
                                     if _retry_result:
-                                        _rt = _retry_result.strip()
-                                        if '```' in _rt:
-                                            for _rp in _rt.split('```'):
-                                                _rp = _rp.strip()
-                                                if _rp.startswith('json'): _rp = _rp[4:].strip()
-                                                if _rp.startswith('{'): _rt = _rp; break
-                                        _rp2 = json.loads(_rt)
+                                        _rp2 = _parse_email_compose_json(_retry_result)
                                         subject = _rp2.get('subject', '')
                                         body = _rp2.get('body', '')
                                         if subject and body:

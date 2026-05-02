@@ -9838,6 +9838,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _iter_max_tokens = min(_iter_max_tokens, 900)
         _api_timeout_this = API_TIMEOUT_NORMAL if _timeout_relaxed_mode else API_TIMEOUT_LONG
         try:
+            _repair_dangling_tool_chain(_messages)
             _resp = await _agent_inst.call_ai(
                 _messages,
                 use_tools=_use_tools_now,
