@@ -9644,9 +9644,17 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             # чтобы создание blog Note не падало с "current transaction is aborted".
             session.rollback()
             from models import Note as _NoteCP
+            # Заголовок из первой осмысленной фразы, а не из всей первой строки (часто очень длинная).
+            import re as _re_cp_title
             _blog_title = content.strip().split('\n')[0].strip()
-            if len(_blog_title) > 1000:
-                _blog_title = _blog_title[:1000].rstrip()
+            if not _blog_title or len(_blog_title) < 5:
+                _blog_title = content.strip()
+            _first_sent_cp = _re_cp_title.split(r'(?<=[.!?])\s+', _blog_title, maxsplit=1)[0].strip()
+            if _first_sent_cp:
+                _blog_title = _first_sent_cp
+            if len(_blog_title) > 200:
+                _cut_cp = _blog_title[:200].rsplit(' ', 1)[0]
+                _blog_title = (_cut_cp or _blog_title[:200]).rstrip()
             if not _blog_title or len(_blog_title) < 5:
                 _blog_title = post_preview
             _blog_note_content = content.strip()
@@ -9672,28 +9680,70 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 # В фоне картинка будет сгенерирована позже — сразу ставим placeholder,
                 # чтобы _bg_generate_image смог привязать байты к заметке.
                 _blog_note_content = f"![Иллюстрация к посту](/blog/image/PENDING_CP_ID)\n\n{_blog_note_content}"
-            _blog_note = _NoteCP(
-                user_id=user.id,
-                title=_blog_title,
-                content=_blog_note_content,
-                source='blog',
-            )
-            session.add(_blog_note)
-            session.commit()
-            _blog_note.slug = _make_blog_slug(_blog_title, _blog_note.id)
-            if _post_image_url and _img_bytes_cp:
-                _blog_note.image_data = _img_bytes_cp
-                _blog_note.image_mime = _img_mime_cp
-                _blog_note.content = _blog_note.content.replace('PENDING_CP_ID', str(_blog_note.id))
-            session.commit()
-            _blog_url = f'https://asibiont.com/blog/{_blog_note.slug}'
-            logger.info(f"[CREATE_POST] Blog note created: id={_blog_note.id}, slug={_blog_note.slug!r}")
+            # Dedup для blog-note: если за последние 20 минут уже есть очень похожая статья,
+            # не создаём второй дубль (частый кейс: create_post + save_note(source='blog')).
+            _existing_blog = None
+            try:
+                from datetime import timedelta as _td_cp
+                from difflib import SequenceMatcher as _SM_cp
+                _blog_cutoff = dt.datetime.now(dt.timezone.utc) - _td_cp(minutes=20)
+                _recent_blog_notes = (
+                    session.query(_NoteCP)
+                    .filter(
+                        _NoteCP.user_id == user.id,
+                        _NoteCP.source == 'blog',
+                        _NoteCP.created_at >= _blog_cutoff,
+                    )
+                    .order_by(_NoteCP.id.desc())
+                    .limit(5)
+                    .all()
+                )
+                _cur_blog_norm = ' '.join((_blog_note_content or '').lower().split())[:1200]
+                for _bn in _recent_blog_notes:
+                    _bn_norm = ' '.join(((_bn.content or '')).lower().split())[:1200]
+                    if not _bn_norm:
+                        continue
+                    _sim_blog = _SM_cp(None, _cur_blog_norm, _bn_norm).ratio()
+                    if _sim_blog >= 0.90:
+                        _existing_blog = _bn
+                        logger.warning(
+                            "[CREATE_POST] Blog dedup skip: similar recent note id=%s (sim=%.2f)",
+                            _bn.id, _sim_blog,
+                        )
+                        break
+            except Exception as _blog_dedup_err:
+                logger.debug("suppressed blog dedup check: %s", _blog_dedup_err)
+
+            if _existing_blog:
+                # Если slug ещё не проставлен (редкий legacy-кейс), проставим без создания дубля.
+                if not _existing_blog.slug:
+                    _existing_blog.slug = _make_blog_slug(_existing_blog.title or _blog_title, _existing_blog.id)
+                    session.commit()
+                _blog_url = f'https://asibiont.com/blog/{_existing_blog.slug}'
+            else:
+                _blog_note = _NoteCP(
+                    user_id=user.id,
+                    title=_blog_title,
+                    content=_blog_note_content,
+                    source='blog',
+                )
+                session.add(_blog_note)
+                session.commit()
+                _blog_note.slug = _make_blog_slug(_blog_title, _blog_note.id)
+                if _post_image_url and _img_bytes_cp:
+                    _blog_note.image_data = _img_bytes_cp
+                    _blog_note.image_mime = _img_mime_cp
+                    _blog_note.content = _blog_note.content.replace('PENDING_CP_ID', str(_blog_note.id))
+                session.commit()
+                _blog_url = f'https://asibiont.com/blog/{_blog_note.slug}'
+                logger.info(f"[CREATE_POST] Blog note created: id={_blog_note.id}, slug={_blog_note.slug!r}")
             # Fire-and-forget EN translation
             try:
                 import asyncio as _aio_cp
-                _aio_cp.get_running_loop().create_task(
-                    _translate_blog_post_to_en(_blog_note.id, _blog_title, _blog_note.content or content.strip())
-                )
+                if not _existing_blog:
+                    _aio_cp.get_running_loop().create_task(
+                        _translate_blog_post_to_en(_blog_note.id, _blog_title, _blog_note.content or content.strip())
+                    )
             except Exception:
                 pass
         except Exception as _bn_err:
