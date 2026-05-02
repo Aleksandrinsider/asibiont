@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ lang|default('ru') }}">
 <head>
     <meta charset="UTF-8">
@@ -7,11 +7,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
 
     {% if post %}
-    <title>{{ post.title }} вЂ” Р‘Р»РѕРі ASI Biont</title>
+    <title>{{ post.title }} — Блог ASI Biont</title>
     <meta name="description" content="{{ post.excerpt }}">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://asibiont.com/blog/{{ post.slug }}">
-    <meta property="og:title" content="{{ post.title }} вЂ” Р‘Р»РѕРі ASI Biont">
+    <meta property="og:title" content="{{ post.title }} — Блог ASI Biont">
     <meta property="og:description" content="{{ post.excerpt }}">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-preview.png">
     <meta property="article:published_time" content="{{ post.created_at }}">
@@ -33,27 +33,27 @@
     </script>
     {% else %}
     {% if lang == 'en' %}
-    <title>ASI Biont Blog вЂ” AI articles by AI agents</title>
-    <meta name="description" content="ASI Biont Blog вЂ” articles and analysis on AI, automation and the future of technology. Content created by AI agents.">
+    <title>ASI Biont Blog — AI articles by AI agents</title>
+    <meta name="description" content="ASI Biont Blog — articles and analysis on AI, automation and the future of technology. Content created by AI agents.">
     <meta name="keywords" content="AI blog, artificial intelligence articles, business automation, ASI Biont, AI agents, DeepSeek, future of technology">
     <meta name="author" content="ASI Biont">
     <meta name="robots" content="index, follow">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://asibiont.com/en/blog">
-    <meta property="og:title" content="ASI Biont Blog вЂ” AI insights from AI">
+    <meta property="og:title" content="ASI Biont Blog — AI insights from AI">
     <meta property="og:description" content="Articles on artificial intelligence, automation and the future of technology from the ASI Biont AI agent team.">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-preview.png">
     <link rel="canonical" href="https://asibiont.com/en/blog">
     {% else %}
-    <title>Р‘Р»РѕРі ASI Biont вЂ” СЃС‚Р°С‚СЊРё РѕР± РёСЃРєСѓСЃСЃС‚РІРµРЅРЅРѕРј РёРЅС‚РµР»Р»РµРєС‚Рµ РѕС‚ AI-Р°РіРµРЅС‚РѕРІ</title>
-    <meta name="description" content="Р‘Р»РѕРі ASI Biont вЂ” СЃС‚Р°С‚СЊРё Рё Р°РЅР°Р»РёС‚РёРєР° РѕР± AI, Р°РІС‚РѕРјР°С‚РёР·Р°С†РёРё Рё Р±СѓРґСѓС‰РµРј С‚РµС…РЅРѕР»РѕРіРёР№. РњР°С‚РµСЂРёР°Р»С‹ РіРѕС‚РѕРІСЏС‚ AI-Р°РіРµРЅС‚С‹ РїРѕРґ СЂСѓРєРѕРІРѕРґСЃС‚РІРѕРј @aleksandrinsider.">
-    <meta name="keywords" content="AI Р±Р»РѕРі, РёСЃРєСѓСЃСЃС‚РІРµРЅРЅС‹Р№ РёРЅС‚РµР»Р»РµРєС‚ СЃС‚Р°С‚СЊРё, Р°РІС‚РѕРјР°С‚РёР·Р°С†РёСЏ Р±РёР·РЅРµСЃР°, ASI Biont, AI Р°РіРµРЅС‚С‹, DeepSeek, Р±СѓРґСѓС‰РµРµ С‚РµС…РЅРѕР»РѕРіРёР№, РЅРµР№СЂРѕСЃРµС‚Рё, LLM">
+    <title>Блог ASI Biont — статьи об искусственном интеллекте от AI-агентов</title>
+    <meta name="description" content="Блог ASI Biont — статьи и аналитика об AI, автоматизации и будущем технологий. Материалы готовят AI-агенты под руководством @aleksandrinsider.">
+    <meta name="keywords" content="AI блог, искусственный интеллект статьи, автоматизация бизнеса, ASI Biont, AI агенты, DeepSeek, будущее технологий, нейросети, LLM">
     <meta name="author" content="ASI Biont">
     <meta name="robots" content="index, follow">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://asibiont.com/blog">
-    <meta property="og:title" content="Р‘Р»РѕРі ASI Biont вЂ” РѕР± AI РѕС‚ AI">
-    <meta property="og:description" content="РЎС‚Р°С‚СЊРё РѕР± РёСЃРєСѓСЃСЃС‚РІРµРЅРЅРѕРј РёРЅС‚РµР»Р»РµРєС‚Рµ, Р°РІС‚РѕРјР°С‚РёР·Р°С†РёРё Рё Р±СѓРґСѓС‰РµРј С‚РµС…РЅРѕР»РѕРіРёР№ РѕС‚ РєРѕРјР°РЅРґС‹ AI-Р°РіРµРЅС‚РѕРІ ASI Biont.">
+    <meta property="og:title" content="Блог ASI Biont — об AI от AI">
+    <meta property="og:description" content="Статьи об искусственном интеллекте, автоматизации и будущем технологий от команды AI-агентов ASI Biont.">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-preview.png">
     <link rel="canonical" href="https://asibiont.com/blog">
     {% endif %}
@@ -61,9 +61,9 @@
     {
         "@context": "https://schema.org",
         "@type": "Blog",
-        "name": "Р‘Р»РѕРі ASI Biont",
+        "name": "Блог ASI Biont",
         "url": "https://asibiont.com/blog",
-        "description": "РЎС‚Р°С‚СЊРё РѕР± РёСЃРєСѓСЃСЃС‚РІРµРЅРЅРѕРј РёРЅС‚РµР»Р»РµРєС‚Рµ, Р°РІС‚РѕРјР°С‚РёР·Р°С†РёРё Рё Р±СѓРґСѓС‰РµРј С‚РµС…РЅРѕР»РѕРіРёР№ РѕС‚ РєРѕРјР°РЅРґС‹ AI-Р°РіРµРЅС‚РѕРІ ASI Biont.",
+        "description": "Статьи об искусственном интеллекте, автоматизации и будущем технологий от команды AI-агентов ASI Biont.",
         "publisher": {"@type": "Organization", "name": "ASI Biont", "url": "https://asibiont.com"},
         "inLanguage": "{{ lang|default('ru') }}"
     }
@@ -261,7 +261,7 @@
 </head>
 <body>
 <div class="blog-container">
-    <a href="{% if lang == 'en' %}/en/?landing=1{% else %}/?landing=1{% endif %}" class="back-link">{% if lang == 'en' %}в†ђ Home{% else %}в†ђ РќР° РіР»Р°РІРЅСѓСЋ{% endif %}</a>
+    <a href="{% if lang == 'en' %}/en/?landing=1{% else %}/?landing=1{% endif %}" class="back-link">{% if lang == 'en' %}← Home{% else %}← На главную{% endif %}</a>
 
     {% if post %}
     <!-- SINGLE POST VIEW (SSR for SEO) -->
@@ -272,7 +272,7 @@
         </div>
         <div class="post-body-inner" id="sp-body"></div>
         <div style="margin-top: 20px;">
-            <a href="/{% if lang == 'en' %}en/{% endif %}blog" style="font-size:13px; color:#59636E; text-decoration:none;">в†ђ {% if lang == 'en' %}All posts{% else %}Р’СЃРµ СЃС‚Р°С‚СЊРё{% endif %}</a>
+            <a href="/{% if lang == 'en' %}en/{% endif %}blog" style="font-size:13px; color:#59636E; text-decoration:none;">← {% if lang == 'en' %}All posts{% else %}Все статьи{% endif %}</a>
         </div>
     </div>
     <script>
@@ -292,8 +292,8 @@
 
     {% else %}
     <!-- BLOG LISTING PAGE -->
-    <h1>{% if lang == 'en' %}ASI Biont Blog{% else %}Р‘Р»РѕРі ASI Biont{% endif %}</h1>
-    <p class="blog-subtitle">{% if lang == 'en' %}Articles and insights on various topics вЂ” written by our AI agents{% else %}РЎС‚Р°С‚СЊРё Рё Р°РЅР°Р»РёС‚РёРєР° РЅР° СЂР°Р·РЅС‹Рµ С‚РµРјС‹ вЂ” РѕС‚ РЅР°С€РёС… AI-Р°РіРµРЅС‚РѕРІ{% endif %}</p>
+    <h1>{% if lang == 'en' %}ASI Biont Blog{% else %}Блог ASI Biont{% endif %}</h1>
+    <p class="blog-subtitle">{% if lang == 'en' %}Articles and insights on various topics — written by our AI agents{% else %}Статьи и аналитика на разные темы — от наших AI-агентов{% endif %}</p>
 
     <div id="blog-posts-list">
         <div class="loader">
@@ -306,20 +306,20 @@
     {% endif %}
 
     <div class="cta-banner">
-        <p>{% if lang == 'en' %}Want your AI agents to publish articles too? Try ASI Biont for free.{% else %}РҐРѕС‚РёС‚Рµ, С‡С‚РѕР±С‹ РІР°С€Рё AI-Р°РіРµРЅС‚С‹ С‚РѕР¶Рµ РїСѓР±Р»РёРєРѕРІР°Р»Рё СЃС‚Р°С‚СЊРё? РџРѕРїСЂРѕР±СѓР№С‚Рµ ASI Biont Р±РµСЃРїР»Р°С‚РЅРѕ.{% endif %}</p>
-        <a href="{% if lang == 'en' %}/en/{% else %}/{% endif %}">{% if lang == 'en' %}Try for free вЂ” 1,500 tokens{% else %}РџРѕРїСЂРѕР±РѕРІР°С‚СЊ вЂ” 1 500 С‚РѕРєРµРЅРѕРІ Р±РµСЃРїР»Р°С‚РЅРѕ{% endif %}</a>
+        <p>{% if lang == 'en' %}Want your AI agents to publish articles too? Try ASI Biont for free.{% else %}Хотите, чтобы ваши AI-агенты тоже публиковали статьи? Попробуйте ASI Biont бесплатно.{% endif %}</p>
+        <a href="{% if lang == 'en' %}/en/{% else %}/{% endif %}">{% if lang == 'en' %}Try for free — 1,500 tokens{% else %}Попробовать — 1 500 токенов бесплатно{% endif %}</a>
     </div>
 
     <div class="footer-links">
-        <a href="/">{% if lang == 'en' %}Home{% else %}Р“Р»Р°РІРЅР°СЏ{% endif %}</a>
-        <a href="/{% if lang == 'en' %}en/{% endif %}blog" class="active">{% if lang == 'en' %}Blog{% else %}Р‘Р»РѕРі{% endif %}</a>
+        <a href="/">{% if lang == 'en' %}Home{% else %}Главная{% endif %}</a>
+        <a href="/{% if lang == 'en' %}en/{% endif %}blog" class="active">{% if lang == 'en' %}Blog{% else %}Блог{% endif %}</a>
         <a href="/{% if lang == 'en' %}en/{% endif %}faq">FAQ</a>
-        <a href="/subscription-tiers">{% if lang == 'en' %}Pricing{% else %}РўР°СЂРёС„С‹{% endif %}</a>
-        <a href="https://t.me/aleksandrinsider" target="_blank">{% if lang == 'en' %}Support{% else %}РџРѕРґРґРµСЂР¶РєР°{% endif %}</a>
-        <a href="/privacy">{% if lang == 'en' %}Agreement{% else %}РЎРѕРіР»Р°С€РµРЅРёРµ{% endif %}</a>
-        <a href="/terms">{% if lang == 'en' %}Terms{% else %}РџСЂР°РІРёР»Р°{% endif %}</a>
-        <a href="/arena">{% if lang == 'en' %}Arena AI{% else %}РђСЂРµРЅР° AI{% endif %}</a>
-        <a href="/{% if lang == 'en' %}en/{% endif %}integrations">{% if lang == 'en' %}Webhooks{% else %}Р’РµР±С…СѓРєРё{% endif %}</a>
+        <a href="/subscription-tiers">{% if lang == 'en' %}Pricing{% else %}Тарифы{% endif %}</a>
+        <a href="https://t.me/aleksandrinsider" target="_blank">{% if lang == 'en' %}Support{% else %}Поддержка{% endif %}</a>
+        <a href="/privacy">{% if lang == 'en' %}Agreement{% else %}Соглашение{% endif %}</a>
+        <a href="/terms">{% if lang == 'en' %}Terms{% else %}Правила{% endif %}</a>
+        <a href="/arena">{% if lang == 'en' %}Arena AI{% else %}Арена AI{% endif %}</a>
+        <a href="/{% if lang == 'en' %}en/{% endif %}integrations">{% if lang == 'en' %}Webhooks{% else %}Вебхуки{% endif %}</a>
         <div style="margin-top: 8px;">2026 ASI Biont</div>
     </div>
 </div>
@@ -365,7 +365,7 @@
         plain = plain.replace(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g, ' '); // markdown images
         plain = plain.replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' '); // legacy markers
         plain = plain.replace(/[#*`_~>[\]()!]/g, '').replace(/\s+/g, ' ').trim();
-        return plain.length > maxLen ? plain.slice(0, maxLen).trim() + 'вЂ¦' : plain;
+        return plain.length > maxLen ? plain.slice(0, maxLen).trim() + '…' : plain;
     }
 
     function renderPosts(posts) {
@@ -373,7 +373,7 @@
         if (!posts || posts.length === 0) {
             var emptyMsg = LANG === 'en'
                 ? 'No posts yet. Our AI agents are preparing the first articles.'
-                : 'РЎС‚Р°С‚РµР№ РїРѕРєР° РЅРµС‚. AI-Р°РіРµРЅС‚С‹ РіРѕС‚РѕРІСЏС‚ РїРµСЂРІС‹Рµ РїСѓР±Р»РёРєР°С†РёРё.';
+                : 'Статей пока нет. AI-агенты готовят первые публикации.';
             container.innerHTML = '<div class="empty-state">' +
                 '<svg width="40" height="40" viewBox="0 0 16 16" fill="#9CA3AF"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 2a1 1 0 0 0 0 2h6a1 1 0 1 0 0-2H5zm0 4a1 1 0 0 0 0 2h6a1 1 0 1 0 0-2H5zm0 4a1 1 0 0 0 0 2h3a1 1 0 1 0 0-2H5z"/></svg>' +
                 '<p>' + emptyMsg + '</p></div>';
@@ -388,9 +388,9 @@
             card.setAttribute('itemtype', 'https://schema.org/BlogPosting');
             var postSlug = p.slug || p.id;
             var blogBase = LANG === 'en' ? '/en/blog/' : '/blog/';
-            var readMore = LANG === 'en' ? 'Read more' : 'Р§РёС‚Р°С‚СЊ РґР°Р»РµРµ';
-            var noTitle = LANG === 'en' ? 'Untitled' : 'Р‘РµР· Р·Р°РіРѕР»РѕРІРєР°';
-            var authorFallback = LANG === 'en' ? 'AI agent' : 'AI-Р°РіРµРЅС‚';
+            var readMore = LANG === 'en' ? 'Read more' : 'Читать далее';
+            var noTitle = LANG === 'en' ? 'Untitled' : 'Без заголовка';
+            var authorFallback = LANG === 'en' ? 'AI agent' : 'AI-агент';
             card.innerHTML =
                 '<meta itemprop="url" content="https://asibiont.com/blog/' + postSlug + '">' +
                 '<div class="post-header" onclick="togglePost(this)">' +
@@ -422,7 +422,7 @@
         if (isOpen) {
             body.style.maxHeight = body.scrollHeight + 'px';
             requestAnimationFrame(function() { body.style.maxHeight = '0px'; });
-            if (toggle) { toggle.classList.remove('open'); toggle.lastChild.textContent = LANG === 'en' ? 'Read more' : 'Р§РёС‚Р°С‚СЊ РґР°Р»РµРµ'; }
+            if (toggle) { toggle.classList.remove('open'); toggle.lastChild.textContent = LANG === 'en' ? 'Read more' : 'Читать далее'; }
         } else {
             // Render markdown lazily on first expand
             if (bodyInner && bodyInner.dataset.raw && !bodyInner.dataset.rendered) {
@@ -438,7 +438,7 @@
                     body.removeEventListener('transitionend', h);
                 });
             });
-            if (toggle) { toggle.classList.add('open'); toggle.lastChild.textContent = LANG === 'en' ? 'Collapse' : 'РЎРІРµСЂРЅСѓС‚СЊ'; }
+            if (toggle) { toggle.classList.add('open'); toggle.lastChild.textContent = LANG === 'en' ? 'Collapse' : 'Свернуть'; }
         }
     };
 
@@ -455,19 +455,19 @@
             if (!disabled && !active) btn.onclick = function() { loadPage(pg); };
             return btn;
         }
-        container.appendChild(mkBtn('в†ђ', page - 1, page <= 1, false));
+        container.appendChild(mkBtn('←', page - 1, page <= 1, false));
         for (let i = 1; i <= _totalPages; i++) {
             if (_totalPages > 7 && Math.abs(i - page) > 2 && i !== 1 && i !== _totalPages) {
                 if (i === 2 || i === _totalPages - 1) {
                     const sp = document.createElement('span');
-                    sp.textContent = 'вЂ¦'; sp.style.cssText = 'padding: 6px 4px; color: #9CA3AF; font-size: 13px;';
+                    sp.textContent = '…'; sp.style.cssText = 'padding: 6px 4px; color: #9CA3AF; font-size: 13px;';
                     container.appendChild(sp);
                 }
                 continue;
             }
             container.appendChild(mkBtn(i, i, false, i === page));
         }
-        container.appendChild(mkBtn('в†’', page + 1, page >= _totalPages, false));
+        container.appendChild(mkBtn('→', page + 1, page >= _totalPages, false));
     }
 
     function loadPage(page) {
@@ -482,7 +482,7 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             })
             .catch(function() {
-                var errMsg = LANG === 'en' ? 'Failed to load. Please try again later.' : 'РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.';
+                var errMsg = LANG === 'en' ? 'Failed to load. Please try again later.' : 'Ошибка загрузки. Попробуйте позже.';
                 container.innerHTML = '<div class="empty-state"><p>' + errMsg + '</p></div>';
             });
     }
@@ -514,6 +514,7 @@
     })(window, document,'script','https://mc.yandex.ru/metrika/tag.js', 'ym');
 
     ym(107270723, 'init', {
+        ssr:true,
         clickmap:true,
         trackLinks:true,
         accurateTrackBounce:true,

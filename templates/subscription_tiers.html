@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ lang|default('ru') }}">
 <head>
     <meta charset="UTF-8">
@@ -6,23 +6,23 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>{% if lang == 'en' %}ASI Biont Tokens вЂ” Top Up Balance | AI Partner{% else %}РўРѕРєРµРЅС‹ ASI Biont вЂ” РџРѕРїРѕР»РЅРёС‚Рµ Р±Р°Р»Р°РЅСЃ | AI-РїР°СЂС‚РЅС‘СЂ РґР»СЏ Р±РёР·РЅРµСЃР°{% endif %}</title>
-    <meta name="description" content="{% if lang == 'en' %}Top up ASI Biont tokens. 1 token = $0.01 USDT. All features unlocked: tasks, delegation, marketing, auto-posting. Packages from $15. Bonuses up to +20%.{% else %}РџРѕРїРѕР»РЅРёС‚Рµ Р±Р°Р»Р°РЅСЃ С‚РѕРєРµРЅРѕРІ ASI Biont. 1 С‚РѕРєРµРЅ = 1 СЂСѓР±Р»СЊ. Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹: Р·Р°РґР°С‡Рё, РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ, РјР°СЂРєРµС‚РёРЅРі, Р°РІС‚РѕРїРѕСЃС‚РёРЅРі, РїСЂРѕР°РєС‚РёРІРЅС‹Рµ СЂРµРєРѕРјРµРЅРґР°С†РёРё. РџР°РєРµС‚С‹ РѕС‚ 1 500в‚Ѕ. Р‘РѕРЅСѓСЃС‹ РґРѕ +20%.{% endif %}">
-    <meta name="keywords" content="{% if lang == 'en' %}AI agent platform pricing, AI assistant tokens, autonomous AI platform, task automation, delegation, auto-posting, proactive AI recommendations, ASI Biont pricing, AI Arena, 60 integrations{% else %}С‚РѕРєРµРЅС‹ AI РїР»Р°С‚С„РѕСЂРјР°, Р±Р°Р»Р°РЅСЃ AI Р°СЃСЃРёСЃС‚РµРЅС‚, Р°РІС‚РѕРјР°С‚РёР·Р°С†РёСЏ Р·Р°РґР°С‡, РїРѕРёСЃРє РїР°СЂС‚РЅС‘СЂРѕРІ, РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ, Р°РІС‚РѕРїРѕСЃС‚РёРЅРі, РїСЂРѕР°РєС‚РёРІРЅС‹Рµ РїСЂРµРґР»РѕР¶РµРЅРёСЏ AI, РїР»Р°С‚С„РѕСЂРјР° AI-Р°РіРµРЅС‚РѕРІ, ASI Biont С†РµРЅС‹, AI Arena{% endif %}">
+    <title>{% if lang == 'en' %}ASI Biont Tokens — Top Up Balance | AI Partner{% else %}Токены ASI Biont — Пополните баланс | AI-партнёр для бизнеса{% endif %}</title>
+    <meta name="description" content="{% if lang == 'en' %}Top up ASI Biont tokens. 1 token = $0.01 USDT. All features unlocked: tasks, delegation, marketing, auto-posting. Packages from $15. Bonuses up to +20%.{% else %}Пополните баланс токенов ASI Biont. 1 токен = 1 рубль. Все функции открыты: задачи, делегирование, маркетинг, автопостинг, проактивные рекомендации. Пакеты от 1 500₽. Бонусы до +20%.{% endif %}">
+    <meta name="keywords" content="{% if lang == 'en' %}AI agent platform pricing, AI assistant tokens, autonomous AI platform, task automation, delegation, auto-posting, proactive AI recommendations, ASI Biont pricing, AI Arena, 60 integrations{% else %}токены AI платформа, баланс AI ассистент, автоматизация задач, поиск партнёров, делегирование, автопостинг, проактивные предложения AI, платформа AI-агентов, ASI Biont цены, AI Arena{% endif %}">
     <meta name="author" content="ASI Biont">
     <meta name="robots" content="index, follow">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/subscription-tiers">
-    <meta property="og:title" content="{% if lang == 'en' %}ASI Biont Tokens вЂ” AI Partner That Never Sleeps{% else %}РўРѕРєРµРЅС‹ ASI Biont вЂ” AI-РїР°СЂС‚РЅС‘СЂ, РєРѕС‚РѕСЂС‹Р№ РЅРµ СЃРїРёС‚{% endif %}">
-    <meta property="og:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹. РџР»Р°С‚РёС‚Рµ С‚РѕР»СЊРєРѕ Р·Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ. 1 С‚РѕРєРµРЅ = 1в‚Ѕ. РџР°РєРµС‚С‹: 1 500в‚Ѕ, 5 000в‚Ѕ (+10%), 50 000в‚Ѕ (+20%).{% endif %}">
+    <meta property="og:title" content="{% if lang == 'en' %}ASI Biont Tokens — AI Partner That Never Sleeps{% else %}Токены ASI Biont — AI-партнёр, который не спит{% endif %}">
+    <meta property="og:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).{% endif %}">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{% if lang == 'en' %}ASI Biont Tokens вЂ” AI Partner That Never Sleeps{% else %}РўРѕРєРµРЅС‹ ASI Biont вЂ” AI-РїР°СЂС‚РЅС‘СЂ, РєРѕС‚РѕСЂС‹Р№ РЅРµ СЃРїРёС‚{% endif %}">
-    <meta name="twitter:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹. РџР»Р°С‚РёС‚Рµ С‚РѕР»СЊРєРѕ Р·Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ. 1 С‚РѕРєРµРЅ = 1в‚Ѕ. РџР°РєРµС‚С‹: 1 500в‚Ѕ, 5 000в‚Ѕ (+10%), 50 000в‚Ѕ (+20%).{% endif %}">
+    <meta name="twitter:title" content="{% if lang == 'en' %}ASI Biont Tokens — AI Partner That Never Sleeps{% else %}Токены ASI Biont — AI-партнёр, который не спит{% endif %}">
+    <meta name="twitter:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).{% endif %}">
     <meta name="twitter:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
     <link rel="icon" type="image/svg+xml" href="/static/asibiont.svg">
@@ -40,29 +40,29 @@
     {
         "@context": "https://schema.org",
         "@type": "WebPage",
-        "name": "{% if lang == 'en' %}ASI Biont Tokens{% else %}РўРѕРєРµРЅС‹ ASI Biont{% endif %}",
-        "description": "{% if lang == 'en' %}Top up your AI partner balance: all features unlocked, pay per use{% else %}РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР° AI-РїР°СЂС‚РЅС‘СЂР°: РІСЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹, РѕРїР»Р°С‚Р° Р·Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ{% endif %}",
+        "name": "{% if lang == 'en' %}ASI Biont Tokens{% else %}Токены ASI Biont{% endif %}",
+        "description": "{% if lang == 'en' %}Top up your AI partner balance: all features unlocked, pay per use{% else %}Пополнение баланса AI-партнёра: все функции открыты, оплата за использование{% endif %}",
         "url": "https://asibiont.com{% if lang == 'en' %}/en{% endif %}/subscription-tiers",
         "mainEntity": {
             "@type": "ItemList",
-            "name": "{% if lang == 'en' %}Token Packages{% else %}РџР°РєРµС‚С‹ С‚РѕРєРµРЅРѕРІ{% endif %}",
+            "name": "{% if lang == 'en' %}Token Packages{% else %}Пакеты токенов{% endif %}",
             "itemListElement": [
                 {
                     "@type": "Product",
-                    "name": "{% if lang == 'en' %}Starter{% else %}РЎС‚Р°СЂС‚РѕРІС‹Р№{% endif %}",
-                    "description": "{% if lang == 'en' %}1,500 tokens to get started with your AI partner.{% else %}1 500 С‚РѕРєРµРЅРѕРІ РґР»СЏ Р·РЅР°РєРѕРјСЃС‚РІР° СЃ AI-РїР°СЂС‚РЅС‘СЂРѕРј.{% endif %}",
+                    "name": "{% if lang == 'en' %}Starter{% else %}Стартовый{% endif %}",
+                    "description": "{% if lang == 'en' %}1,500 tokens to get started with your AI partner.{% else %}1 500 токенов для знакомства с AI-партнёром.{% endif %}",
                     "offers": { "@type": "Offer", "price": "{% if lang == 'en' %}15{% else %}1500{% endif %}", "priceCurrency": "{% if lang == 'en' %}USD{% else %}RUB{% endif %}" }
                 },
                 {
                     "@type": "Product",
-                    "name": "{% if lang == 'en' %}Standard{% else %}РћРїС‚РёРјР°Р»СЊРЅС‹Р№{% endif %}",
-                    "description": "{% if lang == 'en' %}5,500 tokens (+10% bonus) вЂ” most popular choice.{% else %}5 500 С‚РѕРєРµРЅРѕРІ (+10% Р±РѕРЅСѓСЃ) вЂ” СЃР°РјС‹Р№ РїРѕРїСѓР»СЏСЂРЅС‹Р№ РІС‹Р±РѕСЂ.{% endif %}",
+                    "name": "{% if lang == 'en' %}Standard{% else %}Оптимальный{% endif %}",
+                    "description": "{% if lang == 'en' %}5,500 tokens (+10% bonus) — most popular choice.{% else %}5 500 токенов (+10% бонус) — самый популярный выбор.{% endif %}",
                     "offers": { "@type": "Offer", "price": "{% if lang == 'en' %}50{% else %}5000{% endif %}", "priceCurrency": "{% if lang == 'en' %}USD{% else %}RUB{% endif %}" }
                 },
                 {
                     "@type": "Product",
-                    "name": "{% if lang == 'en' %}Premium{% else %}РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№{% endif %}",
-                    "description": "{% if lang == 'en' %}60,000 tokens (+20% bonus) вЂ” best value.{% else %}60 000 С‚РѕРєРµРЅРѕРІ (+20% Р±РѕРЅСѓСЃ) вЂ” РјР°РєСЃРёРјР°Р»СЊРЅР°СЏ РІС‹РіРѕРґР°.{% endif %}",
+                    "name": "{% if lang == 'en' %}Premium{% else %}Максимальный{% endif %}",
+                    "description": "{% if lang == 'en' %}60,000 tokens (+20% bonus) — best value.{% else %}60 000 токенов (+20% бонус) — максимальная выгода.{% endif %}",
                     "offers": { "@type": "Offer", "price": "{% if lang == 'en' %}500{% else %}50000{% endif %}", "priceCurrency": "{% if lang == 'en' %}USD{% else %}RUB{% endif %}" }
                 }
             ]
@@ -81,7 +81,7 @@
                 min-width: 40px;
             }
             .apply-promo-btn::after {
-                content: 'вњ“';
+                content: '✓';
                 font-size: 18px;
                 font-weight: 600;
             }
@@ -120,76 +120,76 @@
 </head>
 <body class="subscription-page">
     <div class="pricing-container">
-        <a href="/dashboard" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">{% if lang == 'en' %}в†ђ Back{% else %}в†ђ РќР° РіР»Р°РІРЅСѓСЋ{% endif %}</a>
+        <a href="/dashboard" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">{% if lang == 'en' %}← Back{% else %}← На главную{% endif %}</a>
         <div class="pricing-card">
             <div style="text-align: center; margin-bottom: 24px;">
-                <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">{% if lang == 'en' %}Top Up Token Balance{% else %}РџРѕРїРѕР»РЅРёС‚Рµ Р±Р°Р»Р°РЅСЃ С‚РѕРєРµРЅРѕРІ{% endif %}</h1>
+                <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">{% if lang == 'en' %}Top Up Token Balance{% else %}Пополните баланс токенов{% endif %}</h1>
                 <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 8px auto;">
-                    {% if show_yookassa %}Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹ РґР»СЏ РІСЃРµС…. РџР»Р°С‚РёС‚Рµ С‚РѕР»СЊРєРѕ Р·Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ. 1 С‚РѕРєРµРЅ = 1 СЂСѓР±Р»СЊ.{% else %}All features unlocked from the start. Pay only for what you use. 1 token = $0.01 USDT.{% endif %}
+                    {% if show_yookassa %}Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.{% else %}All features unlocked from the start. Pay only for what you use. 1 token = $0.01 USDT.{% endif %}
                 </div>
                 <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 32px auto;">
-                    <b>{% if show_yookassa %}Р’СЃРµ С„СѓРЅРєС†РёРё РґРѕСЃС‚СѓРїРЅС‹ СЃСЂР°Р·Сѓ.{% else %}All features available immediately.{% endif %}</b>
+                    <b>{% if show_yookassa %}Все функции доступны сразу.{% else %}All features available immediately.{% endif %}</b>
                 </div>
             </div>
 
             <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                <!-- РЎС‚Р°СЂС‚РѕРІС‹Р№ -->
+                <!-- Стартовый -->
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">{% if show_yookassa %}РЎС‚Р°СЂС‚РѕРІС‹Р№{% else %}Starter{% endif %}</h2>
-                    <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">{% if show_yookassa %}1 500 в‚Ѕ{% else %}$15 USDT{% endif %}</div>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">{% if show_yookassa %}1 500 С‚РѕРєРµРЅРѕРІ{% else %}1,500 tokens{% endif %}</div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">{% if show_yookassa %}Р”Р»СЏ Р·РЅР°РєРѕРјСЃС‚РІР° СЃ AI-РїР°СЂС‚РЅС‘СЂРѕРј{% else %}Get started with your AI partner{% endif %}</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">{% if show_yookassa %}Стартовый{% else %}Starter{% endif %}</h2>
+                    <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">{% if show_yookassa %}1 500 ₽{% else %}$15 USDT{% endif %}</div>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">{% if show_yookassa %}1 500 токенов{% else %}1,500 tokens{% endif %}</div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">{% if show_yookassa %}Для знакомства с AI-партнёром{% else %}Get started with your AI partner{% endif %}</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
-                        {% if show_yookassa %}В«РќР°РїРѕРјРЅРё Р·Р°РІС‚СЂР° РІ 9 РїСЂРѕ СЃРѕР·РІРѕРЅВ» вЂ” РѕРЅ РїРѕРјРЅРёС‚. В«РќР°Р№РґРё РґРёР·Р°Р№РЅРµСЂР°В» вЂ” РЅР°С…РѕРґРёС‚. Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹ СЃ РїРµСЂРІРѕРіРѕ С‚РѕРєРµРЅР°.{% else %}"Remind me tomorrow at 9 about the call" вЂ” it remembers. "Find a designer" вЂ” it finds. All features unlocked from token one.{% endif %}
+                        {% if show_yookassa %}«Напомни завтра в 9 про созвон» — он помнит. «Найди дизайнера» — находит. Все функции открыты с первого токена.{% else %}"Remind me tomorrow at 9 about the call" — it remembers. "Find a designer" — it finds. All features unlocked from token one.{% endif %}
                     </div>
-                    {% if show_yookassa %}<button onclick="selectPack('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">РџРѕРїРѕР»РЅРёС‚СЊ вЂ” 1 500 в‚Ѕ</button>{% else %}<button onclick="selectPackCrypto('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $15 USDT</button>{% endif %}
+                    {% if show_yookassa %}<button onclick="selectPack('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Пополнить — 1 500 ₽</button>{% else %}<button onclick="selectPackCrypto('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $15 USDT</button>{% endif %}
                 </div>
 
-                <!-- РћРїС‚РёРјР°Р»СЊРЅС‹Р№ -->
+                <!-- Оптимальный -->
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
-                    <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">{% if show_yookassa %}Р’Р«Р“РћР”РќР«Р™{% else %}POPULAR{% endif %}</div>
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">{% if show_yookassa %}РћРїС‚РёРјР°Р»СЊРЅС‹Р№{% else %}Standard{% endif %}</h2>
-                    <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">{% if show_yookassa %}5 000 в‚Ѕ{% else %}$50 USDT{% endif %}</div>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">{% if show_yookassa %}5 500 С‚РѕРєРµРЅРѕРІ{% else %}5,500 tokens{% endif %} <span style="color: #059669; font-weight: 600;">+10%</span></div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">{% if show_yookassa %}РЎР°РјС‹Р№ РїРѕРїСѓР»СЏСЂРЅС‹Р№ РІС‹Р±РѕСЂ{% else %}Most popular choice{% endif %}</div>
+                    <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #59636E; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">{% if show_yookassa %}ВЫГОДНЫЙ{% else %}POPULAR{% endif %}</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">{% if show_yookassa %}Оптимальный{% else %}Standard{% endif %}</h2>
+                    <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">{% if show_yookassa %}5 000 ₽{% else %}$50 USDT{% endif %}</div>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">{% if show_yookassa %}5 500 токенов{% else %}5,500 tokens{% endif %} <span style="color: #059669; font-weight: 600;">+10%</span></div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">{% if show_yookassa %}Самый популярный выбор{% else %}Most popular choice{% endif %}</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
-                        {% if show_yookassa %}+500 С‚РѕРєРµРЅРѕРІ СЃРІРµСЂС…Сѓ. Р’С‹ РЅР° РІСЃС‚СЂРµС‡Рµ вЂ” РѕРЅ РґРµР»РµРіРёСЂСѓРµС‚ Р·Р°РґР°С‡Рё. Р’С‹ СЃРїРёС‚Рµ вЂ” РїРѕСЃС‚РёС‚ РІ РєР°РЅР°Р». РђРІС‚РѕРїРёР»РѕС‚, РєРѕС‚РѕСЂС‹Р№ РЅРµ РІС‹РєР»СЋС‡Р°РµС‚СЃСЏ.{% else %}+500 bonus tokens. On a call вЂ” it delegates. Sleeping вЂ” it posts. An autopilot that never stops.{% endif %}
+                        {% if show_yookassa %}+500 токенов сверху. Вы на встрече — он делегирует задачи. Вы спите — постит в канал. Автопилот, который не выключается.{% else %}+500 bonus tokens. On a call — it delegates. Sleeping — it posts. An autopilot that never stops.{% endif %}
                     </div>
-                    {% if show_yookassa %}<button onclick="selectPack('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">РџРѕРїРѕР»РЅРёС‚СЊ вЂ” 5 000 в‚Ѕ</button>{% else %}<button onclick="selectPackCrypto('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Pay $50 USDT</button>{% endif %}
+                    {% if show_yookassa %}<button onclick="selectPack('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Пополнить — 5 000 ₽</button>{% else %}<button onclick="selectPackCrypto('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Pay $50 USDT</button>{% endif %}
                 </div>
 
-                <!-- РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№ -->
+                <!-- Максимальный -->
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">{% if show_yookassa %}РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№{% else %}Premium{% endif %}</h2>
-                    <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">{% if show_yookassa %}50 000 в‚Ѕ{% else %}$500 USDT{% endif %}</div>
-                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">{% if show_yookassa %}60 000 С‚РѕРєРµРЅРѕРІ{% else %}60,000 tokens{% endif %} <span style="color: #059669; font-weight: 600;">+20%</span></div>
-                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">{% if show_yookassa %}РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РІС‹РіРѕРґР° Р·Р° С‚РѕРєРµРЅ{% else %}Best value per token{% endif %}</div>
+                    <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">{% if show_yookassa %}Максимальный{% else %}Premium{% endif %}</h2>
+                    <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">{% if show_yookassa %}50 000 ₽{% else %}$500 USDT{% endif %}</div>
+                    <div style="font-size: 13px; color: #6C727F; margin-bottom: 4px;">{% if show_yookassa %}60 000 токенов{% else %}60,000 tokens{% endif %} <span style="color: #059669; font-weight: 600;">+20%</span></div>
+                    <div style="font-size: 12px; color: #6C727F; margin-bottom: 20px;">{% if show_yookassa %}Максимальная выгода за токен{% else %}Best value per token{% endif %}</div>
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
-                        {% if show_yookassa %}+10 000 С‚РѕРєРµРЅРѕРІ СЃРІРµСЂС…Сѓ. РљРѕРЅС‚РµРЅС‚, РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ, Р°Р»РµСЂС‚С‹, РёРЅСЃР°Р№С‚С‹ вЂ” РІСЃС‘ РЅР° Р°РІС‚РѕРїРёР»РѕС‚Рµ. Р’С‹ СЂР°СЃС‚С‘С‚Рµ, РїРѕРєР° AI СЂР°Р±РѕС‚Р°РµС‚.{% else %}+10,000 bonus tokens. Content, delegation, alerts, insights вЂ” all on autopilot. You grow while AI works.{% endif %}
+                        {% if show_yookassa %}+10 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.{% else %}+10,000 bonus tokens. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.{% endif %}
                     </div>
-                    {% if show_yookassa %}<button onclick="selectPack('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">РџРѕРїРѕР»РЅРёС‚СЊ вЂ” 50 000 в‚Ѕ</button>{% else %}<button onclick="selectPackCrypto('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $500 USDT</button>{% endif %}
+                    {% if show_yookassa %}<button onclick="selectPack('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Пополнить — 50 000 ₽</button>{% else %}<button onclick="selectPackCrypto('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $500 USDT</button>{% endif %}
                 </div>
             </div>
 
             <!-- CTA -->
             <div class="cta-section" style="text-align: center; margin: 32px 0 0 0; padding: 24px 16px;">
-                <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">Р’СЃРµ С„СѓРЅРєС†РёРё РґРѕСЃС‚СѓРїРЅС‹ СЃСЂР°Р·Сѓ.</p>
+                <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; font-weight: 600;">Все функции доступны сразу.</p>
                 <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                    <a href="https://t.me/asibiont_bot" target="_blank" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">РџРѕРїСЂРѕР±РѕРІР°С‚СЊ Р±РµСЃРїР»Р°С‚РЅРѕ вЂ” 1 500 С‚РѕРєРµРЅРѕРІ</a>
-                    <button id="pwa-install-btn" onclick="triggerPwaInstall()" style="display: inline-flex; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s; align-items: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµ</button>
+                    <a href="https://t.me/asibiont_bot" target="_blank" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">Попробовать бесплатно — 1 500 токенов</a>
+                    <button id="pwa-install-btn" onclick="triggerPwaInstall()" style="display: inline-flex; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s; align-items: center;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Установить приложение</button>
                 </div>
             </div>
 
             <div class="footer-links" style="text-align: center; margin-top: 24px; padding-top: 24px; color: #6C727F; font-size: 13px;">
-                <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Р“Р»Р°РІРЅР°СЏ</a>
-                <a href="/blog" style="color: #59636E; text-decoration: none; margin-right: 16px;">Р‘Р»РѕРі</a>
+                <a href="/" style="color: #59636E; text-decoration: none; margin-right: 16px;">Главная</a>
+                <a href="/blog" style="color: #59636E; text-decoration: none; margin-right: 16px;">Блог</a>
                 <a href="/faq" style="color: #59636E; text-decoration: none; margin-right: 16px;">FAQ</a>
-                <a href="/subscription-tiers" style="color: #1F2328; text-decoration: none; margin-right: 16px; font-weight: 600;">РўР°СЂРёС„С‹</a>
-                <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">РџРѕРґРґРµСЂР¶РєР°</a>
-                <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">РЎРѕРіР»Р°С€РµРЅРёРµ</a>
-                <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">РџСЂР°РІРёР»Р°</a>
-                <a href="/arena" style="color: #59636E; text-decoration: none; margin-right: 16px;">РђСЂРµРЅР° AI</a>
-                <a href="/integrations" style="color: #59636E; text-decoration: none;">Р’РµР±С…СѓРєРё</a>
+                <a href="/subscription-tiers" style="color: #1F2328; text-decoration: none; margin-right: 16px; font-weight: 600;">Тарифы</a>
+                <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #59636E; text-decoration: none; margin-right: 16px;">Поддержка</a>
+                <a href="/privacy" style="color: #59636E; text-decoration: none; margin-right: 16px;">Соглашение</a>
+                <a href="/terms" style="color: #59636E; text-decoration: none; margin-right: 16px;">Правила</a>
+                <a href="/arena" style="color: #59636E; text-decoration: none; margin-right: 16px;">Арена AI</a>
+                <a href="/integrations" style="color: #59636E; text-decoration: none;">Вебхуки</a>
                 <div style="margin-top: 8px;">2026 ASI Biont</div>
             </div>
         </div>
@@ -214,42 +214,42 @@
   var SHOW_YOOKASSA = {{ show_yookassa|lower }};
   var T = {
     ru: {
-      title: 'РўРѕРєРµРЅС‹ ASI Biont вЂ” РџРѕРїРѕР»РЅРёС‚Рµ Р±Р°Р»Р°РЅСЃ | AI-РїР°СЂС‚РЅС‘СЂ РґР»СЏ Р±РёР·РЅРµСЃР°',
-      back: 'в†ђ РќР° РіР»Р°РІРЅСѓСЋ',
-      h1: 'РџРѕРїРѕР»РЅРёС‚Рµ Р±Р°Р»Р°РЅСЃ С‚РѕРєРµРЅРѕРІ',
-      desc1: 'Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹ РґР»СЏ РІСЃРµС…. РџР»Р°С‚РёС‚Рµ С‚РѕР»СЊРєРѕ Р·Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ. 1 С‚РѕРєРµРЅ = 1 СЂСѓР±Р»СЊ.',
-      desc2: 'Р’СЃРµ С„СѓРЅРєС†РёРё РґРѕСЃС‚СѓРїРЅС‹ СЃСЂР°Р·Сѓ.',
-      badge: 'Р’Р«Р“РћР”РќР«Р™',
+      title: 'Токены ASI Biont — Пополните баланс | AI-партнёр для бизнеса',
+      back: '← На главную',
+      h1: 'Пополните баланс токенов',
+      desc1: 'Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.',
+      desc2: 'Все функции доступны сразу.',
+      badge: 'ВЫГОДНЫЙ',
       cards: [
-        { name: 'РЎС‚Р°СЂС‚РѕРІС‹Р№', sub: 'Р”Р»СЏ Р·РЅР°РєРѕРјСЃС‚РІР° СЃ AI-РїР°СЂС‚РЅС‘СЂРѕРј', desc: 'В«РќР°РїРѕРјРЅРё Р·Р°РІС‚СЂР° РІ 9 РїСЂРѕ СЃРѕР·РІРѕРЅВ» вЂ” РѕРЅ РїРѕРјРЅРёС‚. В«РќР°Р№РґРё РґРёР·Р°Р№РЅРµСЂР°В» вЂ” РЅР°С…РѕРґРёС‚. Р’СЃРµ С„СѓРЅРєС†РёРё РѕС‚РєСЂС‹С‚С‹ СЃ РїРµСЂРІРѕРіРѕ С‚РѕРєРµРЅР°.' },
-        { name: 'РћРїС‚РёРјР°Р»СЊРЅС‹Р№', sub: 'РЎР°РјС‹Р№ РїРѕРїСѓР»СЏСЂРЅС‹Р№ РІС‹Р±РѕСЂ', desc: '+500 С‚РѕРєРµРЅРѕРІ СЃРІРµСЂС…Сѓ. Р’С‹ РЅР° РІСЃС‚СЂРµС‡Рµ вЂ” РѕРЅ РґРµР»РµРіРёСЂСѓРµС‚ Р·Р°РґР°С‡Рё. Р’С‹ СЃРїРёС‚Рµ вЂ” РїРѕСЃС‚РёС‚ РІ РєР°РЅР°Р». РђРІС‚РѕРїРёР»РѕС‚, РєРѕС‚РѕСЂС‹Р№ РЅРµ РІС‹РєР»СЋС‡Р°РµС‚СЃСЏ.' },
-        { name: 'РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№', sub: 'РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РІС‹РіРѕРґР° Р·Р° С‚РѕРєРµРЅ', desc: '+10 000 С‚РѕРєРµРЅРѕРІ СЃРІРµСЂС…Сѓ. РљРѕРЅС‚РµРЅС‚, РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ, Р°Р»РµСЂС‚С‹, РёРЅСЃР°Р№С‚С‹ вЂ” РІСЃС‘ РЅР° Р°РІС‚РѕРїРёР»РѕС‚Рµ. Р’С‹ СЂР°СЃС‚С‘С‚Рµ, РїРѕРєР° AI СЂР°Р±РѕС‚Р°РµС‚.' }
+        { name: 'Стартовый', sub: 'Для знакомства с AI-партнёром', desc: '«Напомни завтра в 9 про созвон» — он помнит. «Найди дизайнера» — находит. Все функции открыты с первого токена.' },
+        { name: 'Оптимальный', sub: 'Самый популярный выбор', desc: '+500 токенов сверху. Вы на встрече — он делегирует задачи. Вы спите — постит в канал. Автопилот, который не выключается.' },
+        { name: 'Максимальный', sub: 'Максимальная выгода за токен', desc: '+10 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.' }
       ],
-      prices: ['1 500 в‚Ѕ', '5 000 в‚Ѕ', '50 000 в‚Ѕ'],
-      tokens: ['1 500 С‚РѕРєРµРЅРѕРІ', '5 500 С‚РѕРєРµРЅРѕРІ', '60 000 С‚РѕРєРµРЅРѕРІ'],
-      topup: ['РџРѕРїРѕР»РЅРёС‚СЊ вЂ” 1 500 в‚Ѕ', 'РџРѕРїРѕР»РЅРёС‚СЊ вЂ” 5 000 в‚Ѕ', 'РџРѕРїРѕР»РЅРёС‚СЊ вЂ” 50 000 в‚Ѕ'],
+      prices: ['1 500 ₽', '5 000 ₽', '50 000 ₽'],
+      tokens: ['1 500 токенов', '5 500 токенов', '60 000 токенов'],
+      topup: ['Пополнить — 1 500 ₽', 'Пополнить — 5 000 ₽', 'Пополнить — 50 000 ₽'],
       payFunc: 'selectPack',
-      ctaBtn1: 'РџРѕРїСЂРѕР±РѕРІР°С‚СЊ Р±РµСЃРїР»Р°С‚РЅРѕ вЂ” 1 500 С‚РѕРєРµРЅРѕРІ', ctaBtn2: 'РЈСЃС‚Р°РЅРѕРІРёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµ',
-      cta: 'Р’СЃРµ С„СѓРЅРєС†РёРё РґРѕСЃС‚СѓРїРЅС‹ СЃСЂР°Р·Сѓ.',
-      fHome: 'Р“Р»Р°РІРЅР°СЏ', fBlog: 'Р‘Р»РѕРі', fFaq: 'FAQ', fPrice: 'РўР°СЂРёС„С‹', fSupport: 'РџРѕРґРґРµСЂР¶РєР°', fPrivacy: 'РЎРѕРіР»Р°С€РµРЅРёРµ', fTerms: 'РџСЂР°РІРёР»Р°', fArena: 'РђСЂРµРЅР° AI'
+      ctaBtn1: 'Попробовать бесплатно — 1 500 токенов', ctaBtn2: 'Установить приложение',
+      cta: 'Все функции доступны сразу.',
+      fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
     },
     en: {
-      title: 'ASI Biont Tokens вЂ” Top Up Balance | AI Partner for Business',
-      back: 'в†ђ Home',
+      title: 'ASI Biont Tokens — Top Up Balance | AI Partner for Business',
+      back: '← Home',
       h1: 'Top Up Token Balance',
       desc1: 'All features unlocked from the start. Pay only for what you use. 1 token = $0.01 USDT.',
       desc2: 'All features available immediately.',
       badge: 'POPULAR',
       cards: [
-        { name: 'Starter', sub: 'Get started with your AI partner', desc: '"Remind me tomorrow at 9 about the call" вЂ” it remembers. "Find a designer" вЂ” it finds. All features unlocked from token one.' },
-        { name: 'Standard', sub: 'Most popular choice', desc: '+500 bonus tokens. On a call вЂ” it delegates. Sleeping вЂ” it posts. An autopilot that never stops.' },
-        { name: 'Premium', sub: 'Best value per token', desc: '+10,000 bonus tokens. Content, delegation, alerts, insights вЂ” all on autopilot. You grow while AI works.' }
+        { name: 'Starter', sub: 'Get started with your AI partner', desc: '"Remind me tomorrow at 9 about the call" — it remembers. "Find a designer" — it finds. All features unlocked from token one.' },
+        { name: 'Standard', sub: 'Most popular choice', desc: '+500 bonus tokens. On a call — it delegates. Sleeping — it posts. An autopilot that never stops.' },
+        { name: 'Premium', sub: 'Best value per token', desc: '+10,000 bonus tokens. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.' }
       ],
       prices: ['$15 USDT', '$50 USDT', '$500 USDT'],
       tokens: ['1,500 tokens', '5,500 tokens', '60,000 tokens'],
       topup: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $500 USDT'],
       payFunc: 'selectPackCrypto',
-      ctaBtn1: 'Try for free вЂ” 1,500 tokens', ctaBtn2: 'Install App',
+      ctaBtn1: 'Try for free — 1,500 tokens', ctaBtn2: 'Install App',
       cta: 'All features available immediately.',
       fHome: 'Home', fBlog: 'Blog', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
     }
@@ -338,9 +338,9 @@ function triggerPwaInstall() {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
     } else if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-        alert('РќР°Р¶РјРёС‚Рµ В«РџРѕРґРµР»РёС‚СЊСЃСЏВ» в†’ В«РќР° СЌРєСЂР°РЅ Р”РѕРјРѕР№В»');
+        alert('Нажмите «Поделиться» → «На экран Домой»');
     } else {
-        alert('РћС‚РєСЂРѕР№С‚Рµ СЃР°Р№С‚ РІ Chrome РёР»Рё Safari РґР»СЏ СѓСЃС‚Р°РЅРѕРІРєРё');
+        alert('Откройте сайт в Chrome или Safari для установки');
     }
 }
 </script>
@@ -355,6 +355,7 @@ function triggerPwaInstall() {
     })(window, document,'script','https://mc.yandex.ru/metrika/tag.js', 'ym');
 
     ym(107270723, 'init', {
+        ssr:true,
         clickmap:true,
         trackLinks:true,
         accurateTrackBounce:true,
