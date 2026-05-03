@@ -2167,6 +2167,21 @@ async def dashboard_handler(request):
             finally:
                 _deleg_session.close()
 
+        # Preload agent names for tasks created by autopilot agents (source='agent', created_by_agent_id set)
+        _agent_id_name = {}
+        _agent_task_ids = set(
+            getattr(t, 'created_by_agent_id', None) for t in tasks
+            if getattr(t, 'source', None) == 'agent' and getattr(t, 'created_by_agent_id', None)
+        )
+        if _agent_task_ids:
+            from models import UserAgent as _UA_dash
+            _ag_sess = Session()
+            try:
+                for _ag in _ag_sess.query(_UA_dash).filter(_UA_dash.id.in_(_agent_task_ids)).all():
+                    _agent_id_name[_ag.id] = _ag.name
+            finally:
+                _ag_sess.close()
+
         tasks_dict = []
         for task in tasks:
             # Подготовим reminder_time в ISO формате для JavaScript
@@ -2195,7 +2210,10 @@ async def dashboard_handler(request):
                 'delegated_by_username': _delegator_cache.get(task.delegated_by),
                 'delegated_by_me': task.delegated_by == user.id if task.delegated_by else False,
                 'source': getattr(task, 'source', 'manual') or 'manual',
-                'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
+                'agent_name': (
+                    task.delegated_to_username
+                    or _agent_id_name.get(getattr(task, 'created_by_agent_id', None))
+                ) if getattr(task, 'source', None) == 'agent' else None,
                 'completion_notes': (task.completion_notes or '') if task.status in ('completed', 'cancelled') else '',
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
@@ -7611,6 +7629,17 @@ async def api_tasks_handler(request):
             for u in session_db.query(User).filter(User.id.in_(_delegator_ids)).all():
                 _delegators_map[u.id] = u
 
+        # Preload agent names for tasks created by autopilot agents (source='agent', created_by_agent_id set)
+        _agent_id_name = {}
+        _agent_task_ids = set(
+            getattr(t, 'created_by_agent_id', None) for t in tasks
+            if getattr(t, 'source', None) == 'agent' and getattr(t, 'created_by_agent_id', None)
+        )
+        if _agent_task_ids:
+            from models import UserAgent as _UA_api
+            for _ag in session_db.query(_UA_api).filter(_UA_api.id.in_(_agent_task_ids)).all():
+                _agent_id_name[_ag.id] = _ag.name
+
         # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
         if user and user.timezone:
@@ -7667,7 +7696,10 @@ async def api_tasks_handler(request):
                 'delegated_by_username': None,
                 'delegated_by_me': task.delegated_by == user.id,
                 'source': getattr(task, 'source', 'manual') or 'manual',
-                'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
+                'agent_name': (
+                    task.delegated_to_username
+                    or _agent_id_name.get(getattr(task, 'created_by_agent_id', None))
+                ) if getattr(task, 'source', None) == 'agent' else None,
                 'completion_notes': (task.completion_notes or '') if task.status in ('completed', 'cancelled') else '',
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
                 'goal_id': task.goal_id,
