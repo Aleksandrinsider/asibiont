@@ -2756,87 +2756,31 @@ async def delegate_task(
                 return (_cut or _txt[:_limit]).strip(' ,;:.-')
 
             def _live_assignment_text(_agent_name: str, _task_text: str) -> str:
-                _STRUCT_HEADERS = (
-                    'данные для работы', 'ключевые данные', 'детали', 'описание',
-                    'шаги', 'план', 'задача', 'ожидание в отчёте', 'ожидание в отчете',
-                    'каналы',
-                )
+                # Показываем title задачи как есть — ИИ уже написал его в нужной форме.
+                # Никаких regex-обрезаний и таблиц спряжений: "учи ИИ, не кастрируй текст".
                 _task_lines = [ln.strip() for ln in (_task_text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n') if ln.strip()]
-                # Берём первые 2-3 содержательные строки (не структурные заголовки) для контекста
-                _content_lines = []
+                # Берём первую содержательную строку (title задачи) как текст поручения
+                _SKIP_HEADERS = (
+                    'данные для работы', 'ключевые данные', 'детали', 'описание',
+                    'шаги', 'план', 'задача', 'дедлайн', 'ожидание в отчёте',
+                    'ожидание в отчете', 'каналы', 'активные цели',
+                )
+                _base = ''
                 for _ln in _task_lines:
                     _ln_lc = _ln.lower().rstrip(' :')
-                    if any(_ln_lc.startswith(h) for h in _STRUCT_HEADERS):
+                    if any(_ln_lc.startswith(h) for h in _SKIP_HEADERS):
                         continue
-                    if _ln.endswith(':') and len(_ln) < 80:
+                    if _ln.endswith(':') and len(_ln) < 80 and not _ren.search(r'[.!?]', _ln[:-1]):
                         continue
-                    _content_lines.append(_ln)
-                    if len(_content_lines) >= 3:
-                        break
-                _title_line = _content_lines[0] if _content_lines else ''
-                # Склеиваем до 2-3 предложений для показа контекста (не только первая строка)
-                _multi = ' '.join(_content_lines).strip()
-                _base = _multi or _strip_structured_text(_task_text, _max_len=600)
-                # Обрезаем структурные разделители — но ТОЛЬКО если они НЕ в начале строки
-                # (чтобы не уничтожать задачи типа "На основе анализа трендов разработай...")
-                _split_m = _ren.split(
-                    r'(?i)(?<=[а-яёa-z.,])\s+\b(?:используй|детали|описание|данные\s+для\s+работы|ключевые\s+данные|нужно\s+найти|нужно\s+сделать)\b',
-                    _base,
-                    maxsplit=1,
-                )
-                if len(_split_m) > 1 and len(_split_m[0].strip()) >= 18:
-                    _base = _split_m[0].strip(' ,;:.-')
-                if len(_base) < 18 and len(_task_lines) > 1:
-                    _base = _strip_structured_text('\n'.join(_task_lines[:3]), _max_len=320)
-                _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
-                _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
+                    _base = _ln
+                    break
+                _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip()
                 _generic = f'{_agent_name}, продолжи работу по текущей задаче.'
                 if not _base:
                     return _generic
-                # Показываем до 600 символов — достаточно для полного контекста поручения
-                _base = _truncate_by_word(_base, 600)
-                if _base and _base[:1].isupper() and not _base[:3].isupper():
-                    _base = _base[:1].lower() + _base[1:]
-                # Эвристика: глагол (инфинитив/императив) или существительное?
-                _first_w = (_base.split()[0] if _base else '').lower().rstrip('.,;:')
-                _is_verb = bool(_ren.match(
-                    r'.+(ть|ться|чь|чься)$|.+(и|й|ись|йся|йте|ьте|ьтесь)$',
-                    _first_w,
-                )) and not _ren.match(r'.+(ость|ение|ание|ция|ство|ок|ка|ие|тель)$', _first_w)
-                # Noun→imperative conversion
-                _NOUN_IMP_DEL = {
-                    'поиск': 'поищи', 'анализ': 'проанализируй', 'отправка': 'отправь',
-                    'проверка': 'проверь', 'создание': 'создай', 'подготовка': 'подготовь',
-                    'исследование': 'исследуй', 'публикация': 'опубликуй',
-                    'обновление': 'обнови', 'написание': 'напиши', 'составление': 'составь',
-                    'настройка': 'настрой', 'разработка': 'разработай', 'сбор': 'собери',
-                    'обзор': 'сделай обзор', 'подбор': 'подбери', 'оценка': 'оцени',
-                }
-                if not _is_verb and _first_w in _NOUN_IMP_DEL:
-                    _noun_imp = _NOUN_IMP_DEL[_first_w]
-                    _rest = _base[len(_first_w):].lstrip()
-                    _base = f'{_noun_imp} {_rest}' if _rest else _noun_imp
-                    _is_verb = True
-                if _is_verb:
-                    # INF→IMP: конвертируем инфинитив в императив
-                    _INF_IMP_DEL = {
-                        'найти': 'найди', 'проверить': 'проверь', 'отправить': 'отправь',
-                        'создать': 'создай', 'написать': 'напиши', 'собрать': 'собери',
-                        'подготовить': 'подготовь', 'исследовать': 'исследуй',
-                        'поискать': 'поищи', 'сделать': 'сделай', 'запустить': 'запусти',
-                        'использовать': 'используй', 'опубликовать': 'опубликуй',
-                        'обновить': 'обнови', 'связаться': 'свяжись',
-                        'составить': 'составь', 'настроить': 'настрой', 'добавить': 'добавь',
-                        'изучить': 'изучи', 'узнать': 'узнай', 'проанализировать': 'проанализируй',
-                        'разработать': 'разработай', 'подключить': 'подключи',
-                        'выбрать': 'выбери', 'протестировать': 'протестируй',
-                        'описать': 'опиши', 'подобрать': 'подбери',
-                    }
-                    if _first_w in _INF_IMP_DEL:
-                        _base = _INF_IMP_DEL[_first_w] + _base[len(_first_w):]
-                    _msg = f'{_agent_name}, {_base}.'
-                else:
-                    _msg = f'{_agent_name}, {_base}.' if len(_base) > 30 else f'{_agent_name}, есть задача — {_base}.'
+                _msg = f'{_agent_name}, {_base}'
+                if not _msg.rstrip().endswith(('.', '!', '?')):
+                    _msg = _msg.rstrip() + '.'
                 _sanitized = sanitize_live_team_chat_text(
                     _msg,
                     anchor_type='agent_delegation',
@@ -13797,6 +13741,25 @@ async def send_outreach_email(
         if not user:
             return " Пользователь не найден"
 
+        # Внутренние агенты команды должны общаться через DELEGATE/внутреннюю координацию,
+        # а не через email-outreach инструмент.
+        def _norm_agent_token(_s: str) -> str:
+            import re as _re_norm_ag
+            return _re_norm_ag.sub(r'[^a-zа-яё0-9]+', '', (_s or '').strip().lower())
+
+        _team_agents_l = {}
+        try:
+            from models import UserAgent as _UA_int
+            for _ua_int in session.query(_UA_int).filter(
+                _UA_int.author_id == user.id,
+                _UA_int.status != 'disabled',
+            ).all():
+                _n = (_ua_int.name or '').strip()
+                if _n:
+                    _team_agents_l[_norm_agent_token(_n)] = _n
+        except Exception as _e_team:
+            logger.debug("suppressed team-agent load: %s", _e_team)
+
         # ── GUARD: проверка user_rules — запрет email-рассылки + извлечение сайта ──
         _user_landing_url = None
         try:
@@ -13859,6 +13822,25 @@ async def send_outreach_email(
         # строку с пробелами/переносами и т.п. — извлекаем только email.
         _raw_rcpt = (recipient_email or '').strip()
         recipient_email = _normalize_email_input(_raw_rcpt)
+
+        # ── GUARD: внутренний агент не должен быть email-получателем ──
+        if recipient_email:
+            _rcpt_l = recipient_email.strip().lower()
+            _rcpt_local = _rcpt_l.split('@', 1)[0] if '@' in _rcpt_l else _rcpt_l
+            _rcpt_domain = _rcpt_l.rsplit('@', 1)[1] if '@' in _rcpt_l else ''
+            _rcpt_name_tok = _norm_agent_token(recipient_name or '')
+            _local_tok = _norm_agent_token(_rcpt_local)
+            _matched_internal = ''
+            if _rcpt_name_tok and _rcpt_name_tok in _team_agents_l:
+                _matched_internal = _team_agents_l[_rcpt_name_tok]
+            elif _local_tok and _local_tok in _team_agents_l and _rcpt_domain in ('asibiont.com',):
+                _matched_internal = _team_agents_l[_local_tok]
+            if _matched_internal:
+                return (
+                    f"⛔ {_matched_internal} — внутренний агент команды. "
+                    f"Для связи между агентами используй внутреннюю делегацию: DELEGATE[{_matched_internal}], "
+                    f"а не send_outreach_email."
+                )
 
         # ── GUARD: невалидный email после нормализации ──
         if (not recipient_email or '@' not in recipient_email
@@ -18628,6 +18610,39 @@ async def save_email_contact(
         email_clean = (email or '').strip().lower()
         if not email_clean or '@' not in email_clean:
             return " Некорректный email"
+
+        # Внутренние агенты не должны сохраняться как email-лиды для outreach.
+        def _norm_agent_token(_s: str) -> str:
+            import re as _re_norm_ag
+            return _re_norm_ag.sub(r'[^a-zа-яё0-9]+', '', (_s or '').strip().lower())
+
+        _team_agents_l = {}
+        try:
+            from models import UserAgent as _UA_int
+            for _ua_int in session.query(_UA_int).filter(
+                _UA_int.author_id == user.id,
+                _UA_int.status != 'disabled',
+            ).all():
+                _n = (_ua_int.name or '').strip()
+                if _n:
+                    _team_agents_l[_norm_agent_token(_n)] = _n
+        except Exception as _e_team:
+            logger.debug("suppressed team-agent load: %s", _e_team)
+
+        _email_local = email_clean.split('@', 1)[0]
+        _email_domain = email_clean.split('@')[-1] if '@' in email_clean else ''
+        _name_tok = _norm_agent_token(name or '')
+        _local_tok = _norm_agent_token(_email_local)
+        _matched_internal = ''
+        if _name_tok and _name_tok in _team_agents_l:
+            _matched_internal = _team_agents_l[_name_tok]
+        elif _local_tok and _local_tok in _team_agents_l and _email_domain in ('asibiont.com',):
+            _matched_internal = _team_agents_l[_local_tok]
+        if _matched_internal:
+            return (
+                f"⛔ {_matched_internal} — внутренний агент команды. "
+                f"Не сохраняй как email-контакт. Для передачи задачи используй DELEGATE[{_matched_internal}]."
+            )
 
         # Блокируем фейковые/placeholder домены — агент не должен придумывать email
         _FAKE_DOMAINS = {
