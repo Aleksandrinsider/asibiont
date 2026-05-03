@@ -1697,12 +1697,34 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         # Rate-limit заметок отключён: сохраняем всё, что агент считает важным.
         _since_24h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=24)
 
-        # --- Дедуп: проверяем похожий заголовок за последние 4ч (было 24ч — слишком агрессивно) ---
+        # --- Дедуп: проверяем похожий заголовок за последние 4ч (blog: 30 мин через SequenceMatcher) ---
+        import re as _re_sn_dedup
+        def _strip_img_md_sn(_txt):
+            return _re_sn_dedup.sub(r'^!\[.*?\]\(.*?\)\s*', '', (_txt or '').strip(), flags=_re_sn_dedup.MULTILINE | _re_sn_dedup.DOTALL)
+
         _since_dedup = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=4)
         _recent_notes = session.query(Note).filter(
             Note.user_id == user.id,
             Note.created_at >= _since_dedup,
         ).all()
+
+        # Для source='blog': сравниваем контент через SequenceMatcher (без image-markdown),
+        # чтобы поймать дубль от create_post который тоже создаёт Note(source='blog').
+        if source == 'blog':
+            from difflib import SequenceMatcher as _SM_sn
+            _cur_sn_text = _strip_img_md_sn(content)
+            _cur_sn_norm = ' '.join(_cur_sn_text.lower().split())[:1200]
+            for _rn in _recent_notes:
+                if not _rn.content:
+                    continue
+                _rn_text = _strip_img_md_sn(_rn.content)
+                _rn_norm = ' '.join(_rn_text.lower().split())[:1200]
+                if not _rn_norm:
+                    continue
+                _sim_sn = _SM_sn(None, _cur_sn_norm, _rn_norm).ratio()
+                if _sim_sn >= 0.85:
+                    logger.info(f"[SAVE_NOTE] Blog dedup: similar note exists (id={_rn.id}, sim={_sim_sn:.0%}): «{_rn.title}»")
+                    return f"Похожая статья уже есть: «{_rn.title}» — дубль не создан."
 
         # Сравнение по заголовку (>70% слов) + по содержимому (>70% слов в 1-м предложении)
         _title_words = set(w for w in _note_title.lower().split() if len(w) > 2)
@@ -1717,7 +1739,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                     return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
             # Дополнительно: совпадение по началу контента
             if _content_head_words and len(_content_head_words) >= 4:
-                _rn_content_head = set(w for w in (_rn.content or '').split('.')[0].lower().split() if len(w) > 3)
+                _rn_content_head = set(w for w in _strip_img_md_sn(_rn.content or '').split('.')[0].lower().split() if len(w) > 3)
                 if _rn_content_head:
                     _c_overlap = len(_content_head_words & _rn_content_head) / max(len(_content_head_words), len(_rn_content_head))
                     if _c_overlap > 0.70:
@@ -9625,7 +9647,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             try:
                 from datetime import timedelta as _td_cp
                 from difflib import SequenceMatcher as _SM_cp
-                _blog_cutoff = dt.datetime.now(dt.timezone.utc) - _td_cp(minutes=20)
+                import re as _re_bd
+                _blog_cutoff = dt.datetime.now(dt.timezone.utc) - _td_cp(minutes=30)
                 _recent_blog_notes = (
                     session.query(_NoteCP)
                     .filter(
@@ -9634,22 +9657,42 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                         _NoteCP.created_at >= _blog_cutoff,
                     )
                     .order_by(_NoteCP.id.desc())
-                    .limit(5)
+                    .limit(10)
                     .all()
                 )
-                _cur_blog_norm = ' '.join((_blog_note_content or '').lower().split())[:1200]
+                # Strip image markdown prefix before comparing — otherwise dedup fails
+                # when one version has "![...](...)
+
+Content" and other has just "Content"
+                def _strip_img_md(_txt):
+                    return _re_bd.sub(r'^!\[.*?\]\(.*?\)\s*', '', (_txt or '').strip(), flags=_re_bd.MULTILINE | _re_bd.DOTALL)
+                _cur_blog_text = _strip_img_md(_blog_note_content)
+                _cur_blog_norm = ' '.join(_cur_blog_text.lower().split())[:1200]
+                _cur_title_words = set(w for w in _blog_title.lower().split() if len(w) > 2)
                 for _bn in _recent_blog_notes:
-                    _bn_norm = ' '.join(((_bn.content or '')).lower().split())[:1200]
+                    _bn_text = _strip_img_md(_bn.content)
+                    _bn_norm = ' '.join(_bn_text.lower().split())[:1200]
                     if not _bn_norm:
                         continue
                     _sim_blog = _SM_cp(None, _cur_blog_norm, _bn_norm).ratio()
-                    if _sim_blog >= 0.90:
+                    if _sim_blog >= 0.85:
                         _existing_blog = _bn
                         logger.warning(
-                            "[CREATE_POST] Blog dedup skip: similar recent note id=%s (sim=%.2f)",
+                            "[CREATE_POST] Blog dedup skip: similar recent note id=%s (content sim=%.2f)",
                             _bn.id, _sim_blog,
                         )
                         break
+                    # Also check title word overlap (catches same-topic posts with reworded content)
+                    _bn_title_words = set(w for w in (_bn.title or '').lower().split() if len(w) > 2)
+                    if _cur_title_words and _bn_title_words:
+                        _title_sim = len(_cur_title_words & _bn_title_words) / max(len(_cur_title_words), len(_bn_title_words))
+                        if _title_sim >= 0.65:
+                            _existing_blog = _bn
+                            logger.warning(
+                                "[CREATE_POST] Blog dedup skip: similar title note id=%s (title sim=%.2f)",
+                                _bn.id, _title_sim,
+                            )
+                            break
             except Exception as _blog_dedup_err:
                 logger.debug("suppressed blog dedup check: %s", _blog_dedup_err)
 
