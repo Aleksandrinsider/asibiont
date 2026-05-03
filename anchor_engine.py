@@ -7349,6 +7349,7 @@ class AnchorEngine:
                             # Reliability penalty: recent timeout/slow cycles should reduce routing priority.
                             # This makes round-robin adaptive without fully excluding an agent.
                             _rr_quality_penalty = {}
+                            _rr_learning_penalty = {}
                             _rr_quality_cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
                             for _ag_rr in _rotation_pool:
                                 _ag_rr_id = getattr(_ag_rr, 'id', 0)
@@ -7384,6 +7385,33 @@ class AnchorEngine:
                                 _qp = (_timeout_like * 12) + (_slow_like * 3) - min(_success_like, 2)
                                 if _qp > 0:
                                     _rr_quality_penalty[_ag_rr_id] = _qp
+
+                                # Learning-weight from real assignment->result conversion.
+                                # Penalize agents who receive assignments but don't close with results,
+                                # reward stable conversion so routing gets smarter over time.
+                                if _ag_rr_id != 0:
+                                    try:
+                                        _h_lr = self._recent_assignment_result_health(
+                                            session, user.id, getattr(_ag_rr, 'name', ''), hours=12
+                                        )
+                                        _a_lr = int(_h_lr.get('assignments', 0) or 0)
+                                        _r_lr = int(_h_lr.get('results', 0) or 0)
+                                        _g_lr = int(_h_lr.get('gap', 0) or 0)
+                                        _lr_pen = 0
+                                        if _a_lr >= 2:
+                                            _conv = _r_lr / max(_a_lr, 1)
+                                            if _conv < 0.50:
+                                                _lr_pen += 4
+                                            if _g_lr >= 2:
+                                                _lr_pen += 6
+                                            if _a_lr >= 5 and _r_lr == 0:
+                                                _lr_pen += 10
+                                            if _conv >= 0.80 and _g_lr == 0:
+                                                _lr_pen -= 2
+                                        if _lr_pen != 0:
+                                            _rr_learning_penalty[_ag_rr_id] = _lr_pen
+                                    except Exception:
+                                        pass
                         except Exception as _rr_err:
                             logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed: %s", _rr_err)
                             try:
@@ -7391,6 +7419,7 @@ class AnchorEngine:
                             except Exception:
                                 pass
                             _rr_quality_penalty = {}
+                            _rr_learning_penalty = {}
 
                         # ── Универсальный скоринг: интеграции агента × потребности цели ──
                         from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_rr
@@ -7440,6 +7469,7 @@ class AnchorEngine:
                             cnt = _rr_counts.get(aid, 0)
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 15  # 50→15: таймаут API не выбивает агента из ротации на часы
                             quality_penalty = _rr_quality_penalty.get(aid, 0)
+                            learning_penalty = _rr_learning_penalty.get(aid, 0)
                             cap_bonus = _capability_score(a)  # capability — мягкая подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
                             # Тай-брейк: агент с меньшим числом назначений за 2ч (не по id).
@@ -7456,12 +7486,12 @@ class AnchorEngine:
                             except Exception:
                                 _assigns_2h = 0
                             tie_break = (_assigns_2h, aid if aid != 0 else _asi_tie)
-                            return (cnt + fail_penalty + quality_penalty - cap_bonus, tie_break)
+                            return (cnt + fail_penalty + quality_penalty + learning_penalty - cap_bonus, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content
                         _rr_debug = (
                             f'[RR] pool={[(getattr(a,"id",0), getattr(a,"name","?")) for a in _rotation_pool]} '
-                            f'counts={_rr_counts} fails={_rr_recent_fails} quality={_rr_quality_penalty} '
+                            f'counts={_rr_counts} fails={_rr_recent_fails} quality={_rr_quality_penalty} learning={_rr_learning_penalty} '
                             f'chosen={chosen.name}({getattr(chosen,"id",0)})'
                         )
                     else:
