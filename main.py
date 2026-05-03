@@ -11675,6 +11675,7 @@ async def resend_webhook_handler(request):
             # --- Tracking events (delivered, opened, bounced, complained) ---
             if event_type in ('email.delivered', 'email.opened', 'email.bounced', 'email.complained'):
                 from sqlalchemy import func
+                import re as _re_bnc
 
                 def _extract_first_email(_raw):
                     try:
@@ -11705,6 +11706,24 @@ async def resend_webhook_handler(request):
                     or data.get('subject', '')
                 ).strip()
 
+                _bounce = payload.get('bounce') if isinstance(payload, dict) else {}
+                _bounce_type = str((_bounce or {}).get('type') or '').strip().lower()
+                _bounce_subtype = str((_bounce or {}).get('subType') or '').strip().lower()
+                _diag_raw = (_bounce or {}).get('diagnosticCode') or ''
+                if isinstance(_diag_raw, list):
+                    _diag_text = ' | '.join(str(x) for x in _diag_raw)
+                else:
+                    _diag_text = str(_diag_raw or '')
+                _diag_l = _diag_text.lower()
+                _is_transient_bounce = (
+                    event_type == 'email.bounced' and (
+                        _bounce_type == 'transient'
+                        or _bounce_subtype == 'general'
+                        or bool(_re_bnc.search(r'\b4\d\d\b', _diag_l))
+                        or any(w in _diag_l for w in ('temporary', 'try again', 'later', '4.7.0'))
+                    )
+                )
+
                 if email_id:
                     from models import EmailOutreach, EmailCampaign
                     outreach = session_db.query(EmailOutreach).filter_by(resend_id=email_id).first()
@@ -11731,14 +11750,23 @@ async def resend_webhook_handler(request):
                             'email.bounced': 'bounced',
                             'email.complained': 'failed',
                         }
-                        new_status = status_map.get(event_type, outreach.status)
+                        if _is_transient_bounce:
+                            # Temporary SMTP bounces (e.g., 451 4.7.0) are retryable.
+                            # Do not convert contact to terminal bounced status.
+                            new_status = outreach.status if outreach.status in ('delivered', 'opened', 'replied') else 'sent'
+                            logger.info(
+                                f"[RESEND_WEBHOOK] Transient bounce for outreach #{outreach.id}: "
+                                f"type={_bounce_type or '?'} subtype={_bounce_subtype or '?'} diag={_diag_text[:180]}"
+                            )
+                        else:
+                            new_status = status_map.get(event_type, outreach.status)
                         status_priority = {'draft': 0, 'sent': 1, 'delivered': 2, 'opened': 3, 'replied': 4, 'bounced': 5, 'failed': 5}
                         if status_priority.get(new_status, 0) > status_priority.get(outreach.status, 0):
                             outreach.status = new_status
                             session_db.commit()
                             logger.info(f"[RESEND_WEBHOOK] Updated outreach #{outreach.id} → {new_status}")
 
-                        if event_type in ('email.bounced', 'email.complained'):
+                        if event_type == 'email.complained' or (event_type == 'email.bounced' and not _is_transient_bounce):
                             # Синхронизируем статус EmailContact → bounced
                             try:
                                 from models import EmailContact
@@ -11810,6 +11838,11 @@ async def resend_webhook_handler(request):
                                     logger.warning(f"[RESEND_WEBHOOK] SPAM COMPLAINT: outreach #{outreach.id} from {outreach.recipient_email} in campaign #{outreach.campaign_id}")
                                 except Exception as _e_aal:
                                     logger.debug(f"[RESEND_WEBHOOK] Failed to log complaint to AAL: {_e_aal}")
+                        elif event_type == 'email.bounced' and _is_transient_bounce:
+                            logger.info(
+                                f"[RESEND_WEBHOOK] Skip terminal bounce sync for retryable transient bounce: "
+                                f"{redact_email(outreach.recipient_email)}"
+                            )
                     elif recipient_email and event_type in ('email.bounced', 'email.complained'):
                         logger.warning(
                             f"[RESEND_WEBHOOK] {event_type}: email_id={email_id or '?'} unmatched, "
