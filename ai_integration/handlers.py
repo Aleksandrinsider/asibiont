@@ -9661,9 +9661,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     .all()
                 )
                 # Strip image markdown prefix before comparing — otherwise dedup fails
-                # when one version has "![...](...)
-
-Content" and other has just "Content"
+                # when one version has an image prefix and the other does not.
                 def _strip_img_md(_txt):
                     return _re_bd.sub(r'^!\[.*?\]\(.*?\)\s*', '', (_txt or '').strip(), flags=_re_bd.MULTILINE | _re_bd.DOTALL)
                 _cur_blog_text = _strip_img_md(_blog_note_content)
