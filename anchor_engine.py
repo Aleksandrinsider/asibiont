@@ -7345,12 +7345,52 @@ class AnchorEngine:
                                         break
                                 if _consec >= 3:
                                     _rr_recent_fails[_ag_rr_id] = _consec
+
+                            # Reliability penalty: recent timeout/slow cycles should reduce routing priority.
+                            # This makes round-robin adaptive without fully excluding an agent.
+                            _rr_quality_penalty = {}
+                            _rr_quality_cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
+                            for _ag_rr in _rotation_pool:
+                                _ag_rr_id = getattr(_ag_rr, 'id', 0)
+                                _ref_val = _ag_rr_id if _ag_rr_id != 0 else None
+                                _rr_rows = session.query(
+                                    _AAL_ap.status, _AAL_ap.result, _AAL_ap.created_at, _AAL_ap.updated_at
+                                ).filter(
+                                    _AAL_ap.user_id == user.id,
+                                    _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                                    _AAL_ap.created_at >= _rr_quality_cutoff,
+                                    _AAL_ap.ref_id == _ref_val if _ref_val is not None else _AAL_ap.ref_id.is_(None),
+                                ).order_by(_AAL_ap.created_at.desc()).limit(8).all()
+                                if not _rr_rows:
+                                    continue
+
+                                _timeout_like = 0
+                                _slow_like = 0
+                                _success_like = 0
+                                for _st_q, _res_q, _crt_q, _upd_q in _rr_rows:
+                                    _res_l = (_res_q or '').lower()
+                                    if _st_q == 'completed':
+                                        _success_like += 1
+                                    if _st_q == 'failed' or 'timeout/process_restart' in _res_l or 'timeouterror' in _res_l:
+                                        _timeout_like += 1
+                                    if _st_q == 'completed' and _crt_q and _upd_q:
+                                        try:
+                                            _dur_s = (_upd_q - _crt_q).total_seconds()
+                                            if _dur_s > 180:
+                                                _slow_like += 1
+                                        except Exception:
+                                            pass
+
+                                _qp = (_timeout_like * 12) + (_slow_like * 3) - min(_success_like, 2)
+                                if _qp > 0:
+                                    _rr_quality_penalty[_ag_rr_id] = _qp
                         except Exception as _rr_err:
                             logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed: %s", _rr_err)
                             try:
                                 session.rollback()
                             except Exception:
                                 pass
+                            _rr_quality_penalty = {}
 
                         # ── Универсальный скоринг: интеграции агента × потребности цели ──
                         from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_rr
@@ -7399,6 +7439,7 @@ class AnchorEngine:
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 15  # 50→15: таймаут API не выбивает агента из ротации на часы
+                            quality_penalty = _rr_quality_penalty.get(aid, 0)
                             cap_bonus = _capability_score(a)  # capability — мягкая подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
                             # Тай-брейк: агент с меньшим числом назначений за 2ч (не по id).
@@ -7415,12 +7456,13 @@ class AnchorEngine:
                             except Exception:
                                 _assigns_2h = 0
                             tie_break = (_assigns_2h, aid if aid != 0 else _asi_tie)
-                            return (cnt + fail_penalty - cap_bonus, tie_break)
+                            return (cnt + fail_penalty + quality_penalty - cap_bonus, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content
                         _rr_debug = (
                             f'[RR] pool={[(getattr(a,"id",0), getattr(a,"name","?")) for a in _rotation_pool]} '
-                            f'counts={_rr_counts} fails={_rr_recent_fails} chosen={chosen.name}({getattr(chosen,"id",0)})'
+                            f'counts={_rr_counts} fails={_rr_recent_fails} quality={_rr_quality_penalty} '
+                            f'chosen={chosen.name}({getattr(chosen,"id",0)})'
                         )
                     else:
                         chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
@@ -7451,6 +7493,28 @@ class AnchorEngine:
                     'knowledge_base': getattr(chosen, 'knowledge_base', '') or '',
                 }
                 agent_name = chosen.name
+
+                # Timeout pressure: if selected agent recently had multiple timeout-like cycles,
+                # force shorter one-tool execution plan to reduce process_restart loops.
+                _compact_timeout_mode = False
+                _recent_timeout_like = 0
+                if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                    try:
+                        _cut_tmo = datetime.now(timezone.utc) - timedelta(hours=12)
+                        _ref_tmo = chosen.id
+                        _tmo_rows = session.query(_AAL_ap.status, _AAL_ap.result).filter(
+                            _AAL_ap.user_id == user.id,
+                            _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                            _AAL_ap.created_at >= _cut_tmo,
+                            _AAL_ap.ref_id == _ref_tmo,
+                        ).order_by(_AAL_ap.created_at.desc()).limit(8).all()
+                        for _st_tmo, _res_tmo in _tmo_rows:
+                            _res_tmo_l = (_res_tmo or '').lower()
+                            if _st_tmo == 'failed' or 'timeout/process_restart' in _res_tmo_l or 'timeouterror' in _res_tmo_l:
+                                _recent_timeout_like += 1
+                        _compact_timeout_mode = _recent_timeout_like >= 2
+                    except Exception as _tmo_mode_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] timeout mode probe failed: %s", _tmo_mode_err)
 
                 # Efficiency guard: если агент застрял (поручения >> результаты),
                 # переключаемся на более «здорового» агента до dispatch.
@@ -7642,6 +7706,17 @@ class AnchorEngine:
                     # Иначе оставляем task_text как был
 
                 # ── Проверяем токены за автопилот (минимум agent_task=15) ──
+                if _compact_timeout_mode:
+                    task_text += (
+                        "\n\n⚠️ РЕЖИМ СТАБИЛЬНОСТИ: у тебя были таймауты в последних циклах. "
+                        "Сделай ОДИН короткий шаг (один инструмент, один результат, без длинного анализа)."
+                    )
+                    logger.info(
+                        "[ANCHOR-AUTOPILOT] compact timeout mode ON for %s (recent_timeout_like=%d)",
+                        agent_name,
+                        _recent_timeout_like,
+                    )
+
                 from token_service import has_enough_tokens as _het_ap, spend_tokens as _sp_ap
                 from config import FREE_ACCESS_MODE as _FAM_ap
                 if not _FAM_ap:
