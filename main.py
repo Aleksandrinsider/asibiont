@@ -3376,6 +3376,39 @@ async def custom_404_middleware(request, handler):
 @web.middleware
 async def session_error_middleware(request, handler):
     """Handle corrupted session cookies"""
+    def _clear_session_cookie(response):
+        """Best-effort cookie cleanup across common host/domain variants."""
+        _host = (request.host or '').split(':', 1)[0].strip().lower()
+        _domains = [None]
+        if _host and _host not in ('localhost', '127.0.0.1'):
+            _domains.extend([_host, f'.{_host}'])
+        for _dom in _domains:
+            try:
+                response.del_cookie('AIOHTTP_SESSION', domain=_dom, path='/')
+            except Exception:
+                pass
+
+    def _broken_session_response():
+        # API clients shouldn't be redirected to the same failing endpoint.
+        if request.path.startswith('/api/'):
+            _resp = web.json_response({'error': 'session_invalid', 'reload': True}, status=401)
+        else:
+            _resp = web.Response(status=302)
+            _resp.headers['Location'] = '/'
+        _clear_session_cookie(_resp)
+        return _resp
+
+    def _looks_like_cookie_session_error(exc):
+        _name = type(exc).__name__.lower()
+        _msg = str(exc).lower()
+        _cookie_present = 'AIOHTTP_SESSION' in request.cookies
+        _name_hit = any(k in _name for k in ('invalidtoken', 'invalidsignature', 'badsignature'))
+        _msg_hit = any(k in _msg for k in (
+            'cookie', 'session', 'fernet', 'invalid token', 'invalidtoken',
+            'bad signature', 'invalid signature', 'cannot decrypt',
+        ))
+        return _cookie_present and (_name_hit or _msg_hit)
+
     try:
         return await handler(request)
     except web.HTTPException:
@@ -3383,19 +3416,17 @@ async def session_error_middleware(request, handler):
         raise
     except (json.JSONDecodeError, ValueError, UnicodeDecodeError, binascii.Error) as e:
         logger.error(f"Corrupted session cookie detected: {e}, clearing cookie")
-        # Create response without session cookie
-        response = web.Response(status=302)
-        response.headers['Location'] = request.path
-        response.del_cookie('AIOHTTP_SESSION', domain=None, path='/')
-        return response
+        return _broken_session_response()
     except Exception as e:
         # EncryptedCookieStorage can raise InvalidToken for stale/tampered cookies.
         if _FernetInvalidToken is not None and isinstance(e, _FernetInvalidToken):
             logger.error("Corrupted encrypted session cookie detected (InvalidToken), clearing cookie")
-            response = web.Response(status=302)
-            response.headers['Location'] = request.path
-            response.del_cookie('AIOHTTP_SESSION', domain=None, path='/')
-            return response
+            return _broken_session_response()
+        if _looks_like_cookie_session_error(e):
+            logger.error(
+                f"Likely corrupted session cookie [{type(e).__name__}] on {request.method} {request.path}: {e}; clearing cookie"
+            )
+            return _broken_session_response()
         if isinstance(e, (ConnectionResetError, BrokenPipeError)):
             logger.debug(f"Client disconnected during {request.method} {request.path}: {e}")
             raise
