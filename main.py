@@ -11690,6 +11690,10 @@ async def resend_webhook_handler(request):
                 _wh_timeout_disabled = True
             except Exception:
                 pass
+            # --- Skip outgoing delivery notifications (not inbound replies) ---
+            if event_type == 'email.sent':
+                return web.json_response({'status': 'ok', 'event': 'sent_ack'})
+
             # --- Tracking events (delivered, opened, bounced, complained) ---
             if event_type in ('email.delivered', 'email.opened', 'email.bounced', 'email.complained'):
                 from sqlalchemy import func
