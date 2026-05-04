@@ -1891,6 +1891,7 @@ class ContextBuilder:
         _has_pochta = 'POCHTA' in _kup
         _has_gmaps = 'GOOGLE_MAPS' in _kup or 'GMAPS' in _kup
         _has_alphavantage = 'ALPHAVANTAGE' in _kup or 'ALPHA_VANTAGE' in _kup
+        _has_oanda = 'OANDA_API_KEY' in _kup or 'OANDA_ACCESS_TOKEN' in _kup
         _has_newsapi = 'NEWSAPI' in _kup
         _has_hh = 'HH_' in _kup or 'HEADHUNTER' in _kup
         _has_avito = 'AVITO' in _kup
@@ -2035,6 +2036,10 @@ class ContextBuilder:
              "Alpha Vantage",
              "котировки акций/нефти/форекс/металлов, исторические данные",
              "агент + ALPHAVANTAGE_API_KEY (alphavantage.co, бесплатно)"),
+            (not _has_oanda,
+             "OANDA",
+             "форекс-анализ: котировки 70+ пар, свечи OHLCV, SMA/RSI без торгового счёта",
+             "агент + OANDA_API_KEY (oanda.com → практический аккаунт бесплатно)"),
             (not _has_newsapi,
              "NewsAPI",
              "поток новостей из 100+ источников по любой теме",

@@ -9097,6 +9097,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'get_stock_price', 'get_news_trends', 'research_topic',
                     'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
                 })
+            # OANDA / форекс-анализ — по ключу интеграции
+            if any(w in _lbl_ap for w in ('oanda', 'форекс', 'forex', 'валют')):
+                _autopilot_tools.update({
+                    'get_forex_analysis', 'get_news_trends', 'research_topic',
+                    'create_post', 'publish_to_telegram', 'save_note',
+                })
             # RSS/мониторинг — по лейблу интеграции ИЛИ специализации агента
             if (any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')) or
                     any(w in _spec for w in ('rss', 'лент', 'feed'))):
@@ -9202,6 +9208,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _inferred_tools.update({
                     'get_stock_price', 'get_news_trends', 'research_topic', 'web_search',
                     'create_post', 'publish_to_telegram', 'save_note',
+                })
+            # OANDA / форекс-анализ — по ключу интеграции
+            if any(w in _lbl_ch for w in ('oanda', 'форекс', 'forex', 'валют')):
+                _inferred_tools.update({
+                    'get_forex_analysis', 'get_news_trends', 'research_topic',
+                    'create_post', 'save_note',
                 })
             # RSS — по ключу интеграции ИЛИ специализации агента
             if (any(w in _lbl_ch for w in ('rss', 'лент', 'feed', 'новост')) or
@@ -12225,7 +12237,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "  • email (send_email, send_outreach_email, reply_to_outreach_email, send_follow_up_email, negotiate_by_email, check_emails)\n"
         "  • email-контакты (save_email_contact, update_email_contact_status, list_email_contacts)\n"
         "  • кампании делегирования (start_delegation_campaign, manage_delegation_campaign)\n"
-        "  • исследования (web_search, research_topic, get_news_trends, get_weather_info, get_stock_price)\n"
+        "  • исследования (web_search, research_topic, get_news_trends, get_weather_info, get_stock_price, get_forex_analysis)\n"
         "  • делегирование задач (delegate_task, get_delegation_progress, accept_delegated_task, reject_delegated_task)\n"
         "  • коммуникации (send_message_to_user, find_and_message_relevant_users, reply_to_user_message, get_incoming_messages, broadcast_message_to_all_users)\n"
         "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"

@@ -1747,6 +1747,33 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_forex_analysis",
+            "description": "📊 Анализ форекс-рынка через OANDA: котировки валютных пар, исторические свечи OHLCV, технический анализ (SMA20, диапазон, % изменение). Требует OANDA_API_KEY в ключах агента (бесплатный practice-аккаунт на oanda.com). Пары: EUR/USD, GBP/USD, USD/JPY, USD/RUB, XAU/USD (золото), USD/CHF и др. 70+ инструментов.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instrument": {
+                        "type": "string",
+                        "description": "Валютная пара или инструмент. Формат: EUR/USD, GBP/USD, USD/JPY, XAU/USD (золото), XAG/USD (серебро). Допускается написание с подчёркиванием: EUR_USD."
+                    },
+                    "granularity": {
+                        "type": "string",
+                        "description": "Таймфрейм свечей: M5 (5 мин), M15 (15 мин), H1 (часовые), H4 (4 часа), D (дневные). По умолчанию H1.",
+                        "enum": ["M5", "M15", "M30", "H1", "H4", "D", "W"]
+                    },
+                    "count": {
+                        "type": "integer",
+                        "description": "Количество свечей для анализа (5–200). По умолчанию 50. Больше — глубже история.",
+                        "default": 50
+                    }
+                },
+                "required": ["instrument"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_news_trends",
             "description": "📰 Получить актуальные новости и тренды по теме. Используй когда нужна подборка новостей для анализа рынка, контент-плана или просто «что происходит в нише».",
             "parameters": {
