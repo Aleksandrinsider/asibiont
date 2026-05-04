@@ -7539,6 +7539,16 @@ try:
     print('Sub: ' + d.get('sub', '?'))
 except Exception as e:
     print('Ошибка LinkedIn: ' + str(e))`
+            },
+            custom: {
+                name: 'Своя интеграция',
+                isCustom: true,
+                fields: [
+                    {k:'_CNAME_', label:'Название интеграции', ph:'Моя CRM / My API', t:'text'},
+                    {k:'_CKEYS_', label:'API-ключи (KEY=value, по одному на строке)', ph:'MY_API_KEY=abc123\nMY_TOKEN=xyz789\nBASE_URL=https://api.myservice.com', t:'textarea'}
+                ],
+                hint: 'Добавь любые переменные окружения в формате KEY=value. Дай название для удобства. Код можно описать текстом ниже — ИИ сгенерирует его автоматически.',
+                code: ''
             }
         };
 
@@ -7646,6 +7656,41 @@ except Exception as e:
         function mpApplyTemplateConfirm(svc) {
             const tmpl = _MPA_SVC[svc];
             if (!tmpl) return;
+
+            // === Своя интеграция (произвольные ключи) ===
+            if (tmpl.isCustom) {
+                const nameEl = document.getElementById('mpa-svc-_CNAME_');
+                const keysEl = document.getElementById('mpa-svc-_CKEYS_');
+                const customName = nameEl?.value?.trim() || 'Своя интеграция';
+                const rawKeys = keysEl?.value?.trim() || '';
+                if (!rawKeys) {
+                    mpShowStatus('Укажи хотя бы один ключ в формате KEY=value', '#FEF2F2', '#DC2626');
+                    return;
+                }
+                const apiEl = document.getElementById('mpa-apikeys');
+                if (apiEl) {
+                    const existing = {};
+                    for (const line of apiEl.value.split('\n')) {
+                        const trimmed = line.trim();
+                        if (!trimmed || !trimmed.includes('=')) continue;
+                        const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                        existing[key] = trimmed;
+                    }
+                    for (const line of rawKeys.split('\n')) {
+                        const trimmed = line.trim();
+                        if (!trimmed || !trimmed.includes('=')) continue;
+                        const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
+                        if (key) existing[key] = trimmed;
+                    }
+                    apiEl.value = Object.values(existing).join('\n');
+                }
+                const det = document.getElementById('mpa-advanced-details');
+                if (det) det.open = true;
+                mpShowStatus('Ключи «' + customName + '» добавлены. Опишите задачу агента ниже — ИИ сгенерирует код.', '#ECFDF5', '#059669');
+                mpUpdateServiceHint();
+                return;
+            }
+
             const commonFields = [
                 {k:'AGENT_PARAM_PERIOD', t:'text'},
                 {k:'AGENT_PARAM_FROM', t:'text'},
@@ -8166,6 +8211,8 @@ except Exception as e:
                             <option value="sms_ru">SMS-рассылки (SMS.ru / SMSC)</option>
                             <option value="twilio">Twilio (SMS / Звонки)</option>
                             <option value="playwright">Playwright (скрапинг)</option>
+                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Своя / Другая</option>
+                            <option value="custom">➕ Своя интеграция (произвольные ключи)</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
                         <div id="mpa-svc-hint" style="font-size:12px;color:#6B7280;margin-top:5px;display:none;"></div>
