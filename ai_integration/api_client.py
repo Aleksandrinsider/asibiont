@@ -138,7 +138,7 @@ class RateLimiter:
         self._calls: Dict[str, List[float]] = {}
         self._limits: Dict[str, tuple] = {
             # (max_calls, window_seconds)
-            'ddg': (200, 86400),             # DuckDuckGo — бесплатный
+            'ddg': (60, 86400),              # DuckDuckGo — бесплатный, лимит 60/день
             'newsapi': (40, 86400),          # 100/день (NewsAPI Free), большой запас чтобы не 429
             'openweathermap': (55, 60),      # 60/мин (OWM Free)
             'deepseek': (50, 60),            # DeepSeek — мягкий лимит
@@ -533,7 +533,7 @@ class ExternalAPIClient:
         query: str,
         num: int = 10,
         region: str = "ru-ru",
-        cache_ttl: int = 1800
+        cache_ttl: int = 7200
     ) -> Optional[List[dict]]:
         """
         Бесплатный поиск через DuckDuckGo (без API ключа).
@@ -632,7 +632,7 @@ class ExternalAPIClient:
         query: str,
         num: int = 10,
         region: str = "ru-RU",
-        cache_ttl: int = 1800,
+        cache_ttl: int = 7200,
     ) -> Optional[List[dict]]:
         """Поиск через Bing HTML (без API ключа, как fallback для DDG)."""
         import re as _re_bing

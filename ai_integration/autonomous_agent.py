@@ -4799,7 +4799,7 @@ class HybridAutonomousAgent:
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз; start_email_campaign разрешён повторно
-            multi_limit_tools = {'add_task': 12, 'update_profile': 6, 'create_goal': 8, 'run_agent_action': 16, 'send_email': 12, 'delegate_task': 12}  # мягкие лимиты per turn
+            multi_limit_tools = {'add_task': 12, 'update_profile': 6, 'create_goal': 8, 'run_agent_action': 16, 'send_email': 12, 'delegate_task': 12, 'web_search': 5}  # мягкие лимиты per turn; web_search cap=5 экономит токены
             used_once_only = set()
             multi_limit_counts = {}
 

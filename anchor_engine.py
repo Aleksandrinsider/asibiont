@@ -20358,7 +20358,7 @@ class AnchorEngine:
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
             'goal_autopilot_review': 0.5,   # было 0.25 (15 мин) → 30 мин: 45/day→24/day
-            'email_need_leads': 2.0,         # было 0.5 (49/day!) → 2ч: 49/day→12/day, экономит токены
+            'email_need_leads': 4.0,         # было 2.0 → 4ч: 6/день, экономит токены
             'chat_ai_review': 3.0,           # min 3ч между одинаковыми review (было 1.5h)
         }
         _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
@@ -23463,7 +23463,7 @@ class AnchorEngine:
                             }),
                             triggered_at=now_utc,
                             expires_at=now_utc + timedelta(hours=6),
-                            cooldown_hours=0.5,  # was 1.5h — need ~30 lead searches/day for active pipeline
+                            cooldown_hours=2.0,  # was 0.5h — 2h: max 12 searches/day per campaign
                             batch_group='email',
                         ))
 
