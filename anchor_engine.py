@@ -23232,14 +23232,13 @@ class AnchorEngine:
             else:
                 remaining_total = 999999  # безлимит
 
-            # ── AUTO-REFRAME: 0 engagement после ≥15 отправок — AI автономно меняет стратегию ──
-            # Не ставим на паузу. Автопилот сам переписывает offer и target_audience,
-            # затем продолжает работу. Работает для любой кампании и любой цели.
+            # ── AUTO-REFRAME: 0 engagement после ≥15 отправок — ставим якорь для async обработчика ──
+            # _scan_email_outreach синхронный — await недоступен.
+            # Создаём якорь 'email_strategy_reframe' — он обрабатывается в async _process_email_silent_anchor.
             _reframe_done_key = f'email_campaign:{campaign.id}:reframe'
             _reframe_already = session.query(Anchor).filter(
                 Anchor.user_id == user.id,
                 Anchor.source == _reframe_done_key,
-                Anchor.anchor_type == 'email_campaign_report',
             ).first()
             if not is_paused and not _reframe_already and (campaign.emails_sent or 0) >= 15:
                 _any_engagement = any(
@@ -23247,70 +23246,31 @@ class AnchorEngine:
                     for o in _camp_outreach
                 )
                 if not _any_engagement:
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='email_strategy_reframe',
+                        source=_reframe_done_key,
+                        topic=_t(user,
+                            f'Кампания «{campaign.name}»: {campaign.emails_sent} писем, 0 реакций — автопилот меняет стратегию',
+                            f'Campaign «{campaign.name}»: {campaign.emails_sent} sent, 0 engagement — autopilot reframes strategy'),
+                        priority=AnchorPriority.HIGH,
+                        data=json.dumps({
+                            'campaign_id': campaign.id,
+                            'campaign_name': campaign.name,
+                            'campaign_goal': (campaign.goal or '')[:400],
+                            'target_audience': (campaign.target_audience or '')[:300],
+                            'offer': (campaign.offer or '')[:400],
+                            'emails_sent': campaign.emails_sent,
+                        }),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=24),
+                        cooldown_hours=72.0,
+                        batch_group='email',
+                    ))
                     logger.warning(
-                        "[ANCHOR] AutoReframe: campaign #%d «%s» sent=%d, 0 engagement — calling AI to reframe",
+                        "[ANCHOR] AutoReframe anchor queued for campaign #%d «%s» sent=%d",
                         campaign.id, campaign.name, campaign.emails_sent,
                     )
-                    try:
-                        from ai_integration.api_client import get_api_client as _get_api_rf
-                        _api_rf = _get_api_rf()
-                        _reframe_prompt = (
-                            f"Email-кампания отправила {campaign.emails_sent} писем и получила 0 ответов и 0 открытий.\n"
-                            f"Цель кампании: «{(campaign.goal or '')[:300]}»\n"
-                            f"Текущая аудитория: «{(campaign.target_audience or '')[:250]}»\n"
-                            f"Текущий оффер/УТП: «{(campaign.offer or '')[:300]}»\n\n"
-                            f"Текущая стратегия явно не работает. Предложи НОВУЮ стратегию.\n"
-                            f"Верни ТОЛЬКО JSON без объяснений:\n"
-                            f"{{\"new_offer\": \"новое ценностное предложение (1-2 предложения, конкретная польза)\",\n"
-                            f"  \"new_audience\": \"расширенная аудитория: добавь синонимы, смежные роли, другой сегмент\"}}"
-                        )
-                        _reframe_result = await _api_rf.deepseek_analyze(
-                            prompt=_reframe_prompt,
-                            system_prompt="Ты эксперт email outreach. Возвращай ТОЛЬКО валидный JSON.",
-                            max_tokens=300,
-                            temperature=0.8,
-                        )
-                        if _reframe_result:
-                            import re as _re_rf
-                            _m_rf = _re_rf.search(r'\{.*\}', _reframe_result, _re_rf.DOTALL)
-                            if _m_rf:
-                                _rj = json.loads(_m_rf.group())
-                                _new_offer = (_rj.get('new_offer') or '').strip()
-                                _new_audience = (_rj.get('new_audience') or '').strip()
-                                if _new_offer and len(_new_offer) > 20:
-                                    campaign.offer = _new_offer[:800]
-                                if _new_audience and len(_new_audience) > 20:
-                                    campaign.target_audience = _new_audience[:600]
-                                session.commit()
-                                logger.info(
-                                    "[ANCHOR] AutoReframe campaign #%d: new_offer=%s new_audience=%s",
-                                    campaign.id, (_new_offer or '')[:80], (_new_audience or '')[:80],
-                                )
-                                # Помечаем что рефрейм уже сделан (не повторять)
-                                _rf_marker = Anchor(
-                                    user_id=user.id,
-                                    anchor_type='email_campaign_report',
-                                    source=_reframe_done_key,
-                                    topic=_t(user,
-                                        f'Автопилот изменил стратегию кампании «{campaign.name}»: новый оффер и аудитория после {campaign.emails_sent} писем без ответа',
-                                        f'Autopilot updated campaign «{campaign.name}» strategy: new offer & audience after {campaign.emails_sent} no-reply sends'),
-                                    priority=AnchorPriority.LOW,
-                                    data=json.dumps({
-                                        'campaign_id': campaign.id,
-                                        'emails_sent': campaign.emails_sent,
-                                        'new_offer': _new_offer[:300],
-                                        'new_audience': _new_audience[:300],
-                                        'review_type': 'auto_reframe',
-                                    }),
-                                    triggered_at=now_utc,
-                                    expires_at=now_utc + timedelta(hours=72),
-                                    cooldown_hours=72.0,
-                                    batch_group='email',
-                                )
-                                anchors.append(_rf_marker)
-                    except Exception as _rf_err:
-                        logger.warning("[ANCHOR] AutoReframe failed (non-critical): %s", _rf_err)
-                    # Не прерываем цикл — кампания продолжает работать с новыми параметрами
 
             if drafts and remaining_daily > 0 and remaining_total > 0:
                 # Защита от flood: не создаём новый anchor если уже есть ≥3 непрочитанных для этой кампании
@@ -25981,6 +25941,67 @@ class AnchorEngine:
                     user_id=user.id,
                     anchor_ids=json.dumps([anchor.id]),
                     message_text=f'[EMAIL_SILENT] email_follow_up: follow-up #{follow_up_number} to {redact_email(recipient_email)}',
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+                return
+
+            elif anchor.anchor_type == 'email_strategy_reframe':
+                # ── AUTO-REFRAME: AI переписывает offer и target_audience кампании ──
+                # Вызывается когда ≥15 писем отправлено и 0 engagement (replied/opened/interested).
+                _rf_campaign_id = anchor_data.get('campaign_id')
+                if not _rf_campaign_id:
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
+                    return
+                _rf_campaign = session.query(EmailCampaign).filter_by(id=_rf_campaign_id).first()
+                if not _rf_campaign or _rf_campaign.status not in ('active', 'running'):
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
+                    return
+                try:
+                    from ai_integration.api_client import get_api_client as _get_api_rf2
+                    _api_rf2 = _get_api_rf2()
+                    _rf_prompt = (
+                        f"Email-кампания отправила {anchor_data.get('emails_sent', 0)} писем и получила 0 ответов и 0 открытий.\n"
+                        f"Цель: «{anchor_data.get('campaign_goal', '')[:300]}»\n"
+                        f"Текущая аудитория: «{anchor_data.get('target_audience', '')[:250]}»\n"
+                        f"Текущий оффер: «{anchor_data.get('offer', '')[:300]}»\n\n"
+                        f"Стратегия не работает. Предложи НОВУЮ.\n"
+                        f"Верни ТОЛЬКО JSON:\n"
+                        f'{{"new_offer": "новое УТП (1-2 предложения, конкретная польза получателю)",'
+                        f'  "new_audience": "расширенная аудитория: синонимы, смежные роли, другой сегмент"}}'
+                    )
+                    _rf_result2 = await _api_rf2.deepseek_analyze(
+                        prompt=_rf_prompt,
+                        system_prompt="Ты эксперт email outreach. Возвращай ТОЛЬКО валидный JSON.",
+                        max_tokens=300,
+                        temperature=0.8,
+                    )
+                    if _rf_result2:
+                        import re as _re_rf2
+                        _m_rf2 = _re_rf2.search(r'\{.*\}', _rf_result2, _re_rf2.DOTALL)
+                        if _m_rf2:
+                            _rj2 = json.loads(_m_rf2.group())
+                            _new_offer2 = (_rj2.get('new_offer') or '').strip()
+                            _new_audience2 = (_rj2.get('new_audience') or '').strip()
+                            if _new_offer2 and len(_new_offer2) > 20:
+                                _rf_campaign.offer = _new_offer2[:800]
+                            if _new_audience2 and len(_new_audience2) > 20:
+                                _rf_campaign.target_audience = _new_audience2[:600]
+                            session.commit()
+                            logger.info(
+                                "[ANCHOR] AutoReframe done for campaign #%d: offer=%s audience=%s",
+                                _rf_campaign.id, (_new_offer2 or '')[:80], (_new_audience2 or '')[:80],
+                            )
+                except Exception as _rf_err2:
+                    logger.warning("[ANCHOR] email_strategy_reframe AI call failed: %s", _rf_err2)
+                anchor.delivered_at = datetime.now(timezone.utc)
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[EMAIL_SILENT] email_strategy_reframe: campaign #{_rf_campaign_id}',
                     anchor_types=json.dumps([anchor.anchor_type]),
                 )
                 session.add(log)
