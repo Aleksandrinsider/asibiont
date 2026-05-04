@@ -6119,57 +6119,14 @@ except Exception as e:
                 name: 'ExchangeRate-API (курсы валют)',
                 fields: [
                     {k:'EXCHANGERATE_API_KEY', label:'API Key', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'ER_PAIRS', label:'Валютные пары через запятую (опционально)', ph:'EUR/USD,USD/RUB,GBP/USD', t:'text', opt:true},
-                    {k:'RSS_URLS', label:'RSS-ленты форекс-новостей (опционально)', ph:'https://www.forexfactory.com/rss,https://ru.investing.com/rss/news.rss', t:'text', opt:true},
-                    {k:'RSS_COUNT', label:'Макс. новостей на ленту', ph:'10', t:'text', opt:true}
+                    {k:'ER_PAIRS', label:'Пары через запятую (опционально)', ph:'EUR/USD,USD/RUB,GBP/USD', t:'text', opt:true}
                 ],
-                hint: 'Бесплатный ключ: exchangerate-api.com → Get Free Key. 1500 запросов/мес, 170+ валют. Обновление курсов раз в 24ч. Пары: EUR/USD, USD/RUB, GBP/USD, USD/JPY, USD/KZT, USD/TRY. Дополнительно: RSS_URLS — форекс-новости из любых лент.',
-                code: `import urllib.request, re, html, json, os
-
-# === RSS-новости (если RSS_URLS заданы) ===
-_raw  = os.environ.get('RSS_URLS', '') or os.environ.get('RSS_URL', '')
-URLS  = [u.strip() for u in re.split(r'[\\n,]+', _raw) if u.strip().startswith('http')]
-COUNT = int(os.environ.get('RSS_COUNT', '10') or '10')
-
-def _cdata_or_plain(raw):
-    raw = raw.strip()
-    m = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw, re.DOTALL)
-    return html.unescape((m.group(1) if m else raw).strip())
-
-def _tag(item, tag):
-    m = re.search(r'<' + tag + r'[^>]*>(.*?)</' + tag + r'>', item, re.DOTALL)
-    return _cdata_or_plain(m.group(1)) if m else ''
-
-def fetch_rss(url):
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        content = r.read().decode('utf-8', errors='replace')
-    return re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:COUNT]
-
-if URLS:
-    for url in URLS:
-        try:
-            items = fetch_rss(url)
-            print('=== ' + url + ' ===')
-            if not items:
-                print('  Нет новостей в ленте')
-            else:
-                for i, item in enumerate(items, 1):
-                    title = _tag(item, 'title') or '(без заголовка)'
-                    link  = _tag(item, 'link')
-                    desc  = re.sub(r'<[^>]+>', '', _tag(item, 'description')).strip()[:200]
-                    print(str(i) + '. ' + title)
-                    if link: print('   ' + link)
-                    if desc: print('   ' + desc)
-                    print()
-        except Exception as e:
-            print('Ошибка ' + url + ': ' + str(e))
-
-# === ExchangeRate-API (курсы валют) ===
+                hint: 'Бесплатный ключ: exchangerate-api.com → Get Free Key. 1500 запросов/мес, 170+ валют. Обновление курсов раз в 24ч. Пары: EUR/USD, USD/RUB, GBP/USD, USD/JPY, USD/KZT, USD/TRY и любые другие ISO 4217.',
+                code: `import urllib.request, json, os
 API_KEY = os.environ.get('EXCHANGERATE_API_KEY', '')
-PAIRS   = os.environ.get('ER_PAIRS', 'EUR/USD,USD/RUB,GBP/USD,USD/JPY')
+PAIRS = os.environ.get('ER_PAIRS', 'EUR/USD,USD/RUB,GBP/USD,USD/JPY')
 
-def er_get_pair(base, target):
+def er_get_pair(base, target, amount=1):
     url = 'https://v6.exchangerate-api.com/v6/' + API_KEY + '/pair/' + base + '/' + target
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as r:
@@ -6189,7 +6146,7 @@ try:
             if d.get('result') == 'error':
                 print(pair + ': ошибка — ' + d.get('error-type', '?'))
             else:
-                rate    = d.get('conversion_rate', '?')
+                rate = d.get('conversion_rate', '?')
                 updated = d.get('time_last_update_utc', '')[:16]
                 print(pair + ': ' + str(rate) + '  (' + updated + ')')
 except Exception as e:
@@ -7539,18 +7496,102 @@ try:
     print('Sub: ' + d.get('sub', '?'))
 except Exception as e:
     print('Ошибка LinkedIn: ' + str(e))`
-            },
-            custom: {
-                name: 'Своя интеграция',
-                isCustom: true,
-                fields: [
-                    {k:'_CNAME_', label:'Название интеграции', ph:'Моя CRM / My API', t:'text'},
-                    {k:'_CKEYS_', label:'API-ключи (KEY=value, по одному на строке)', ph:'MY_API_KEY=abc123\nMY_TOKEN=xyz789\nBASE_URL=https://api.myservice.com', t:'textarea'}
-                ],
-                hint: 'Добавь любые переменные окружения в формате KEY=value. Дай название для удобства. Код можно описать текстом ниже — ИИ сгенерирует его автоматически.',
-                code: ''
             }
         };
+
+        // Canonical action names per service — enables ACTION-routing in generated code
+        // The AI reads these via _extract_python_actions() and calls run_agent_action(action=...)
+        const _SVC_ACTIONS = {
+            gmail:           ['check_emails', 'send_email', 'check_inbox'],
+            yandex:          ['check_emails', 'send_email', 'check_inbox'],
+            mailru:          ['check_emails', 'send_email', 'check_inbox'],
+            resend:          ['send_email', 'send_campaign'],
+            openweather:     ['get_weather', 'check_weather', 'weather_forecast'],
+            rss:             ['check_news', 'read_rss', 'get_feed', 'get_news'],
+            telegram_bot:    ['send_telegram', 'telegram_notify', 'send_message'],
+            vk:              ['vk_post', 'get_vk_stats', 'check_vk'],
+            wildberries:     ['get_products', 'get_orders', 'check_wb'],
+            ozon:            ['get_products', 'get_orders', 'check_ozon'],
+            avito:           ['avito_ads', 'check_avito'],
+            yandex_market:   ['get_ym_products', 'check_ym'],
+            yandex_direct:   ['get_campaigns', 'get_ad_stats'],
+            yandex_metrika:  ['get_metrics', 'analytics_report'],
+            moysklad:        ['get_ms_products', 'moysklad_inventory'],
+            google_sheets:   ['read_sheet', 'append_row', 'get_sheet'],
+            github:          ['list_issues', 'create_issue', 'search_repos'],
+            hh:              ['search_vacancies', 'search_resumes'],
+            superjob:        ['search_vacancies'],
+            linkedin:        ['linkedin_post', 'get_linkedin_profile'],
+            twitter:         ['post_tweet', 'twitter_search'],
+            notion:          ['add_page', 'search_notion'],
+            airtable:        ['airtable_query', 'airtable_insert'],
+            slack:           ['post_message', 'send_slack'],
+            trello:          ['create_card', 'get_board'],
+            stripe:          ['get_charges', 'get_revenue_stripe'],
+            yookassa:        ['get_payments', 'check_yookassa'],
+            shopify:         ['get_products', 'get_orders'],
+            youtube:         ['get_videos', 'youtube_stats'],
+            coingecko:       ['get_coin_price', 'get_market_cap'],
+            jira:            ['jira_issues', 'create_jira_issue'],
+            calendly:        ['get_events', 'check_calendly'],
+            http_api:        ['api_call', 'http_get'],
+            google_drive:    ['list_gdrive', 'upload_gdrive'],
+            ms_teams:        ['send_teams', 'teams_message'],
+            outlook:         ['send_outlook', 'check_outlook'],
+            clickup:         ['get_tasks_clickup', 'create_task_clickup'],
+            linear:          ['get_linear_issues', 'create_linear_issue'],
+            webhook:         ['trigger_webhook', 'send_webhook'],
+            bitrix24:        ['get_deals', 'create_deal_bitrix'],
+            amocrm:          ['get_leads', 'create_lead', 'search_contacts'],
+            hubspot:         ['get_hubspot_contacts', 'create_hubspot_contact'],
+            postgresql:      ['query_db', 'pg_query'],
+            mysql:           ['query_db', 'mysql_query'],
+            mongodb:         ['mongo_find', 'query_db'],
+            redis_db:        ['redis_get', 'redis_set'],
+            replicate:       ['replicate_run', 'generate_image'],
+            openai_api:      ['openai_complete', 'generate_text'],
+            gemini:          ['gemini_generate', 'generate_text'],
+            firebase:        ['firebase_query', 'firebase_set'],
+            aws_s3:          ['upload_file', 's3_list', 's3_upload'],
+            aviasales:       ['search_flights', 'aviasales_search'],
+            tutu:            ['search_flights', 'tutu_search'],
+            flightradar:     ['flightradar_status', 'check_flight'],
+            cdek:            ['cdek_track', 'check_delivery'],
+            marinetraffic:   ['track_vessel', 'search_vessels'],
+            pochta_russia:   ['pochta_track', 'pochta_tariff'],
+            google_calendar: ['list_events', 'create_event'],
+            tinkoff:         ['tinkoff_portfolio', 'get_tinkoff_balance'],
+            ga4:             ['ga4_report', 'get_ga4_metrics'],
+            alphavantage:    ['alphavantage_query', 'get_stock_data'],
+            exchangerate:    ['get_rates', 'check_forex', 'get_exchange_rates', 'forex_rates'],
+            finnhub:         ['finnhub_news', 'get_insiders'],
+            twelvedata:      ['twelvedata_price', 'get_stock_price'],
+            yahoo_finance:   ['yahoo_quote', 'get_stock_price'],
+            fmp:             ['fmp_query', 'get_financials'],
+            polygon:         ['polygon_tickers', 'get_stock_data'],
+            whatsapp:        ['send_whatsapp', 'whatsapp_message'],
+            onec:            ['onec_query', 'get_onec_data'],
+            google_maps:     ['maps_search', 'get_place_info'],
+            google_forms:    ['get_form_responses', 'create_form'],
+            strava:          ['get_strava_activities', 'strava_stats'],
+            sms_ru:          ['send_sms', 'sms_broadcast'],
+            twilio:          ['send_sms', 'send_message'],
+            playwright:      ['scrape_url', 'playwright_fetch'],
+        };
+
+        // Builds one service code block with ACTION routing
+        // Generated code: if ACTION in ('action1', ..., 'check_all'): print('=== name ==='); ...code...
+        // This makes _extract_python_actions() find the action names so the AI knows what to call
+        function _mpBuildBlock(svc, svcName, code) {
+            const acts = _SVC_ACTIONS[svc] || [];
+            if (!acts.length) return '# === ' + svcName + ' ===\n' + code;
+            const actList = acts.concat(['check_all']).map(a => "'" + a + "'").join(', ');
+            const indented = code.split('\n').map(l => '    ' + (l || '')).join('\n');
+            return '# === ' + svcName + ' ===\n' +
+                'if ACTION in (' + actList + '):\n' +
+                "    print('=== " + svcName + " ===', flush=True)\n" +
+                indented;
+        }
 
         function mpUpdateServiceHint() {
             const apiEl = document.getElementById('mpa-apikeys');
@@ -7656,41 +7697,6 @@ except Exception as e:
         function mpApplyTemplateConfirm(svc) {
             const tmpl = _MPA_SVC[svc];
             if (!tmpl) return;
-
-            // === Своя интеграция (произвольные ключи) ===
-            if (tmpl.isCustom) {
-                const nameEl = document.getElementById('mpa-svc-_CNAME_');
-                const keysEl = document.getElementById('mpa-svc-_CKEYS_');
-                const customName = nameEl?.value?.trim() || 'Своя интеграция';
-                const rawKeys = keysEl?.value?.trim() || '';
-                if (!rawKeys) {
-                    mpShowStatus('Укажи хотя бы один ключ в формате KEY=value', '#FEF2F2', '#DC2626');
-                    return;
-                }
-                const apiEl = document.getElementById('mpa-apikeys');
-                if (apiEl) {
-                    const existing = {};
-                    for (const line of apiEl.value.split('\n')) {
-                        const trimmed = line.trim();
-                        if (!trimmed || !trimmed.includes('=')) continue;
-                        const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
-                        existing[key] = trimmed;
-                    }
-                    for (const line of rawKeys.split('\n')) {
-                        const trimmed = line.trim();
-                        if (!trimmed || !trimmed.includes('=')) continue;
-                        const key = trimmed.slice(0, trimmed.indexOf('=')).trim();
-                        if (key) existing[key] = trimmed;
-                    }
-                    apiEl.value = Object.values(existing).join('\n');
-                }
-                const det = document.getElementById('mpa-advanced-details');
-                if (det) det.open = true;
-                mpShowStatus('Ключи «' + customName + '» добавлены. Опишите задачу агента ниже — ИИ сгенерирует код.', '#ECFDF5', '#059669');
-                mpUpdateServiceHint();
-                return;
-            }
-
             const commonFields = [
                 {k:'AGENT_PARAM_PERIOD', t:'text'},
                 {k:'AGENT_PARAM_FROM', t:'text'},
@@ -7722,25 +7728,30 @@ except Exception as e:
                 Object.assign(existing, newKeys);
                 apiEl.value = Object.values(existing).join('\n');
             }
-            // -- Код: добавляем как отдельный блок если уже есть свой код --
+            // -- Код: добавляем блок с ACTION-routing (AI узнаёт action-имена и вызывает run_agent_action) --
             const codeEl = document.getElementById('mpa-pycode');
             if (codeEl) {
                 const existing = codeEl.value.trim();
-                const marker = `# === ${tmpl.name} ===`;
-                const newBlock = marker + '\n' + tmpl.code;
+                const marker = '# === ' + tmpl.name + ' ===';
+                const _HDR = "import os as _os\nACTION = _os.environ.get('AGENT_ACTION', 'check_all')";
+                const newBlock = _mpBuildBlock(svc, tmpl.name, tmpl.code);
+                const _hasActs = (_SVC_ACTIONS[svc] || []).length > 0;
                 if (!existing) {
-                    // первый сервис
-                    codeEl.value = newBlock;
+                    codeEl.value = (_hasActs ? _HDR + '\n\n' : '') + newBlock;
                 } else if (existing.includes(marker)) {
-                    // тот же сервис уже есть — заменяем только его блок, остальное сохраняем
+                    // тот же сервис уже есть — заменяем только его блок
                     const markerIdx = existing.indexOf(marker);
                     const before = existing.slice(0, markerIdx).trimEnd();
                     const afterSearch = existing.indexOf('\n# === ', markerIdx + marker.length);
                     const after = afterSearch !== -1 ? '\n\n' + existing.slice(afterSearch + 1).trimStart() : '';
-                    codeEl.value = (before ? before + '\n\n' : '') + newBlock + after;
+                    let combined = (before ? before + '\n\n' : '') + newBlock + after;
+                    if (_hasActs && !combined.includes('AGENT_ACTION')) combined = _HDR + '\n\n' + combined;
+                    codeEl.value = combined;
                 } else {
-                    // другой сервис — дописываем блок в конец
-                    codeEl.value = existing + '\n\n' + newBlock;
+                    // другой сервис — добавляем в конец
+                    let prefix = existing;
+                    if (_hasActs && !existing.includes('AGENT_ACTION')) prefix = _HDR + '\n\n' + existing;
+                    codeEl.value = prefix + '\n\n' + newBlock;
                 }
                 codeEl.style.height = 'auto';
                 codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
@@ -7788,10 +7799,13 @@ except Exception as e:
                     for (const svc of foundSvcs) {
                         const tmpl = _MPA_SVC[svc];
                         if (!tmpl?.code) continue;
-                        parts.push(foundSvcs.size === 1 ? tmpl.code : ('# === ' + tmpl.name + ' ===\n' + tmpl.code));
+                        parts.push(foundSvcs.size === 1 ? tmpl.code : _mpBuildBlock(svc, tmpl.name, tmpl.code));
                     }
                     if (parts.length && codeEl) {
-                        codeEl.value = parts.join('\n\n');
+                        const _hasAnyActs = [...foundSvcs].some(s => (_SVC_ACTIONS[s] || []).length > 0);
+                        const _HDR2 = "import os as _os\nACTION = _os.environ.get('AGENT_ACTION', 'check_all')";
+                        const _combined2 = parts.join('\n\n');
+                        codeEl.value = _hasAnyActs ? _HDR2 + '\n\n' + _combined2 : _combined2;
                         codeEl.style.height = 'auto';
                         codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
                         if (status) { status.style.display = 'block'; status.textContent = t('mp-template-hint'); }
@@ -8211,8 +8225,6 @@ except Exception as e:
                             <option value="sms_ru">SMS-рассылки (SMS.ru / SMSC)</option>
                             <option value="twilio">Twilio (SMS / Звонки)</option>
                             <option value="playwright">Playwright (скрапинг)</option>
-                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Своя / Другая</option>
-                            <option value="custom">➕ Своя интеграция (произвольные ключи)</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>
                         <div id="mpa-svc-hint" style="font-size:12px;color:#6B7280;margin-top:5px;display:none;"></div>

@@ -2919,6 +2919,10 @@ class HybridAutonomousAgent:
                         # OpenWeather / CRM move/stale
                         'move_lead_stage': 'amo', 'advance_deal': 'amo', 'move_deal': 'amo',
                         'get_stale_leads': 'amo', 'check_pipeline': 'amo',
+                        # ExchangeRate-API
+                        'get_rates': 'exchangerate', 'check_forex': 'exchangerate',
+                        'get_exchange_rates': 'exchangerate', 'forex_rates': 'exchangerate',
+                        'check_rates': 'exchangerate', 'get_forex': 'exchangerate',
                     }
                     _SEC_KEYWORDS = {
                         'amo': ('amocrm', 'amo'),
@@ -2980,6 +2984,7 @@ class HybridAutonomousAgent:
                         'linkedin': ('linkedin', 'линкедин'),
                         'airtable': ('airtable',),
                         'weather': ('openweather', 'weather', 'погода'),
+                        'exchangerate': ('exchangerate', 'exchange rate', 'курсы валют', 'forex rates'),
                     }
                     _target = _ACTION_SECTION_MAP.get(action.lower(), '')
                     if _target:
@@ -6904,6 +6909,9 @@ _INTEGRATION_LABELS: dict = {
     'YAHOO_FINANCE': 'Yahoo Finance',
     'RAPIDAPI': 'RapidAPI',
     'FMP': 'Financial Modeling Prep',
+    # Курсы валют
+    'EXCHANGERATE': 'ExchangeRate-API (курсы валют)',
+    'EXCHANGE_RATE': 'ExchangeRate-API (курсы валют)',
 }
 
 
@@ -7022,6 +7030,8 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         'outlook': 'Microsoft Outlook',
         'microsoft.graph': 'Microsoft Graph (Outlook/Teams)',
         'msal': 'Microsoft OAuth (Outlook/Teams)',
+        'exchangerate-api': 'ExchangeRate-API (курсы валют)',
+        'exchangerate-api.com': 'ExchangeRate-API (курсы валют)',
     }
     for hint, label in _code_hints.items():
         if hint in code_lc:
