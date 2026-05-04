@@ -23457,9 +23457,11 @@ class AnchorEngine:
                     continue  # Skip anchors for completed campaign
 
             # --- 3b. Нужны новые лиды: мало черновиков, но кампания не заполнена ---
-            # Срабатывает когда: активная кампания, < 5 черновиков, ещё есть квота (total/daily)
+            # Срабатывает когда: активная кампания, < 5 черновиков, ещё есть квота (total)
             # Порог 5 (не 0) позволяет строить пайплайн лидов заранее, не ждать когда кончатся
-            if not is_paused and len(drafts) < 5 and remaining_daily >= 3 and remaining_total > 0:
+            # remaining_daily НЕ блокирует поиск лидов: черновики нужны для ЗАВТРАШНЕЙ отправки,
+            # даже если сегодня дневной лимит исчерпан.
+            if not is_paused and len(drafts) < 5 and remaining_total > 0:
                 # Считаем только черновики (ожидающие отправки) как "в пайплайне"
                 # Отправленные/delivered/replied уже обработаны — не блокируют поиск новых
                 drafts_in_pipeline = sum(1 for o in _camp_outreach if o.status == 'draft')
@@ -25352,7 +25354,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(2).all()  # макс 2 за один вызов: 2 × (compose ~40s + possible retry ~40s) ≈ 160s < outer wait_for
+                ).limit(3).all()  # макс 3 за один вызов: 3 × (compose ~40s) ≈ 120s < outer wait_for
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
