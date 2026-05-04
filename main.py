@@ -3457,7 +3457,16 @@ async def session_error_middleware(request, handler):
         if isinstance(e, (ConnectionResetError, BrokenPipeError)):
             logger.debug(f"Client disconnected during {request.method} {request.path}: {e}")
             raise
-        logger.error(f"Session error [{type(e).__name__}] on {request.method} {request.path}: {e}", exc_info=True)
+        _exc_cls = type(e).__name__
+        # Transient network/timeout errors — debug only, no stacktrace
+        _transient = ('TimeoutError', 'ClientError', 'ServerDisconnectedError',
+                      'ClientConnectorError', 'ClientOSError', 'ServerTimeoutError',
+                      'asyncio.TimeoutError', 'concurrent.futures.TimeoutError')
+        if any(_t in _exc_cls for _t in _transient):
+            logger.debug(f"Session middleware transient [{_exc_cls}] on {request.method} {request.path}: {e}")
+            raise
+        # Unknown exception — log ONE line without full stacktrace so Railway shows the type
+        logger.error(f"Session error [{_exc_cls}] on {request.method} {request.path}: {e}")
         raise
 
 
