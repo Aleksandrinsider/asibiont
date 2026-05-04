@@ -3394,6 +3394,15 @@ async def custom_404_middleware(request, handler):
 @web.middleware
 async def session_error_middleware(request, handler):
     """Handle corrupted session cookies"""
+    _health_paths = ('/health', '/healthz', '/ready', '/readyz')
+    if request.path in _health_paths:
+        try:
+            return await handler(request)
+        except Exception as e:
+            # Never fail platform health probes because of unrelated app exceptions.
+            logger.warning(f"Health probe fallback on {request.path}: {type(e).__name__}: {e}")
+            return web.Response(text='OK', status=200)
+
     def _clear_session_cookie(response):
         """Best-effort cookie cleanup across common host/domain variants."""
         _host = (request.host or '').split(':', 1)[0].strip().lower()
