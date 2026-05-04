@@ -9199,6 +9199,9 @@ class AnchorEngine:
                             f"Пиши как короткое сообщение коллеге в чате: естественно, напрямую, на 'ты'. "
                             f"НЕ пиши отчёт о ситуации. НЕ анализируй прошлое. НЕ перечисляй что уже сделано. "
                             f"ТОЛЬКО директива: зачем (1 факт из контекста), что сделать, каким инструментом, какой ожидаемый результат. "
+                            f"ТИХИЙ ДИАГНОЗ ПЕРЕД НАПИСАНИЕМ (не выводи, просто подумай): "
+                            f"(0) Что НЕ сработало в последних циклах для этого агента? Какой конкретный паттерн повторяется? "
+                            f"Если вижу повтор — поручи ПРИНЦИПИАЛЬНО другое действие (другой инструмент или другой тип задачи), а не ту же идею другими словами. "
                             f"Агент сам потом отчитается о выполнении. "
                             f"Перед отправкой сделай ТИХУЮ самопроверку (не выводи её в ответ): "
                             f"(1) текст только во 2-м лице, без фраз типа 'У {_chosen_name} есть', 'у него есть', 'у неё есть' — только 'у тебя есть'; "
@@ -9211,7 +9214,7 @@ class AnchorEngine:
                         _gen = await _qar_coord([
                             {'role': 'system', 'content': _coord_system_msg},
                             {'role': 'user', 'content': _coord_prompt},
-                        ], max_tokens=600)
+                        ], max_tokens=800)
                         # ── Post-generation: strip lists, evaluation phrases, truncated endings ──
                         if _gen:
                             import re as _re_post
@@ -20357,7 +20360,7 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 0.5,   # было 0.25 (15 мин) → 30 мин: 45/day→24/day
+            'goal_autopilot_review': 0.25,  # 15 мин между циклами координатора (было 0.5h)
             'email_need_leads': 4.0,         # было 2.0 → 4ч: 6/день, экономит токены
             'chat_ai_review': 3.0,           # min 3ч между одинаковыми review (было 1.5h)
         }
