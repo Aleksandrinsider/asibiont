@@ -23232,6 +23232,58 @@ class AnchorEngine:
             else:
                 remaining_total = 999999  # безлимит
 
+            # ── AUTO-PAUSE: кампания засохла (≥15 отправлено, 0 открыто/ответило) ──
+            # Универсальная логика: работает для любой кампании и любой цели.
+            # Вместо бесконечной отправки в пустоту — пауза + запрос ревью.
+            if not is_paused and (campaign.emails_sent or 0) >= 15:
+                _any_engagement = any(
+                    o.status in ('replied', 'interested', 'opened')
+                    for o in _camp_outreach
+                )
+                if not _any_engagement:
+                    campaign.status = 'paused'
+                    is_paused = True
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    logger.warning(
+                        "[ANCHOR] Auto-paused campaign #%d «%s»: %d sent, 0 engagement",
+                        campaign.id, campaign.name, campaign.emails_sent,
+                    )
+                    # Создаём HIGH-приоритетный якорь для ревью эффективности
+                    _zr_source = f'email_campaign:{campaign.id}:zero_reply_review'
+                    _zr_exists = session.query(Anchor).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == 'email_campaign_report',
+                        Anchor.source == _zr_source,
+                    ).first()
+                    if not _zr_exists:
+                        anchors.append(Anchor(
+                            user_id=user.id,
+                            anchor_type='email_campaign_report',
+                            source=_zr_source,
+                            topic=_t(user,
+                                f' Кампания «{campaign.name}» приостановлена: {campaign.emails_sent} писем отправлено, 0 ответов/открытий. Проанализируй тему письма, оффер и аудиторию — что нужно изменить?',
+                                f' Campaign «{campaign.name}» auto-paused: {campaign.emails_sent} sent, 0 replies/opens. Analyse subject, offer and audience — what should change?'),
+                            priority=AnchorPriority.HIGH,
+                            data=json.dumps({
+                                'campaign_id': campaign.id,
+                                'campaign_name': campaign.name,
+                                'campaign_goal': campaign.goal[:500] if campaign.goal else '',
+                                'target_audience': campaign.target_audience[:300] if campaign.target_audience else '',
+                                'offer': campaign.offer[:300] if campaign.offer else '',
+                                'emails_sent': campaign.emails_sent,
+                                'emails_replied': campaign.emails_replied or 0,
+                                'review_type': 'zero_reply_auto_pause',
+                            }),
+                            triggered_at=now_utc,
+                            expires_at=now_utc + timedelta(hours=48),
+                            cooldown_hours=24.0,
+                            batch_group='email',
+                        ))
+                    continue  # Skip дальнейшей обработки для этой кампании
+
             if drafts and remaining_daily > 0 and remaining_total > 0:
                 # Защита от flood: не создаём новый anchor если уже есть ≥3 непрочитанных для этой кампании
                 _pending_send_count = session.query(Anchor).filter(
@@ -23416,7 +23468,7 @@ class AnchorEngine:
             # --- 3b. Нужны новые лиды: мало черновиков, но кампания не заполнена ---
             # Срабатывает когда: активная кампания, < 5 черновиков, ещё есть квота (total/daily)
             # Порог 5 (не 0) позволяет строить пайплайн лидов заранее, не ждать когда кончатся
-            if not is_paused and len(drafts) < 5 and remaining_daily > 0 and remaining_total > 0:
+            if not is_paused and len(drafts) < 5 and remaining_daily >= 3 and remaining_total > 0:
                 # Считаем только черновики (ожидающие отправки) как "в пайплайне"
                 # Отправленные/delivered/replied уже обработаны — не блокируют поиск новых
                 drafts_in_pipeline = sum(1 for o in _camp_outreach if o.status == 'draft')

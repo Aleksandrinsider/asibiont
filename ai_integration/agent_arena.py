@@ -395,7 +395,7 @@ _feed_state_cache_ts: float = 0.0
 _FEED_STATE_CACHE_TTL = 5.0  # seconds
 
 # Интервал между новыми ТЕМАМИ (топ-постами) — 60-120 мин
-BACKGROUND_INTERVAL_MIN = (60, 120)
+BACKGROUND_INTERVAL_MIN = (90, 180)
 
 # ─── Persistent state helpers ─────────────────────────────────────────────────
 
