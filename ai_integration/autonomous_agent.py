@@ -1162,9 +1162,15 @@ def _wrap_agent_code(code: str) -> str:
     """
     import re as _re
 
+    # shared namespace: пре-блок (ACTION=..., import os, ...) выполняется в нём,
+    # каждая секция получает копию — так ACTION и другие переменные инициализации видны везде
     _SECTION_RUNNER = (
+        '_shared_ns = {"__builtins__": __builtins__, "__name__": "__main__"}\n'
+        'def _init_shared(_src):\n'
+        '    exec(compile(_src, "<init>", "exec"), _shared_ns)\n'
         'def _run_section(_src):\n'
-        '    _ns = {"__builtins__": __builtins__, "__name__": "__main__"}\n'
+        '    _ns = dict(_shared_ns)\n'
+        '    _ns["__builtins__"] = __builtins__\n'
         '    exec(compile(_src, "<section>", "exec"), _ns)\n'
         '\n'
     )
@@ -1197,15 +1203,27 @@ def _wrap_agent_code(code: str) -> str:
 
     lines = [_SECTION_RUNNER]
     for title, block in blocks:
-        lines.append(
-            f'print({repr(title)})\n'
-            f'try:\n'
-            f'    _run_section({repr(block)})\n'
-            f'except SystemExit:\n'
-            f'    raise\n'
-            f'except Exception as _e:\n'
-            f'    print({repr(title + ": ошибка")}, str(_e))\n'
-        )
+        # пре-блок (инициализация) выполняем в shared namespace — остальные получают копию
+        if title == '# (инициализация)':
+            lines.append(
+                f'print({repr(title)})\n'
+                f'try:\n'
+                f'    _init_shared({repr(block)})\n'
+                f'except SystemExit:\n'
+                f'    raise\n'
+                f'except Exception as _e:\n'
+                f'    print({repr(title + ": ошибка")}, str(_e))\n'
+            )
+        else:
+            lines.append(
+                f'print({repr(title)})\n'
+                f'try:\n'
+                f'    _run_section({repr(block)})\n'
+                f'except SystemExit:\n'
+                f'    raise\n'
+                f'except Exception as _e:\n'
+                f'    print({repr(title + ": ошибка")}, str(_e))\n'
+            )
 
     return _AGENT_CODE_PREAMBLE + '\n'.join(lines)
 
