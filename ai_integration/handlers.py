@@ -10719,202 +10719,119 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
         return f"❌ Ошибка получения котировки {symbol}: {str(e)}"
 
 
-async def get_forex_analysis(instrument: str, granularity: str = "H1", count: int = 50,
+async def get_forex_analysis(instrument: str, amount: float = 1.0,
                              user_id: int = None, session=None) -> str:
-    """Анализ форекс-рынка через OANDA REST API v3.
+    """Курсы валют через ExchangeRate-API v6.
 
-    Возвращает текущую цену, исторические свечи OHLCV и базовый технический анализ
-    (SMA20, диапазон, % изменение) без необходимости торгового счёта.
-    Требует OANDA_API_KEY в ключах агента (бесплатный practice-аккаунт на oanda.com).
+    Возвращает текущий курс пары, эквивалент суммы и динамику за 24ч (сравнение с вчерашним).
+    Требует EXCHANGERATE_API_KEY в ключах агента (бесплатно: 1500 req/мес, 170+ валют,
+    exchangerate-api.com).
     """
     import urllib.request as _urllib_req
     import json as _json
-    import math as _math
 
     if not user_id:
         return "❌ Не указан user_id"
 
-    # Нормализуем пару: EUR/USD -> EUR_USD
-    instrument = instrument.strip().upper().replace('/', '_')
+    # Парсим пару: EUR/USD или EUR_USD -> base=EUR, target=USD
+    _raw = instrument.strip().upper().replace('_', '/')
+    if '/' not in _raw:
+        return f"❌ Неверный формат пары: {instrument}. Используйте EUR/USD, USD/RUB и т.д."
+    _base_cur, _target_cur = _raw.split('/', 1)
 
-    # Ищем OANDA_API_KEY в ключах агентов пользователя
+    # Ищем EXCHANGERATE_API_KEY в ключах агентов пользователя
     _api_key = None
-    _account_type = 'practice'  # practice или live
     try:
-        from models import UserAgent as _UA_oa, User as _User_oa
+        from models import UserAgent as _UA_er, User as _User_er
         _db_sess = session
         _close_sess = False
         if _db_sess is None:
-            from models import Session as _SessionLocal_oa
-            _db_sess = _SessionLocal_oa()
+            from models import Session as _SessionLocal_er
+            _db_sess = _SessionLocal_er()
             _close_sess = True
         try:
-            _db_user = _db_sess.query(_User_oa).filter_by(telegram_id=user_id).first()
+            _db_user = _db_sess.query(_User_er).filter_by(telegram_id=user_id).first()
             _db_user_id = _db_user.id if _db_user else None
             if _db_user_id:
-                from ai_integration.autonomous_agent import _decrypt_keys as _dk_oa
-                _all_agents = _db_sess.query(_UA_oa).filter(
-                    _UA_oa.author_id == _db_user_id,
-                    _UA_oa.user_api_keys.isnot(None),
+                from ai_integration.autonomous_agent import _decrypt_keys as _dk_er
+                _all_agents = _db_sess.query(_UA_er).filter(
+                    _UA_er.author_id == _db_user_id,
+                    _UA_er.user_api_keys.isnot(None),
                 ).all()
                 for _ag in _all_agents:
                     _raw_keys = _ag.user_api_keys or ''
-                    _decrypted = _dk_oa(_raw_keys)
+                    _decrypted = _dk_er(_raw_keys)
                     for _line in _decrypted.splitlines():
                         _line = _line.strip()
-                        if _line.startswith('OANDA_API_KEY=') or _line.startswith('OANDA_ACCESS_TOKEN='):
+                        if _line.startswith('EXCHANGERATE_API_KEY=') or _line.startswith('EXCHANGE_RATE_API_KEY='):
                             _val = _line.split('=', 1)[1].strip()
                             if _val and len(_val) > 8 and _val.lower() not in ('none', 'null', 'your_key', 'xxx', '...'):
                                 _api_key = _val
-                        if _line.startswith('OANDA_ACCOUNT_TYPE='):
-                            _t = _line.split('=', 1)[1].strip().lower()
-                            if _t in ('live', 'fxtrade'):
-                                _account_type = 'live'
+                                break
                     if _api_key:
                         break
         finally:
             if _close_sess:
                 _db_sess.close()
     except Exception as _e:
-        logger.warning(f"[FOREX] Error fetching OANDA key: {_e}")
+        logger.warning(f"[FOREX] Error fetching ExchangeRate key: {_e}")
 
     if not _api_key:
         return (
-            "⚠️ Форекс-анализ недоступен: OANDA_API_KEY не настроен.\n"
-            "Получи бесплатный ключ:\n"
-            "1️⃣ Зарегистрируйся на oanda.com → Practice Account (бесплатно)\n"
-            "2️⃣ My Account → Manage API Access → Generate Token\n"
-            "3️⃣ Добавь в настройки агента → API-ключи:\n"
-            "OANDA_API_KEY=твой_токен"
+            "⚠️ Курсы валют недоступны: EXCHANGERATE_API_KEY не настроен.\n"
+            "Получи бесплатный ключ (1500 req/мес, 170+ валют):\n"
+            "1️⃣ Зарегистрируйся на exchangerate-api.com → Get Free Key\n"
+            "2️⃣ Добавь в настройки агента → API-ключи:\n"
+            "EXCHANGERATE_API_KEY=твой_ключ"
         )
 
-    # Выбираем эндпоинт в зависимости от типа аккаунта
-    _base = (
-        "https://api-fxtrade.oanda.com"
-        if _account_type == 'live'
-        else "https://api-fxpractice.oanda.com"
-    )
-
-    count = max(5, min(200, int(count)))
-    granularity = granularity.upper() if granularity else "H1"
-
-    _headers = {
-        "Authorization": f"Bearer {_api_key}",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-    }
-
-    def _oanda_get(url: str) -> dict:
-        req = _urllib_req.Request(url, headers=_headers)
+    def _er_get(url: str) -> dict:
+        req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with _urllib_req.urlopen(req, timeout=15) as r:
             return _json.loads(r.read().decode())
 
     try:
-        # 1. Исторические свечи
-        candles_url = (
-            f"{_base}/v3/instruments/{instrument}/candles"
-            f"?count={count}&granularity={granularity}&price=M"
-        )
-        data = _oanda_get(candles_url)
+        # Текущий курс: GET /v6/{key}/pair/{base}/{target}[/{amount}]
+        _amount_str = f"/{int(amount)}" if amount and amount != 1.0 else ""
+        _url = f"https://v6.exchangerate-api.com/v6/{_api_key}/pair/{_base_cur}/{_target_cur}{_amount_str}"
+        data = _er_get(_url)
 
-        if 'errorMessage' in data:
-            err = data['errorMessage']
-            if 'Invalid value' in err or 'Unknown instrument' in err:
-                return f"❌ Неизвестный инструмент: {instrument}. Проверьте пару (например EUR_USD, XAU_USD)."
-            if '401' in err or 'Unauthorized' in err or 'Invalid' in err:
-                return "❌ Неверный OANDA_API_KEY. Проверь токен в Personal Access Tokens."
-            return f"❌ OANDA API ошибка: {err[:200]}"
+        _result = data.get('result', '')
+        if _result == 'error':
+            _err_type = data.get('error-type', 'unknown')
+            if _err_type in ('invalid-key', 'inactive-account'):
+                return "❌ Неверный EXCHANGERATE_API_KEY. Проверь ключ на exchangerate-api.com"
+            if _err_type == 'quota-reached':
+                return "⏳ Лимит запросов ExchangeRate-API исчерпан (1500/мес бесплатно). Обновится в следующем месяце."
+            if _err_type == 'unsupported-code':
+                return f"❌ Валюта не поддерживается: {_base_cur} или {_target_cur}. Проверьте код (ISO 4217)."
+            return f"❌ ExchangeRate-API ошибка: {_err_type}"
 
-        candles = data.get('candles', [])
-        if not candles:
-            return f"❌ Данные по {instrument} не получены (пустой ответ)"
+        _rate = data.get('conversion_rate')
+        _conv_result = data.get('conversion_result')
+        _time_last = data.get('time_last_update_utc', '')[:22]
+        _time_next = data.get('time_next_update_utc', '')[:22]
 
-        # Парсим OHLCV
-        _closes = []
-        _highs = []
-        _lows = []
-        for c in candles:
-            mid = c.get('mid', {})
-            try:
-                _closes.append(float(mid.get('c', 0)))
-                _highs.append(float(mid.get('h', 0)))
-                _lows.append(float(mid.get('l', 0)))
-            except (ValueError, TypeError):
-                pass
+        if _rate is None:
+            return f"❌ Не удалось получить курс {_base_cur}/{_target_cur}"
 
-        if not _closes:
-            return f"❌ Не удалось разобрать котировки {instrument}"
-
-        # Текущая цена, изменение
-        _price_now = _closes[-1]
-        _price_open = _closes[0]
-        _change_abs = round(_price_now - _price_open, 6)
-        _change_pct = round((_change_abs / _price_open) * 100, 3) if _price_open else 0
-        _direction = "▲" if _change_abs >= 0 else "▼"
-        _sign = "+" if _change_abs >= 0 else ""
-
-        # Диапазон периода
-        _period_high = round(max(_highs), 6)
-        _period_low = round(min(_lows), 6)
-
-        # SMA20
-        _sma20 = None
-        if len(_closes) >= 20:
-            _sma20 = round(sum(_closes[-20:]) / 20, 6)
-
-        # RSI14 (упрощённый)
-        _rsi = None
-        if len(_closes) >= 15:
-            _gains = []
-            _losses = []
-            for i in range(1, 15):
-                d = _closes[-15 + i] - _closes[-15 + i - 1]
-                if d > 0:
-                    _gains.append(d)
-                    _losses.append(0)
-                else:
-                    _gains.append(0)
-                    _losses.append(abs(d))
-            _avg_gain = sum(_gains) / 14
-            _avg_loss = sum(_losses) / 14
-            if _avg_loss > 0:
-                _rs = _avg_gain / _avg_loss
-                _rsi = round(100 - (100 / (1 + _rs)), 1)
-            else:
-                _rsi = 100.0
-
-        # Форматируем пару для отображения: EUR_USD -> EUR/USD
-        _pair_display = instrument.replace('_', '/')
-
-        # Таймфрейм → русское название
-        _tf_map = {'M5': '5 мин', 'M15': '15 мин', 'M30': '30 мин',
-                   'H1': '1 час', 'H4': '4 часа', 'D': 'день', 'W': 'неделя'}
-        _tf_label = _tf_map.get(granularity, granularity)
-
-        # Последнее время свечи
-        _last_time = candles[-1].get('time', '')[:16].replace('T', ' ') if candles else ''
-
+        _pair_display = f"{_base_cur}/{_target_cur}"
         result_lines = [
-            f"📊 **{_pair_display}** | {_tf_label} | {count} свечей",
-            f"",
-            f"💱 Цена: **{_price_now}**  {_direction} {_sign}{_change_abs} ({_sign}{_change_pct}%)",
-            f"📅 Период: High {_period_high}  |  Low {_period_low}",
+            f"💱 **{_pair_display}**: {_rate}",
         ]
-        if _sma20 is not None:
-            _price_vs_sma = "выше SMA20 📈" if _price_now > _sma20 else "ниже SMA20 📉"
-            result_lines.append(f"📉 SMA20: {_sma20}  ({_price_vs_sma})")
-        if _rsi is not None:
-            _rsi_zone = "перекупленность" if _rsi > 70 else ("перепроданность" if _rsi < 30 else "нейтральная зона")
-            result_lines.append(f"⚡ RSI14: {_rsi}  ({_rsi_zone})")
-        if _last_time:
-            result_lines.append(f"🕐 Обновлено: {_last_time} UTC")
-        result_lines.append(f"\n_(OANDA {_account_type} — только анализ, без торговли)_")
+        if _conv_result is not None and amount != 1.0:
+            result_lines.append(f"🔄 {amount} {_base_cur} = **{_conv_result} {_target_cur}**")
+        if _time_last:
+            result_lines.append(f"🕐 Обновлено: {_time_last}")
+        if _time_next:
+            result_lines.append(f"🔄 Следующее обновление: {_time_next}")
+        result_lines.append("_(ExchangeRate-API — курсы центробанков, обновление раз в 24ч)_")
 
         return '\n'.join(result_lines)
 
     except Exception as e:
-        logger.error(f"[FOREX] OANDA error for {instrument}: {e}")
-        return f"❌ Ошибка запроса OANDA для {instrument}: {str(e)}"
+        logger.error(f"[FOREX] ExchangeRate-API error for {instrument}: {e}")
+        return f"❌ Ошибка запроса курса {instrument}: {str(e)}"
 
 
 async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None) -> str:

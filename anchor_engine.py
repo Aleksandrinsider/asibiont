@@ -2714,7 +2714,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if any(w in _goals_text_all for w in _fin_kw):
         if 'finance' not in _caps_cats:
             _intg_missing.append('⚡ Alpha Vantage — котировки нефти/акций/металлов (ALPHAVANTAGE_API_KEY в настройках агента, 25 req/день бесплатно)')
-            _intg_missing.append('⚡ OANDA — форекс-анализ: 70+ пар, свечи OHLCV, RSI/SMA (OANDA_API_KEY в настройках агента, бесплатный practice-аккаунт на oanda.com)')
+            _intg_missing.append('⚡ ExchangeRate-API — курсы 170+ валют, конвертация (EXCHANGERATE_API_KEY в настройках агента, 1500 req/мес бесплатно, exchangerate-api.com)')
         if 'news' not in _caps_cats and not _os_bap.getenv('NEWSAPI_KEY'):
             _intg_missing.append('⚡ NewsAPI — поток финансовых новостей (NEWSAPI_KEY в настройках агента)')
     if any(w in _goals_text_all for w in _news_kw):
@@ -13649,7 +13649,7 @@ class AnchorEngine:
                         ],
                         'finance': [
                             ('alphavantage', 'Alpha Vantage', 'биржевые котировки в реальном времени'),
-                            ('oanda', 'OANDA', 'форекс-анализ: 70+ пар, свечи, RSI/SMA без торгового счёта'),
+                            ('exchangerate', 'ExchangeRate-API', 'курсы 170+ валют в реальном времени, конвертация пар'),
                             ('coingecko', 'CoinGecko', 'данные крипторынка — цены, объёмы, тренды'),
                         ],
                         'dev': [
@@ -18537,8 +18537,8 @@ class AnchorEngine:
                      'run_agent_action для отправки сообщений в канал'),
                     (('ALPHAVANTAGE_API_KEY=', 'ALPHA_VANTAGE_API_KEY='), '📈', 'Alpha Vantage (биржевые данные)',
                      'run_agent_action(action="get_price", symbol="BRENT"/"BTC"/"GAZP.MCX")'),
-                    (('OANDA_API_KEY=', 'OANDA_ACCESS_TOKEN='), '📊', 'OANDA (форекс-анализ)',
-                     'get_forex_analysis(instrument="EUR/USD", granularity="H1") — котировки, свечи, SMA/RSI'),
+                    (('EXCHANGERATE_API_KEY=', 'EXCHANGE_RATE_API_KEY='), '💱', 'ExchangeRate-API (курсы валют)',
+                     'get_forex_analysis(instrument="EUR/USD") — текущий курс и конвертация 170+ валют'),
                     (('FINNHUB_API_KEY=', 'FINNHUB_KEY='), '🔍', 'Finnhub (инсайдеры)',
                      'run_agent_action(action="insider_trades", symbol="AAPL"/"MSFT") для отслеживания инсайдерских сделок'),
                     (('NEWSAPI_KEY=', 'NEWS_API_KEY='), '📰', 'NewsAPI (100+ источников)',

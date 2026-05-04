@@ -1748,23 +1748,18 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_forex_analysis",
-            "description": "📊 Анализ форекс-рынка через OANDA: котировки валютных пар, исторические свечи OHLCV, технический анализ (SMA20, диапазон, % изменение). Требует OANDA_API_KEY в ключах агента (бесплатный practice-аккаунт на oanda.com). Пары: EUR/USD, GBP/USD, USD/JPY, USD/RUB, XAU/USD (золото), USD/CHF и др. 70+ инструментов.",
+            "description": "📊 Курсы валют через ExchangeRate-API: текущий курс любой пары (EUR/USD, USD/RUB, GBP/USD и др.), конвертация суммы, список всех доступных валют. Требует EXCHANGERATE_API_KEY в ключах агента (бесплатно: 1500 req/мес, 170+ валют). Не требует регистрации торгового счёта.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "instrument": {
                         "type": "string",
-                        "description": "Валютная пара или инструмент. Формат: EUR/USD, GBP/USD, USD/JPY, XAU/USD (золото), XAG/USD (серебро). Допускается написание с подчёркиванием: EUR_USD."
+                        "description": "Валютная пара. Формат: EUR/USD, GBP/USD, USD/JPY, USD/RUB, USD/KZT, EUR/RUB и т.д. Базовая валюта/котируемая валюта."
                     },
-                    "granularity": {
-                        "type": "string",
-                        "description": "Таймфрейм свечей: M5 (5 мин), M15 (15 мин), H1 (часовые), H4 (4 часа), D (дневные). По умолчанию H1.",
-                        "enum": ["M5", "M15", "M30", "H1", "H4", "D", "W"]
-                    },
-                    "count": {
-                        "type": "integer",
-                        "description": "Количество свечей для анализа (5–200). По умолчанию 50. Больше — глубже история.",
-                        "default": 50
+                    "amount": {
+                        "type": "number",
+                        "description": "Сумма для конвертации в базовой валюте. Опционально — по умолчанию 1.",
+                        "default": 1
                     }
                 },
                 "required": ["instrument"]

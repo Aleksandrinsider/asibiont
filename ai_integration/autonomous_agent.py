@@ -9097,8 +9097,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'get_stock_price', 'get_news_trends', 'research_topic',
                     'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
                 })
-            # OANDA / форекс-анализ — по ключу интеграции
-            if any(w in _lbl_ap for w in ('oanda', 'форекс', 'forex', 'валют')):
+            # ExchangeRate-API / форекс — по ключу интеграции
+            if any(w in _lbl_ap for w in ('exchangerate', 'форекс', 'forex', 'валют', 'курс валют')):
                 _autopilot_tools.update({
                     'get_forex_analysis', 'get_news_trends', 'research_topic',
                     'create_post', 'publish_to_telegram', 'save_note',
@@ -9209,8 +9209,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'get_stock_price', 'get_news_trends', 'research_topic', 'web_search',
                     'create_post', 'publish_to_telegram', 'save_note',
                 })
-            # OANDA / форекс-анализ — по ключу интеграции
-            if any(w in _lbl_ch for w in ('oanda', 'форекс', 'forex', 'валют')):
+            # ExchangeRate-API / форекс — по ключу интеграции
+            if any(w in _lbl_ch for w in ('exchangerate', 'форекс', 'forex', 'валют', 'курс валют')):
                 _inferred_tools.update({
                     'get_forex_analysis', 'get_news_trends', 'research_topic',
                     'create_post', 'save_note',

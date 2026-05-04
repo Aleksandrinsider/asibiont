@@ -6115,68 +6115,42 @@ try:
 except Exception as e:
     print('Ошибка Alpha Vantage: ' + str(e))`
             },
-            oanda: {
-                name: 'OANDA (форекс)',
+            exchangerate: {
+                name: 'ExchangeRate-API (курсы валют)',
                 fields: [
-                    {k:'OANDA_API_KEY', label:'Personal Access Token', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'OANDA_INSTRUMENTS', label:'Валютные пары через запятую', ph:'EUR_USD,GBP_USD,XAU_USD', t:'text', opt:true},
-                    {k:'OANDA_ACCOUNT_TYPE', label:'Тип аккаунта', ph:'practice', t:'text', opt:true}
+                    {k:'EXCHANGERATE_API_KEY', label:'API Key', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'ER_PAIRS', label:'Пары через запятую (опционально)', ph:'EUR/USD,USD/RUB,GBP/USD', t:'text', opt:true}
                 ],
-                hint: 'Бесплатный practice-аккаунт: oanda.com → My Account → Manage API Access → Generate Token. Поддерживает 70+ валютных пар. EUR_USD, GBP_USD, USD_JPY, XAU_USD (золото), USD_RUB. Только анализ рынка — без торговли. OANDA_ACCOUNT_TYPE: practice (по умолчанию) или live.',
+                hint: 'Бесплатный ключ: exchangerate-api.com → Get Free Key. 1500 запросов/мес, 170+ валют. Обновление курсов раз в 24ч. Пары: EUR/USD, USD/RUB, GBP/USD, USD/JPY, USD/KZT, USD/TRY и любые другие ISO 4217.',
                 code: `import urllib.request, json, os
-API_KEY = os.environ.get('OANDA_API_KEY', '')
-INSTRUMENTS = os.environ.get('OANDA_INSTRUMENTS', 'EUR_USD,GBP_USD,XAU_USD')
-ACCOUNT_TYPE = os.environ.get('OANDA_ACCOUNT_TYPE', 'practice').lower()
-GRANULARITY = os.environ.get('OANDA_GRANULARITY', 'H1')
-COUNT = int(os.environ.get('OANDA_COUNT', '50'))
+API_KEY = os.environ.get('EXCHANGERATE_API_KEY', '')
+PAIRS = os.environ.get('ER_PAIRS', 'EUR/USD,USD/RUB,GBP/USD,USD/JPY')
 
-BASE = 'https://api-fxtrade.oanda.com' if ACCOUNT_TYPE == 'live' else 'https://api-fxpractice.oanda.com'
-HEADERS = {'Authorization': 'Bearer ' + API_KEY, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}
-
-TF_LABELS = {'M5':'5мин','M15':'15мин','M30':'30мин','H1':'1ч','H4':'4ч','D':'день','W':'неделя'}
-
-def oanda_get(url):
-    req = urllib.request.Request(url, headers=HEADERS)
+def er_get_pair(base, target, amount=1):
+    url = 'https://v6.exchangerate-api.com/v6/' + API_KEY + '/pair/' + base + '/' + target
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read().decode())
 
-def analyze(instrument):
-    instrument = instrument.strip().upper().replace('/', '_')
-    url = BASE + '/v3/instruments/' + instrument + '/candles?count=' + str(COUNT) + '&granularity=' + GRANULARITY + '&price=M'
-    data = oanda_get(url)
-    if 'errorMessage' in data:
-        print(instrument + ': ошибка — ' + data['errorMessage'][:100]); return
-    candles = data.get('candles', [])
-    if not candles:
-        print(instrument + ': нет данных'); return
-    closes = [float(c['mid']['c']) for c in candles if c.get('mid')]
-    highs  = [float(c['mid']['h']) for c in candles if c.get('mid')]
-    lows   = [float(c['mid']['l']) for c in candles if c.get('mid')]
-    if not closes:
-        print(instrument + ': не удалось распарсить'); return
-    price  = closes[-1]
-    chg    = round(price - closes[0], 6)
-    pct    = round(chg / closes[0] * 100, 3) if closes[0] else 0
-    sign   = '+' if chg >= 0 else ''
-    hi     = round(max(highs), 6)
-    lo     = round(min(lows), 6)
-    sma20  = round(sum(closes[-20:]) / 20, 6) if len(closes) >= 20 else None
-    pair   = instrument.replace('_', '/')
-    tf     = TF_LABELS.get(GRANULARITY, GRANULARITY)
-    out    = pair + ': ' + str(price) + '  ' + sign + str(chg) + ' (' + sign + str(pct) + '%)  Hi ' + str(hi) + ' Lo ' + str(lo)
-    if sma20: out += '  SMA20=' + str(sma20) + (' ▲' if price > sma20 else ' ▼')
-    print(out)
-
 try:
     if not API_KEY:
-        print('Ошибка: OANDA_API_KEY не задан. Получи токен на oanda.com → My Account → Manage API Access.')
+        print('Ошибка: EXCHANGERATE_API_KEY не задан. Получи ключ на exchangerate-api.com')
     else:
-        pairs = [p.strip() for p in INSTRUMENTS.split(',') if p.strip()]
-        if not pairs: pairs = ['EUR_USD']
-        for p in pairs[:8]:
-            analyze(p)
+        pairs = [p.strip().upper() for p in PAIRS.split(',') if p.strip()]
+        if not pairs: pairs = ['EUR/USD']
+        for pair in pairs[:10]:
+            if '/' not in pair:
+                print(pair + ': неверный формат, используй EUR/USD'); continue
+            base, target = pair.split('/', 1)
+            d = er_get_pair(base, target)
+            if d.get('result') == 'error':
+                print(pair + ': ошибка — ' + d.get('error-type', '?'))
+            else:
+                rate = d.get('conversion_rate', '?')
+                updated = d.get('time_last_update_utc', '')[:16]
+                print(pair + ': ' + str(rate) + '  (' + updated + ')')
 except Exception as e:
-    print('Ошибка OANDA: ' + str(e))`
+    print('Ошибка ExchangeRate-API: ' + str(e))`
             },
             finnhub: {
                 name: 'Finnhub',
@@ -8131,7 +8105,7 @@ except Exception as e:
                             <option value="tinkoff">Тинькофф Инвестиции</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
-                            <option value="oanda">OANDA (форекс / анализ рынка)</option>
+                            <option value="exchangerate">ExchangeRate-API (курсы валют / конвертация)</option>
                             <option value="finnhub">Finnhub (инсайдеры / котировки / новости / earnings)</option>
                             <option value="twelvedata">Twelve Data (акции / форекс / крипто)</option>
                             <option value="yahoo_finance">Yahoo Finance (акции / индексы / ETF)</option>
