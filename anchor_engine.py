@@ -10386,6 +10386,10 @@ class AnchorEngine:
                 _claims_publish_limit = any(w in _result_lower for w in (
                     'лимит постов', 'дневной лимит постов', 'сегодня уже лимит',
                 ))
+                _claims_internal_agent_email = (
+                    bool(re.search(r'@[a-z0-9.-]*asibiont\.com\b', _result_lower))
+                    and any(w in _result_lower for w in ('отправил', 'отправила', 'письм', 'email'))
+                )
                 _is_noise_result = (
                     # Hollow acks — noise только БЕЗ реальных инструментов
                     (_result_lower.rstrip('.!') in _EMPTY_RESPONSES and not _has_real_actions)
@@ -10418,6 +10422,8 @@ class AnchorEngine:
                     ))
                     # Галлюцинации про недоступный publish/лимиты без реального publish tool-call
                     or ((_claims_no_publish_access or _claims_publish_limit) and not _has_publish_tool_calls)
+                    # Нельзя репортить отправку email внутренним агентам платформы
+                    or _claims_internal_agent_email
                     # Raw data dump: агент просто пересылает список контактов (8+ email)
                     or (len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _result_clean)) >= 8)
                 )

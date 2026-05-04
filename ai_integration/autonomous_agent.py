@@ -8452,6 +8452,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "ШАГ 2 — ДЕЙСТВУЙ: вызови инструмент, получи результат.\n"
             "  Цепочка ценности — доведи до конца, НЕ останавливайся на полпути:\n"
             "  найди (web_search/research) → сохрани (save_email_contact) → СРАЗУ отправь (send_outreach_email)\n"
+            "  📮 МАРШРУТИЗАЦИЯ КАНАЛОВ (ОБЯЗАТЕЛЬНО):\n"
+            "  ВНУТРЕННИЕ коллеги/агенты команды (имена из блока ТВОЯ КОМАНДА, адреса @asibiont.com)\n"
+            "  → только через DELEGATE[Имя], НИКОГДА не через send_outreach_email и не через save_email_contact.\n"
+            "  Email-инструменты = только внешним людям/компаниям вне команды.\n"
             "  ⛔ save_email_contact — это НЕ конец работы. Контакт без письма = ноль для цели.\n"
             "  ⛔ Анализ/заметка без применения = ноль. Всегда доводи до конкретного действия.\n"
             "  Ошибка → другой инструмент. Пустой результат → другой запрос, канал, подход.\n"
@@ -10660,6 +10664,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if any(m in _tc_str_rh for m in ('ИСПРАВЬ параметр body', 'ПЕРЕПИШИ', 'перепиши', 'на английском', 'на English', 'плейсхолдер', 'placeholder')):
                     _messages.append({"role": "user", "content": (
                         "Прочитай ошибку выше и выполни инструкцию: исправь body и вызови send_outreach_email."
+                    )})
+                elif any(m in _tc_str_rh for m in ('внутренний агент команды', '@asibiont.com', 'используй внутреннюю делегацию')):
+                    _messages.append({"role": "user", "content": (
+                        "Стоп: это внутренний коллега/агент. Для внутренних НЕ используй email-инструменты. "
+                        "Сделай DELEGATE[Имя]: передай конкретную задачу и все собранные данные."
                     )})
         _tool_call_count += 1
         # Добавляем фиктивные результаты для пропущенных tool_calls (OpenAI/DeepSeek требует все)
