@@ -6119,14 +6119,57 @@ except Exception as e:
                 name: 'ExchangeRate-API (курсы валют)',
                 fields: [
                     {k:'EXCHANGERATE_API_KEY', label:'API Key', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'ER_PAIRS', label:'Пары через запятую (опционально)', ph:'EUR/USD,USD/RUB,GBP/USD', t:'text', opt:true}
+                    {k:'ER_PAIRS', label:'Валютные пары через запятую (опционально)', ph:'EUR/USD,USD/RUB,GBP/USD', t:'text', opt:true},
+                    {k:'RSS_URLS', label:'RSS-ленты форекс-новостей (опционально)', ph:'https://www.forexfactory.com/rss,https://ru.investing.com/rss/news.rss', t:'text', opt:true},
+                    {k:'RSS_COUNT', label:'Макс. новостей на ленту', ph:'10', t:'text', opt:true}
                 ],
-                hint: 'Бесплатный ключ: exchangerate-api.com → Get Free Key. 1500 запросов/мес, 170+ валют. Обновление курсов раз в 24ч. Пары: EUR/USD, USD/RUB, GBP/USD, USD/JPY, USD/KZT, USD/TRY и любые другие ISO 4217.',
-                code: `import urllib.request, json, os
-API_KEY = os.environ.get('EXCHANGERATE_API_KEY', '')
-PAIRS = os.environ.get('ER_PAIRS', 'EUR/USD,USD/RUB,GBP/USD,USD/JPY')
+                hint: 'Бесплатный ключ: exchangerate-api.com → Get Free Key. 1500 запросов/мес, 170+ валют. Обновление курсов раз в 24ч. Пары: EUR/USD, USD/RUB, GBP/USD, USD/JPY, USD/KZT, USD/TRY. Дополнительно: RSS_URLS — форекс-новости из любых лент.',
+                code: `import urllib.request, re, html, json, os
 
-def er_get_pair(base, target, amount=1):
+# === RSS-новости (если RSS_URLS заданы) ===
+_raw  = os.environ.get('RSS_URLS', '') or os.environ.get('RSS_URL', '')
+URLS  = [u.strip() for u in re.split(r'[\\n,]+', _raw) if u.strip().startswith('http')]
+COUNT = int(os.environ.get('RSS_COUNT', '10') or '10')
+
+def _cdata_or_plain(raw):
+    raw = raw.strip()
+    m = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw, re.DOTALL)
+    return html.unescape((m.group(1) if m else raw).strip())
+
+def _tag(item, tag):
+    m = re.search(r'<' + tag + r'[^>]*>(.*?)</' + tag + r'>', item, re.DOTALL)
+    return _cdata_or_plain(m.group(1)) if m else ''
+
+def fetch_rss(url):
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        content = r.read().decode('utf-8', errors='replace')
+    return re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:COUNT]
+
+if URLS:
+    for url in URLS:
+        try:
+            items = fetch_rss(url)
+            print('=== ' + url + ' ===')
+            if not items:
+                print('  Нет новостей в ленте')
+            else:
+                for i, item in enumerate(items, 1):
+                    title = _tag(item, 'title') or '(без заголовка)'
+                    link  = _tag(item, 'link')
+                    desc  = re.sub(r'<[^>]+>', '', _tag(item, 'description')).strip()[:200]
+                    print(str(i) + '. ' + title)
+                    if link: print('   ' + link)
+                    if desc: print('   ' + desc)
+                    print()
+        except Exception as e:
+            print('Ошибка ' + url + ': ' + str(e))
+
+# === ExchangeRate-API (курсы валют) ===
+API_KEY = os.environ.get('EXCHANGERATE_API_KEY', '')
+PAIRS   = os.environ.get('ER_PAIRS', 'EUR/USD,USD/RUB,GBP/USD,USD/JPY')
+
+def er_get_pair(base, target):
     url = 'https://v6.exchangerate-api.com/v6/' + API_KEY + '/pair/' + base + '/' + target
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as r:
@@ -6146,7 +6189,7 @@ try:
             if d.get('result') == 'error':
                 print(pair + ': ошибка — ' + d.get('error-type', '?'))
             else:
-                rate = d.get('conversion_rate', '?')
+                rate    = d.get('conversion_rate', '?')
                 updated = d.get('time_last_update_utc', '')[:16]
                 print(pair + ': ' + str(rate) + '  (' + updated + ')')
 except Exception as e:
