@@ -12636,10 +12636,13 @@ async def api_agent_test_code_handler(request):
 
         # Строим env как в autonomous_agent
         import os as _os_t, sys as _sys_t, asyncio as _aio_t
+        from ai_integration.autonomous_agent import _decrypt_keys as _dk_test
+        api_keys_raw = _dk_test(api_keys_raw)  # дешифруем enc:/obf: если нужно
         _env = {
             'PATH': _os_t.environ.get('PATH', '/usr/bin:/bin'),
             'HOME': _os_t.environ.get('HOME', '/tmp'),
             'PYTHONIOENCODING': 'utf-8',
+            'AGENT_ACTION': 'check_all',
         }
         for _kline in api_keys_raw.splitlines():
             _kline = _kline.strip()
@@ -12911,6 +12914,7 @@ async def api_marketplace_my_handler(request):
                         'user_api_keys': '', 'python_code': '', 'search_scope': '',
                         'is_subscribed': True, 'is_external': True,
                     })
+            from ai_integration.autonomous_agent import _decrypt_keys as _dk_my
             own_agents_list = [{'id': a.id, 'name': a.name, 'slug': a.slug,
                              'status': a.status, 'subscribers_count': a.subscribers_count,
                              'price_per_message': a.price_per_message,
@@ -12923,7 +12927,7 @@ async def api_marketplace_my_handler(request):
                              'gender': a.gender or 'male',
                              'avatar_url': f'/api/arena/agent_avatar/mkt_{a.id}?v={int(a.updated_at.timestamp())}' if a.avatar_url and a.updated_at else (f'/api/arena/agent_avatar/mkt_{a.id}' if a.avatar_url else ''),
                              'is_private': bool(a.is_private),
-                             'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
+                             'user_api_keys': _dk_my(a.user_api_keys or '') if a.author_id == user_obj.id else '',
                              'python_code': (a.python_code or '') if a.author_id == user_obj.id else '',
                              'search_scope': (a.search_scope or '') if a.author_id == user_obj.id else '',
                              'notification_frequency': _parse_notify_freq(a.custom_anchors) if a.author_id == user_obj.id else 0,
