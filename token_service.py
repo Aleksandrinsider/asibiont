@@ -486,7 +486,7 @@ async def check_and_deduct(user_id: int, action: str, session=None) -> bool:
     """
     if not has_enough_tokens(user_id, action, session):
         return False
-    result = spend_tokens(user_id, action, description=f'anchor_{action}')
+    result = spend_tokens(user_id, action, description=f'anchor_{action}', session=session)
     return result.get('success', False)
 
 

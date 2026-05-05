@@ -152,43 +152,45 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
-# Dispose stale pool connections from previous container (Railway restart)
-try:
-    engine.dispose()
-    logger.info("Disposed stale connection pool")
-except Exception:
-    pass
+def _verify_db_connection():
+    """Dispose stale pool connections and verify DB connectivity with retry.
+    
+    Использует ThreadPoolExecutor для таймаута вместо raw threading.Thread,
+    чтобы избежать ручного управления потоками в асинхронном приложении.
+    """
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
-# Test database connection with retry (Railway DB may not be ready immediately)
-_db_max_retries = 5
-for _db_attempt in range(1, _db_max_retries + 1):
+    # Dispose stale pool connections from previous container (Railway restart)
     try:
-        # Use threading timeout to catch DNS/SSL hangs that connect_timeout misses
-        import threading
-        _conn_result = [None, None]  # [success, error]
-        def _try_connect():
-            try:
-                with engine.connect() as conn:
-                    conn.execute(text("SELECT 1"))
-                _conn_result[0] = True
-            except Exception as e:
-                _conn_result[1] = e
-        _t = threading.Thread(target=_try_connect, daemon=True)
-        _t.start()
-        _t.join(timeout=20)  # 20s hard limit per attempt
-        if _t.is_alive():
-            raise TimeoutError(f"DB connect hung for 20s (attempt {_db_attempt})")
-        if _conn_result[1]:
-            raise _conn_result[1]
-        logger.info("✅ Database connection successful")
-        break
-    except Exception as _db_err:
-        if _db_attempt == _db_max_retries:
-            logger.error(f"❌ Database connection failed after {_db_max_retries} attempts: {_db_err}")
-            raise
-        _wait = min(2 ** _db_attempt, 15)
-        logger.warning(f"⏳ DB connection attempt {_db_attempt}/{_db_max_retries} failed: {_db_err}. Retrying in {_wait}s...")
-        time.sleep(_wait)
+        engine.dispose()
+        logger.info("Disposed stale connection pool")
+    except Exception:
+        pass
+
+    _db_max_retries = 5
+    for _db_attempt in range(1, _db_max_retries + 1):
+        try:
+            # Используем ThreadPoolExecutor для таймаута (ловим DNS/SSL зависания)
+            with ThreadPoolExecutor(max_workers=1) as _executor:
+                _future = _executor.submit(
+                    lambda: engine.connect().execute(text("SELECT 1"))
+                )
+                _future.result(timeout=20)  # 20s hard limit per attempt
+            logger.info("✅ Database connection successful")
+            return
+        except FuturesTimeoutError:
+            _wait = min(2 ** _db_attempt, 15)
+            logger.warning(f"⏳ DB connect hung for 20s (attempt {_db_attempt}). Retrying in {_wait}s...")
+            time.sleep(_wait)
+        except Exception as _db_err:
+            if _db_attempt == _db_max_retries:
+                logger.error(f"❌ Database connection failed after {_db_max_retries} attempts: {_db_err}")
+                raise
+            _wait = min(2 ** _db_attempt, 15)
+            logger.warning(f"⏳ DB connection attempt {_db_attempt}/{_db_max_retries} failed: {_db_err}. Retrying in {_wait}s...")
+            time.sleep(_wait)
+
+_verify_db_connection()
 
 # Clear database if requested (LOCAL only — safety guard)
 if os.getenv('CLEAR_DB') == '1':
@@ -734,10 +736,18 @@ async def _refresh_avatars_background(bot, telegram_ids):
 
 
 def check_telegram_authentication(data):
-    # Проерка аторизации от Telegram
+    """Проверка авторизации от Telegram Login Widget.
+    
+    Telegram Bot API ожидает raw токен (без префикса 'bot').
+    Если токен в окружении сохранён с префиксом 'bot' (напр. из URL API),
+    код защитно обрезает его перед вычислением HMAC.
+    """
     token = TELEGRAM_TOKEN
+    # Telegram Bot API token никогда не начинается с 'bot' в raw виде,
+    # но может быть сохранён с этим префиксом из URL (API-путь).
+    # Защитно обрезаем, если вдруг:
     if token.startswith('bot'):
-        token = token[3:]  # Remove 'bot' prefix
+        token = token[3:]
     secret_key = hashlib.sha256(token.encode()).digest()
     data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()

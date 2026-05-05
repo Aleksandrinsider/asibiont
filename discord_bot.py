@@ -452,11 +452,18 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
                 photo_url=avatar_url,
                 platform='discord',
                 language='en',
-                token_balance=1500,  # Welcome tokens
+                token_balance=1500,  # Welcome tokens — will be overwritten by grant_signup_tokens below
             )
             db.add(user)
             db.commit()
             db.refresh(user)
+            # Начисляем бесплатные токены через единый API (синхронизировано с token_service)
+            # add_tokens() внутри ищет пользователя по telegram_id (не по PK user.id)
+            try:
+                from token_service import grant_signup_tokens
+                grant_signup_tokens(pseudo_telegram_id)
+            except Exception as _tok_err:
+                logger.warning("grant_signup_tokens failed for Discord user %s: %s", discord_user_id, _tok_err)
             logger.info(f"[DISCORD] New user registered: discord_id={discord_user_id}, avatar={'yes' if avatar_url else 'no'}")
         else:
             # Update avatar on every message (keep it fresh, like TG does on login)
