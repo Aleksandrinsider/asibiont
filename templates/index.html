@@ -1768,6 +1768,135 @@ if (pwaBtn) {
     .catch(function() {});
 })();
 </script>
+
+<!-- Fireworks in top-right corner -->
+<canvas id="fw-canvas" style="position:fixed;top:0;right:0;width:320px;height:320px;pointer-events:none;z-index:9999;"></canvas>
+<script>
+(function(){
+  var canvas = document.getElementById('fw-canvas');
+  var ctx = canvas.getContext('2d');
+  var W = 320, H = 320;
+  canvas.width = W; canvas.height = H;
+
+  var particles = [];
+  var rockets = [];
+  var launched = 0;
+  var maxRockets = 6;
+  var done = false;
+
+  function rand(a, b){ return a + Math.random() * (b - a); }
+  function randInt(a, b){ return Math.floor(rand(a, b)); }
+
+  var COLORS = ['#FF6B6B','#FFD93D','#6BCB77','#4D96FF','#FF922B','#CC5DE8','#F06595','#74C0FC','#63E6BE'];
+
+  function launchRocket(){
+    var x = rand(W * 0.3, W * 0.95);
+    rockets.push({
+      x: x,
+      y: H,
+      tx: rand(W * 0.1, W * 0.9),
+      ty: rand(H * 0.05, H * 0.45),
+      speed: rand(4, 7),
+      color: COLORS[randInt(0, COLORS.length)],
+      trail: []
+    });
+    launched++;
+  }
+
+  function explode(x, y, color){
+    var count = randInt(55, 80);
+    for(var i = 0; i < count; i++){
+      var angle = (Math.PI * 2 / count) * i + rand(-0.1, 0.1);
+      var speed = rand(1.5, 5.5);
+      particles.push({
+        x: x, y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        alpha: 1,
+        color: color,
+        radius: rand(1.5, 3),
+        gravity: 0.09,
+        decay: rand(0.012, 0.022)
+      });
+    }
+  }
+
+  var lastLaunch = 0;
+  var launchInterval = 520;
+  var started = Date.now();
+
+  function frame(){
+    if(done) return;
+    ctx.clearRect(0, 0, W, H);
+
+    var now = Date.now();
+
+    // Launch new rockets
+    if(launched < maxRockets && now - lastLaunch > launchInterval){
+      launchRocket();
+      lastLaunch = now;
+    }
+
+    // Update & draw rockets
+    for(var i = rockets.length - 1; i >= 0; i--){
+      var r = rockets[i];
+      r.trail.push({x: r.x, y: r.y});
+      if(r.trail.length > 8) r.trail.shift();
+
+      var dx = r.tx - r.x, dy = r.ty - r.y;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if(dist < r.speed){
+        explode(r.x, r.y, r.color);
+        rockets.splice(i, 1);
+        continue;
+      }
+      r.x += (dx / dist) * r.speed;
+      r.y += (dy / dist) * r.speed;
+
+      // Draw trail
+      for(var t = 0; t < r.trail.length; t++){
+        ctx.globalAlpha = (t / r.trail.length) * 0.6;
+        ctx.fillStyle = r.color;
+        ctx.beginPath();
+        ctx.arc(r.trail[t].x, r.trail[t].y, 2, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, 2.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Update & draw particles
+    for(var j = particles.length - 1; j >= 0; j--){
+      var p = particles[j];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += p.gravity;
+      p.vx *= 0.98;
+      p.alpha -= p.decay;
+      if(p.alpha <= 0){ particles.splice(j, 1); continue; }
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    if(launched >= maxRockets && rockets.length === 0 && particles.length === 0){
+      done = true;
+      canvas.style.display = 'none';
+      return;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // Start after short delay
+  setTimeout(function(){ requestAnimationFrame(frame); }, 600);
+})();
+</script>
 </body>
 </html>
 
