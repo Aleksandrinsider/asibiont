@@ -6958,12 +6958,21 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     )
                 if close_session:
                     session.close()
+                _priority_hint = (
+                    "\n\n🎯 ПРИОРИТЕТ: сначала пиши НОВЫМ контактам (статус new). "
+                    "Follow-up contacted-контактам — только если новых нет И прошло ≥3 дней с последнего письма И follow-up_count < max_follow_ups кампании. "
+                    "Не делай follow-up если есть хотя бы 1 новый контакт."
+                    if _new_contacts else
+                    "\n\n⚠️ Новых контактов нет — ищи через web_search новых людей, затем save_email_contact. "
+                    "Follow-up можно делать только тем из contacted у кого прошло ≥3 дней."
+                )
                 return (
                     '\n\n'.join(_parts)
                     + "\n\nℹ️ Это email-контакты из EmailContact (НЕ пользователи платформы). "
                     "Пиши ТОЛЬКО новым контактам (статус new). "
                     "⚠️ contacted = им уже писали: повтор холодного письма будет заблокирован, "
                     "используй follow-up с новым углом и ценностью."
+                    + _priority_hint
                 )
             else:
                 # 0 контактов — не падаем дальше на поиск пользователей платформы — сразу отвечаем четко
@@ -16182,9 +16191,25 @@ async def send_follow_up_email(
         if not campaign:
             return " Кампания не найдена."
 
-        # Лимит количества follow-up отключён.
+        # ── GUARD: лимит follow-up по кампании ──
+        _max_fu = campaign.max_follow_ups if campaign.max_follow_ups is not None else 3
+        if outreach.follow_up_count >= _max_fu:
+            return (
+                f"⛔ {outreach.recipient_email} уже получил {outreach.follow_up_count} follow-up из {_max_fu} допустимых. "
+                f"Лимит исчерпан — не отправляем. Ищи новые контакты через web_search."
+            )
 
-        # Ограничение по времени до следующего follow-up отключено.
+        # ── GUARD: минимальный интервал между follow-up (3 дня) ──
+        if outreach.last_follow_up_at:
+            _last_fu = outreach.last_follow_up_at
+            if not _last_fu.tzinfo:
+                _last_fu = _last_fu.replace(tzinfo=timezone.utc)
+            _days_since = (datetime.now(timezone.utc) - _last_fu).days
+            if _days_since < 3:
+                return (
+                    f"⛔ Follow-up на {outreach.recipient_email} слишком рано — "
+                    f"последний был {_days_since} дн. назад (минимум 3 дня). Подожди."
+                )
 
         # Follow-up — к уже существующему получателю, глобальный лимит не применяется
 
