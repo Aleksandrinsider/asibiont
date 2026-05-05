@@ -12232,9 +12232,24 @@ class AnchorEngine:
                 _user_id, prev_agent.name, _next_ag.name, _next_task[:50], len(_next_result or ''),
             )
 
+        except asyncio.TimeoutError as _chain_e:
+            _uid_log = locals().get('_user_id', getattr(user, 'id', '?'))
+            logger.warning("[ANCHOR-CHAIN] timeout (120s) for user %s", _uid_log)
+            try:
+                _ct_fail_id = locals().get('_chain_task_id')
+                if _ct_fail_id:
+                    _ct_fail = session.query(_ChainTask).get(_ct_fail_id)
+                    if _ct_fail and _ct_fail.status == 'in_progress':
+                        _ct_fail.status = 'failed'
+                        _ct_fail.skipped_reason = 'chain_timeout_120s'
+                        _ct_fail.completion_notes = 'Агент не уложился в 120с — задача слишком сложная для chain-цикла. Разбить на 1 шаг.'
+                        session.commit()
+            except Exception:
+                pass
         except Exception as _chain_e:
             _uid_log = locals().get('_user_id', getattr(user, 'id', '?'))
-            logger.debug("[ANCHOR-CHAIN] error for user %s: %s", _uid_log, _chain_e)
+            _chain_err_str = type(_chain_e).__name__ + ': ' + str(_chain_e)
+            logger.warning("[ANCHOR-CHAIN] error for user %s: %s", _uid_log, _chain_err_str)
             # Помечаем задачу как failed, чтобы recovery не перезапускал её бесконечно
             try:
                 _ct_fail_id = locals().get('_chain_task_id')
@@ -12242,7 +12257,8 @@ class AnchorEngine:
                     _ct_fail = session.query(_ChainTask).get(_ct_fail_id)
                     if _ct_fail and _ct_fail.status == 'in_progress':
                         _ct_fail.status = 'failed'
-                        _ct_fail.skipped_reason = f'chain_error: {str(_chain_e)[:120]}'
+                        _ct_fail.skipped_reason = f'chain_error: {_chain_err_str[:120]}'
+                        _ct_fail.completion_notes = _chain_err_str[:255]
                         session.commit()
             except Exception:
                 pass
@@ -13789,10 +13805,10 @@ class AnchorEngine:
             # Diagnostic: логируем какие агенты переданы в координатор
             _agent_names_list = [p.get('name', '') for p in _profiles if p.get('name', '').strip()]
             logger.info("[COORD] Starting with %d agent profiles: %s", len(_agent_names_list), _agent_names_list)
-            # 1 шаг на агента — гарантирует что ВСЕ агенты получат задание.
-            # Раньше: agents+goals → 8+ шагов → LLM не хватало токенов → JSON обрезался → 2 из 4 агентов без работы.
-            # Координатор сам распределит цели между агентами (в промпте: «каждая цель получает шаг»).
-            _n_plan_steps = max(_n_real_agents, 2)
+            # Шаги плана: не более 3 агентов за цикл.
+            # Причина: каждый агент получает до 150с → 5+ агентов = 12+ мин > порог stuck-очистки (15 мин).
+            # Координатор сам расставит приоритеты между целями внутри 3 шагов.
+            _n_plan_steps = min(max(_n_real_agents, 2), 3)
 
             # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
@@ -15732,6 +15748,9 @@ class AnchorEngine:
 
                 "ПРАВИЛА:\n"
                 "• research/web_search = подготовка. Данные есть → ДЕЙСТВУЙ через action-tool.\n"
+                "• ❌ ОДИН АГЕНТ — МАКСИМУМ 1 ШАГ. Нельзя назначать одному агенту 2+ шага в одном цикле.\n"
+                "  Если у Beatrice уже есть шаг — следующий email-шаг назначь другому агенту с email-интеграцией.\n"
+                "  Распределяй нагрузку: email → Beatrice, поиск/контент → Hugo/Pablo/Leonardo/Olivia.\n"
                 "• Застой 2+ цикла → кардинально смени подход.\n"
                 "• search_contacts/get_contact = CRM, НЕ поиск новых людей. LinkedIn НЕ даёт email без авторизации.\n"
                 "• task: повелительное наклонение, без имени агента, содержит ЧТО + КОМУ + СКОЛЬКО.\n"
@@ -18748,12 +18767,12 @@ class AnchorEngine:
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=200,  # 200s: первый вызов до 90s + retry до 80s + буфер
+                        timeout=150,  # 150s: 3 агента × 150с = 450с < 15 мин (порог stuck-очистки)
                     )
                 except asyncio.TimeoutError:
                     _raw = None  # FIX: define _raw to prevent UnboundLocalError
-                    _ae_msg = f'Превысил лимит 200с — задача слишком сложная для одного цикла, нужно разбить на шаги'
-                    logger.warning("[COORD] agent %s timeout after 200s: %s", _ag_name, _ag_task[:100])
+                    _ae_msg = f'Превысил лимит 150с — задача слишком сложная для одного цикла, нужно разбить на шаги'
+                    logger.warning("[COORD] agent %s timeout after 150s: %s", _ag_name, _ag_task[:100])
                     self._cancel_agent_task(
                         session,
                         _step_task_id,
