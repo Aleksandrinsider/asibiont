@@ -21279,6 +21279,9 @@ async def execute_code(code: str, timeout: int = 10, user_id: int = None) -> str
     if len(code) > 10000:
         return "Ошибка: код слишком длинный (максимум 10 000 символов)"
 
+    import textwrap as _tw
+    code = _tw.dedent(code).strip()
+
     timeout = min(max(int(timeout or 10), 1), 30)
 
     # Wrapper запрещает опасные импорты и блокирует сеть/файловую систему

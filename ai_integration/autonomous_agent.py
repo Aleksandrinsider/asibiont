@@ -11334,7 +11334,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _tool_blob = '\n'.join(_tool_payloads).lower()
         _email_error_markers = (
             'некорректный email', 'invalid email', 'self-reply detected',
-            'ошибка resend api', 'ошибка отправки', 'blocked', 'не найдено письмо для ответа',
+            'ошибка resend api', 'ошибка отправки', 'не найдено письмо для ответа',
         )
         _email_success_markers = (
             'письмо отправлено', 'ответ отправлен', 'email sent', 'reply sent',
