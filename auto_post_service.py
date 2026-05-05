@@ -15,6 +15,7 @@ import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REPLICATE_API_TOKEN
+from ai_integration.memory import decrypt_data
 
 
 @asynccontextmanager
@@ -26,7 +27,6 @@ async def _safe_http(**kwargs):
     finally:
         await session.close()
         await asyncio.sleep(0)
-from ai_integration.memory import decrypt_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -61,12 +61,12 @@ def _detect_gender(first_name: str) -> str:
     # Явный список английских женских имён (не оканчивающихся на 'a')
     _EN_FEMALE = {
         'kate', 'katie', 'jane', 'mary', 'helen', 'sarah', 'emily', 'claire',
-        'eve', 'grace', 'hope', 'joy', 'faith', 'ruth', 'beth', 'sue', 'sue',
+        'eve', 'grace', 'hope', 'joy', 'faith', 'ruth', 'beth', 'sue',
         'rachel', 'hannah', 'naomi', 'abigail', 'charlotte', 'elizabeth',
         'jennifer', 'jessica', 'ashley', 'brittany', 'megan', 'stephanie',
-        'caroline', 'katherine', 'natalie', 'danielle', 'michelle', 'rachel',
+        'caroline', 'katherine', 'natalie', 'danielle', 'michelle',
         'samantha', 'amber', 'crystal', 'heather', 'holly', 'ivy', 'lily',
-        'rose', 'violet', 'daisy', 'iris', 'pearl', 'ruby', 'claire', 'elise',
+        'rose', 'violet', 'daisy', 'iris', 'pearl', 'ruby', 'elise',
         'erin', 'gwen', 'karen', 'kim', 'lauren', 'leigh', 'lynn', 'meredith',
         'morgan', 'paige', 'quinn', 'robin', 'shelby', 'taylor', 'whitney',
     }

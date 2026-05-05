@@ -39,10 +39,10 @@ _mx_cache = {}  # domain → (has_mx: bool, timestamp)
 # ── Female agent names (for gender agreement in Russian) ──
 _FEMALE_AGENT_NAMES = {
     'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary',
-    'александра', 'анна', 'дарья', 'елена', 'екатерина', 'евгения', 'екатерина',
+    'александра', 'анна', 'дарья', 'елена', 'екатерина', 'евгения',
     'ирина', 'инна', 'анастасия', 'олеся', 'оксана', 'ольга', 'виктория',
-    'валентина', 'полина', 'софья', 'татьяна', 'тамара', 'татьяна', 'ульяна',
-    'ульяна', 'фаина', 'фаина', 'элина', 'элла', 'эмма', 'юлия', 'яна', 'ярослава',
+    'валентина', 'полина', 'софья', 'татьяна', 'тамара', 'ульяна',
+    'фаина', 'элина', 'элла', 'эмма', 'юлия', 'яна', 'ярослава',
 }
 
 def _is_fem_agent(name: str) -> bool:
@@ -53,8 +53,8 @@ def _is_fem_agent(name: str) -> bool:
     first = name.split()[0]
     if first in _FEMALE_AGENT_NAMES:
         return True
-    # Fallback: check if ends with 'а' or 'я' but not special cases
-    if first[-1:] in 'ая' and first[-2:] not in ('ша', 'жа'):
+    # Fallback: check if ends with 'а' or 'я'
+    if first[-1:] in 'ая':
         return True
     return False
 

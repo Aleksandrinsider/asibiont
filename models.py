@@ -286,7 +286,7 @@ class UserRating(Base):
     rated_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # User who receives the rating
     rating = Column(Integer, nullable=False)  # Rating value 1-10
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     rater = relationship("User", foreign_keys=[rater_user_id])
     rated_user = relationship("User", foreign_keys=[rated_user_id])

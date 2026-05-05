@@ -101,15 +101,15 @@ _FEMALE_NAMES_NO_AYA = {
     'кэтрин', 'catherine', 'маргарет', 'margaret', 'джейн', 'jane', 'хелен', 'helen',
     'эдит', 'edith', 'джудит', 'judith', 'рут', 'ruth', 'эстер', 'esther',
     'кармен', 'carmen', 'долорес', 'dolores', 'мерседес', 'mercedes', 'инес', 'ines',
-    'беатрис', 'кэрол', 'carol', 'шарлотт', 'charlotte', 'скарлетт', 'scarlett',
+    'кэрол', 'carol', 'шарлотт', 'charlotte', 'скарлетт', 'scarlett',
     'элис', 'alice', 'агнес', 'agnes', 'ингрид', 'ingrid', 'астрид', 'astrid',
     'изабель', 'isabel', 'мишель', 'michelle', 'рейчел', 'rachel', 'дебора', 'deborah',
     'olivia', 'оливия', 'sophia', 'sophie', 'софия', 'emma', 'эмма', 'emily', 'эмили',
-    'claire', 'клэр', 'claire', 'grace', 'грейс', 'eleanor', 'элеонора',
-    'victoria', 'виктория', 'natalie', 'натали', 'claire', 'клер',
+    'claire', 'клэр', 'grace', 'грейс', 'eleanor', 'элеонора',
+    'victoria', 'виктория', 'natalie', 'натали', 'клер',
     'diana', 'диана', 'monica', 'моника', 'jessica', 'джессика', 'jennifer', 'дженнифер',
     'lauren', 'лорен', 'amber', 'эмбер', 'violet', 'вайолет', 'lily', 'лили',
-    'chloe', 'хлоя', 'zoe', 'зои', 'audrey', 'одри', 'helen', 'хелен',
+    'chloe', 'хлоя', 'zoe', 'зои', 'audrey', 'одри',
 }
 
 def _detect_agent_is_female(name: str) -> bool:
@@ -122,7 +122,11 @@ def _detect_agent_is_female(name: str) -> bool:
         return True
     if first in _MALE_NAMES_ENDING_AYA:
         return False
-    if first[-1:] in 'ая' and first[-2:] not in ('ша', 'жа'):
+    # Русские и европейские женские имена часто заканчиваются на 'а'/'я'.
+    # Имена в _MALE_NAMES_ENDING_AYA (паша, саша, дима и т.д.) уже отфильтрованы выше,
+    # поэтому дополнительное исключение для 'ша'/'жа' не требуется — оно ошибочно
+    # классифицирует женские имена (Даша, Наташа, Глаша) как мужские.
+    if first[-1:] in 'ая':
         return True
     return False
 

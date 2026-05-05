@@ -97,7 +97,7 @@ def normalize_city(city):
     city = city.lower().strip()
     # Strip common prefixes/suffixes
     import re as _re_nc
-    city = _re_nc.sub(r'^(город\s+|г\.?\s*|city\s+of\s+)', '', city)
+    city = _re_nc.sub(r'^(?:город\s+|г\.?\s*|city\s+of\s+)', '', city)
     city = _re_nc.sub(r'[,;].*$', '', city).strip()
     # RU → EN mapping
     city_map = {
@@ -345,7 +345,7 @@ def save_context_to_db(user_id, user_message, ai_message):
 
 async def get_timezone_from_ip(ip_address):
     """Определяет timezone по IP адресу через ipapi.co"""
-    # Маппи алийских зай городо  русские
+    # Маппинг английских названий городов в русские
     city_mapping = {
         'Moscow': 'Москва',
         'Saint Petersburg': 'Санкт-Петербург',
@@ -385,7 +385,7 @@ async def get_timezone_from_ip(ip_address):
     }
 
     try:
-        # грируем локальные IP
+        # Игнорируем локальные IP
         if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
             return 'Europe/Moscow', 'Москва'  # По умолчанию для локальных
 
@@ -396,7 +396,7 @@ async def get_timezone_from_ip(ip_address):
                     timezone = data.get('timezone')
                     city = data.get('city')
 
-                    # Преобразуем алийское зае города  русское, если есть  маппие
+                    # Преобразуем английское название города в русское, если есть в маппинге
                     if city and city in city_mapping:
                         city = city_mapping[city]
 
@@ -617,7 +617,7 @@ async def _refresh_one_avatar(bot, tg_id):
                 # Sentinel was set — skip unless it's stale (re-try once a day)
                 _updated = getattr(_u_r, 'updated_at', None)
                 import datetime
-                _stale = (not _updated) or (_updated < datetime.datetime.utcnow() - datetime.timedelta(days=1))
+                _stale = (not _updated) or (_updated < datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
                 if not _stale:
                     return  # Still fresh sentinel, don't retry
                 # Stale sentinel — clear it and retry below
@@ -992,7 +992,7 @@ async def notify_indexnow(urls: list):
 
 
 async def login_handler(request):
-    """Страца аторизации"""
+    """Страница авторизации"""
     session = await get_session(request)
     user_id = session.get('user_id')
 
@@ -1013,11 +1013,11 @@ async def login_handler(request):
         except (ValueError, TypeError):
             pass
 
-    # Показыаем страцу аторизации
+    # Показываем страницу авторизации
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'asibiont_bot')
     
-    # Формируем auth_url для иджета Telegram
+    # Формируем auth_url для виджета Telegram
     base_url = str(request.url.origin())
     auth_url = f"{base_url}/tg_auth"
     
