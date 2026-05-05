@@ -18538,7 +18538,7 @@ class AnchorEngine:
                     (('ALPHAVANTAGE_API_KEY=', 'ALPHA_VANTAGE_API_KEY='), '📈', 'Alpha Vantage (биржевые данные)',
                      'run_agent_action(action="get_price", symbol="BRENT"/"BTC"/"GAZP.MCX")'),
                     (('EXCHANGERATE_API_KEY=', 'EXCHANGE_RATE_API_KEY='), '💱', 'ExchangeRate-API (курсы валют)',
-                     'get_forex_analysis(instrument="EUR/USD") — текущий курс и конвертация 170+ валют'),
+                     'get_forex_analysis(instrument="EUR/USD") — текущий курс + RSI/MACD/EMA тех. анализ (если есть ALPHAVANTAGE_API_KEY)'),
                     (('FINNHUB_API_KEY=', 'FINNHUB_KEY='), '🔍', 'Finnhub (инсайдеры)',
                      'run_agent_action(action="insider_trades", symbol="AAPL"/"MSFT") для отслеживания инсайдерских сделок'),
                     (('NEWSAPI_KEY=', 'NEWS_API_KEY='), '📰', 'NewsAPI (100+ источников)',

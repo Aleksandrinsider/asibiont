@@ -10721,11 +10721,11 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
 
 async def get_forex_analysis(instrument: str, amount: float = 1.0,
                              user_id: int = None, session=None) -> str:
-    """Курсы валют через ExchangeRate-API v6.
+    """Текущий курс валютной пары + технический анализ (RSI, MACD, EMA).
 
-    Возвращает текущий курс пары, эквивалент суммы и динамику за 24ч (сравнение с вчерашним).
-    Требует EXCHANGERATE_API_KEY в ключах агента (бесплатно: 1500 req/мес, 170+ валют,
-    exchangerate-api.com).
+    Текущий курс через ExchangeRate-API (EXCHANGERATE_API_KEY).
+    Тех. анализ RSI(14), MACD(12,26,9), EMA(20/50) через Alpha Vantage (ALPHAVANTAGE_API_KEY).
+    Оба ключа опциональны — работает с любым из них.
     """
     import urllib.request as _urllib_req
     import json as _json
@@ -10738,9 +10738,11 @@ async def get_forex_analysis(instrument: str, amount: float = 1.0,
     if '/' not in _raw:
         return f"❌ Неверный формат пары: {instrument}. Используйте EUR/USD, USD/RUB и т.д."
     _base_cur, _target_cur = _raw.split('/', 1)
+    _pair_display = f"{_base_cur}/{_target_cur}"
 
-    # Ищем EXCHANGERATE_API_KEY в ключах агентов пользователя
-    _api_key = None
+    # Загружаем оба ключа за один проход по агентам
+    _er_key = None
+    _av_key = None
     try:
         from models import UserAgent as _UA_er, User as _User_er
         _db_sess = session
@@ -10763,75 +10765,163 @@ async def get_forex_analysis(instrument: str, amount: float = 1.0,
                     _decrypted = _dk_er(_raw_keys)
                     for _line in _decrypted.splitlines():
                         _line = _line.strip()
-                        if _line.startswith('EXCHANGERATE_API_KEY=') or _line.startswith('EXCHANGE_RATE_API_KEY='):
+                        if not _er_key and (_line.startswith('EXCHANGERATE_API_KEY=') or _line.startswith('EXCHANGE_RATE_API_KEY=')):
                             _val = _line.split('=', 1)[1].strip()
                             if _val and len(_val) > 8 and _val.lower() not in ('none', 'null', 'your_key', 'xxx', '...'):
-                                _api_key = _val
-                                break
-                    if _api_key:
+                                _er_key = _val
+                        if not _av_key and (_line.startswith('ALPHAVANTAGE_API_KEY=') or _line.startswith('ALPHA_VANTAGE_API_KEY=')):
+                            _val = _line.split('=', 1)[1].strip()
+                            if _val and len(_val) > 4 and _val.lower() not in ('none', 'null', 'your_key', 'xxx', '...'):
+                                _av_key = _val
+                    if _er_key and _av_key:
                         break
         finally:
             if _close_sess:
                 _db_sess.close()
     except Exception as _e:
-        logger.warning(f"[FOREX] Error fetching ExchangeRate key: {_e}")
+        logger.warning(f"[FOREX] Error fetching keys: {_e}")
 
-    if not _api_key:
-        return (
-            "⚠️ Курсы валют недоступны: EXCHANGERATE_API_KEY не настроен.\n"
-            "Получи бесплатный ключ (1500 req/мес, 170+ валют):\n"
-            "1️⃣ Зарегистрируйся на exchangerate-api.com → Get Free Key\n"
-            "2️⃣ Добавь в настройки агента → API-ключи:\n"
-            "EXCHANGERATE_API_KEY=твой_ключ"
-        )
-
-    def _er_get(url: str) -> dict:
+    def _http_get(url: str) -> dict:
         req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with _urllib_req.urlopen(req, timeout=15) as r:
             return _json.loads(r.read().decode())
 
-    try:
-        # Текущий курс: GET /v6/{key}/pair/{base}/{target}[/{amount}]
-        _amount_str = f"/{int(amount)}" if amount and amount != 1.0 else ""
-        _url = f"https://v6.exchangerate-api.com/v6/{_api_key}/pair/{_base_cur}/{_target_cur}{_amount_str}"
-        data = _er_get(_url)
+    result_lines = []
 
-        _result = data.get('result', '')
-        if _result == 'error':
-            _err_type = data.get('error-type', 'unknown')
-            if _err_type in ('invalid-key', 'inactive-account'):
-                return "❌ Неверный EXCHANGERATE_API_KEY. Проверь ключ на exchangerate-api.com"
-            if _err_type == 'quota-reached':
-                return "⏳ Лимит запросов ExchangeRate-API исчерпан (1500/мес бесплатно). Обновится в следующем месяце."
-            if _err_type == 'unsupported-code':
-                return f"❌ Валюта не поддерживается: {_base_cur} или {_target_cur}. Проверьте код (ISO 4217)."
-            return f"❌ ExchangeRate-API ошибка: {_err_type}"
+    # ── Блок 1: текущий курс (ExchangeRate-API) ──
+    if not _er_key:
+        result_lines.append(
+            "⚠️ Текущий курс недоступен: EXCHANGERATE_API_KEY не настроен.\n"
+            "Получи бесплатный ключ (1500 req/мес, 170+ валют) на exchangerate-api.com:\n"
+            "EXCHANGERATE_API_KEY=твой_ключ"
+        )
+    else:
+        try:
+            _amount_str = f"/{int(amount)}" if amount and amount != 1.0 else ""
+            _url = f"https://v6.exchangerate-api.com/v6/{_er_key}/pair/{_base_cur}/{_target_cur}{_amount_str}"
+            data = _http_get(_url)
+            _res = data.get('result', '')
+            if _res == 'error':
+                _etype = data.get('error-type', 'unknown')
+                if _etype in ('invalid-key', 'inactive-account'):
+                    result_lines.append("❌ Неверный EXCHANGERATE_API_KEY.")
+                elif _etype == 'quota-reached':
+                    result_lines.append("⏳ Лимит ExchangeRate-API исчерпан (1500/мес). Обновится в следующем месяце.")
+                elif _etype == 'unsupported-code':
+                    result_lines.append(f"❌ Неподдерживаемая валюта: {_base_cur} или {_target_cur}.")
+                else:
+                    result_lines.append(f"❌ ExchangeRate-API: {_etype}")
+            else:
+                _rate = data.get('conversion_rate')
+                _conv_result = data.get('conversion_result')
+                _time_last = data.get('time_last_update_utc', '')[:22]
+                if _rate is not None:
+                    result_lines.append(f"💱 **{_pair_display}**: {_rate}")
+                    if _conv_result is not None and amount != 1.0:
+                        result_lines.append(f"🔄 {amount} {_base_cur} = **{_conv_result} {_target_cur}**")
+                    if _time_last:
+                        result_lines.append(f"🕐 Курс обновлён: {_time_last}")
+                    result_lines.append("_(ExchangeRate-API — курс ЦБ, раз в 24ч)_")
+        except Exception as e:
+            logger.error(f"[FOREX] ExchangeRate error for {instrument}: {e}")
+            result_lines.append(f"❌ Ошибка получения курса: {e}")
 
-        _rate = data.get('conversion_rate')
-        _conv_result = data.get('conversion_result')
-        _time_last = data.get('time_last_update_utc', '')[:22]
-        _time_next = data.get('time_next_update_utc', '')[:22]
+    # ── Блок 2: технический анализ (Alpha Vantage) ──
+    if not _av_key:
+        result_lines.append(
+            "\n📊 **Технический анализ недоступен**: ALPHAVANTAGE_API_KEY не настроен.\n"
+            "Получи бесплатный ключ (25 req/день) на alphavantage.co:\n"
+            "ALPHAVANTAGE_API_KEY=твой_ключ"
+        )
+    else:
+        _av_sym = f"{_base_cur}{_target_cur}"  # EURUSD
+        _ta_lines = [f"\n📊 **Технический анализ {_pair_display}** (Alpha Vantage, дневной таймфрейм):"]
+        _av_ok = True
 
-        if _rate is None:
-            return f"❌ Не удалось получить курс {_base_cur}/{_target_cur}"
+        def _av_get(params: dict) -> dict:
+            _qs = '&'.join(f"{k}={v}" for k, v in params.items())
+            return _http_get(f"https://www.alphavantage.co/query?{_qs}&apikey={_av_key}")
 
-        _pair_display = f"{_base_cur}/{_target_cur}"
-        result_lines = [
-            f"💱 **{_pair_display}**: {_rate}",
-        ]
-        if _conv_result is not None and amount != 1.0:
-            result_lines.append(f"🔄 {amount} {_base_cur} = **{_conv_result} {_target_cur}**")
-        if _time_last:
-            result_lines.append(f"🕐 Обновлено: {_time_last}")
-        if _time_next:
-            result_lines.append(f"🔄 Следующее обновление: {_time_next}")
-        result_lines.append("_(ExchangeRate-API — курсы центробанков, обновление раз в 24ч)_")
+        def _av_limit(d: dict):
+            info = d.get("Information") or d.get("Note") or d.get("Error Message")
+            if not info:
+                return None
+            il = info.lower()
+            if "rate limit" in il or "per day" in il or "standard api" in il:
+                return "⏳ Лимит Alpha Vantage исчерпан (25 запросов/день). Сбрасывается в 00:00 UTC."
+            if "invalid api key" in il:
+                return "❌ Неверный ALPHAVANTAGE_API_KEY."
+            return f"⚠️ Alpha Vantage: {info[:120]}"
 
-        return '\n'.join(result_lines)
+        # RSI(14)
+        try:
+            d = _av_get({'function': 'RSI', 'symbol': _av_sym, 'interval': 'daily',
+                         'time_period': '14', 'series_type': 'close'})
+            lim = _av_limit(d)
+            if lim:
+                _ta_lines.append(lim)
+                _av_ok = False
+            else:
+                _rsi_data = d.get('Technical Analysis: RSI', {})
+                if _rsi_data:
+                    _ld = sorted(_rsi_data.keys(), reverse=True)[0]
+                    _rsi = float(_rsi_data[_ld]['RSI'])
+                    _zone = "🟢 перепроданность" if _rsi < 30 else ("🔴 перекупленность" if _rsi > 70 else "🟡 нейтральная зона")
+                    _ta_lines.append(f"  • RSI(14): **{_rsi:.1f}** — {_zone} ({_ld})")
+        except Exception as e:
+            logger.warning(f"[FOREX TA] RSI error: {e}")
 
-    except Exception as e:
-        logger.error(f"[FOREX] ExchangeRate-API error for {instrument}: {e}")
-        return f"❌ Ошибка запроса курса {instrument}: {str(e)}"
+        # MACD(12,26,9)
+        if _av_ok:
+            try:
+                d = _av_get({'function': 'MACD', 'symbol': _av_sym, 'interval': 'daily',
+                             'series_type': 'close', 'fastperiod': '12', 'slowperiod': '26', 'signalperiod': '9'})
+                lim = _av_limit(d)
+                if lim:
+                    _ta_lines.append(lim)
+                    _av_ok = False
+                else:
+                    _macd_data = d.get('Technical Analysis: MACD', {})
+                    if _macd_data:
+                        _ld = sorted(_macd_data.keys(), reverse=True)[0]
+                        _m = float(_macd_data[_ld]['MACD'])
+                        _s = float(_macd_data[_ld]['MACD_Signal'])
+                        _h = float(_macd_data[_ld]['MACD_Hist'])
+                        _dir = "▲ бычий" if _m > _s else "▼ медвежий"
+                        _ta_lines.append(f"  • MACD(12,26,9): {_m:.5f} / сигнал: {_s:.5f} / гистограмма: {_h:.5f} — {_dir} ({_ld})")
+            except Exception as e:
+                logger.warning(f"[FOREX TA] MACD error: {e}")
+
+        # EMA(20)
+        if _av_ok:
+            try:
+                d = _av_get({'function': 'EMA', 'symbol': _av_sym, 'interval': 'daily',
+                             'time_period': '20', 'series_type': 'close'})
+                if not _av_limit(d):
+                    _ema_data = d.get('Technical Analysis: EMA', {})
+                    if _ema_data:
+                        _ld = sorted(_ema_data.keys(), reverse=True)[0]
+                        _ta_lines.append(f"  • EMA(20): {float(_ema_data[_ld]['EMA']):.5f} ({_ld})")
+            except Exception as e:
+                logger.warning(f"[FOREX TA] EMA20 error: {e}")
+
+        # EMA(50)
+        if _av_ok:
+            try:
+                d = _av_get({'function': 'EMA', 'symbol': _av_sym, 'interval': 'daily',
+                             'time_period': '50', 'series_type': 'close'})
+                if not _av_limit(d):
+                    _ema_data = d.get('Technical Analysis: EMA', {})
+                    if _ema_data:
+                        _ld = sorted(_ema_data.keys(), reverse=True)[0]
+                        _ta_lines.append(f"  • EMA(50): {float(_ema_data[_ld]['EMA']):.5f} ({_ld})")
+            except Exception as e:
+                logger.warning(f"[FOREX TA] EMA50 error: {e}")
+
+        if len(_ta_lines) > 1:
+            result_lines.extend(_ta_lines)
+
+    return '\n'.join(result_lines) if result_lines else f"❌ Не удалось получить данные по {_pair_display}"
 
 
 async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None) -> str:

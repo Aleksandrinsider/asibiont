@@ -1748,7 +1748,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_forex_analysis",
-            "description": "📊 Курсы валют через ExchangeRate-API: текущий курс любой пары (EUR/USD, USD/RUB, GBP/USD и др.), конвертация суммы, список всех доступных валют. Требует EXCHANGERATE_API_KEY в ключах агента (бесплатно: 1500 req/мес, 170+ валют). Не требует регистрации торгового счёта.",
+            "description": "📊 Курсы валют + технический анализ форекс пары. Текущий курс через ExchangeRate-API (EXCHANGERATE_API_KEY, 1500 req/мес, 170+ валют). Технический анализ RSI(14), MACD(12,26,9), EMA(20/50) через Alpha Vantage (ALPHAVANTAGE_API_KEY, 25 req/день). Оба ключа добавляются в API-ключи агента. Пары: EUR/USD, USD/RUB, GBP/USD, USD/JPY и т.д.",
             "parameters": {
                 "type": "object",
                 "properties": {
