@@ -270,7 +270,7 @@ _CAP_CATEGORY_NAMES: dict[str, str] = {
 # Инструменты по категории (для координатора)
 _CAP_TOOL_HINTS: dict[str, str] = {
     'email': 'check_emails, send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task',
-    'git': 'run_agent_action(action="create_issue", params={"title":"...","body":"..."}) или http_api_request(url="https://api.github.com/repos/OWNER/REPO/issues", method="POST", auth_key="GITHUB_TOKEN")',
+    'git': 'analyze_github_code(repo_url="https://github.com/owner/repo", pr_number=42) — code review PR или файлов репозитория: баги, уязвимости, архитектура. Также: run_agent_action(action="create_issue") или http_api_request(url="https://api.github.com/repos/OWNER/REPO/issues", method="POST", auth_key="GITHUB_TOKEN")',
     'rss': 'run_agent_action(точное action-имя RSS-скрипта агента), get_news_trends, create_post',
     'telegram': 'publish_to_telegram, create_post',
     'discord': 'publish_to_discord',
@@ -5009,7 +5009,10 @@ def _lang_directive(user) -> str:
             "\n\n🗣️ LANGUAGE: Write your ENTIRE response in English. "
             "Even if instructions or data above are in Russian, your output to the user MUST be in English only."
         )
-    return ''
+    return (
+        "\n\n🗣️ ЯЗЫК ОТВЕТА: пиши ВЕСЬ ответ только на русском языке. "
+        "Даже если задача или данные выше написаны на английском — твой ответ пользователю ТОЛЬКО на русском."
+    )
 
 
 def _tg_prefix(user, ru: str, en: str) -> str:
@@ -15823,10 +15826,16 @@ class AnchorEngine:
                 "    ❌ Плохо: 'отправь письма' (нет контекста, нет деталей)\n"
                 "    ❌ Плохо: 'Olivia, нужно...' (имя — дублирование!)\n"
                 + (
-                    "\n🗣️ LANGUAGE: user speaks English. Write ALL user-visible text (task_brief, reason) in English. "
+                    "\n🗣️ LANGUAGE: user speaks English. Write ALL user-visible text (task, task_brief, reason) in English. "
                     "Internal field names stay as-is.\n"
-                    if (getattr(user, 'language', 'ru') or 'ru') == 'en' else ''
+                    if (getattr(user, 'language', 'ru') or 'ru') == 'en' else
+                    "\n🗣️ ЯЗЫК: пользователь говорит по-русски. Пиши ВСЕ пользовательские тексты (task, task_brief, reason) "
+                    "ИСКЛЮЧИТЕЛЬНО на русском языке. Даже если данные контекста, цели или заметки написаны на английском — "
+                    "твой вывод для пользователя ТОЛЬКО на русском. Никаких английских фраз в task/task_brief/reason.\n"
                 )
+                + "\n⛔ ОДИН ТУЛ — ОДИН ШАГ: 'найди контакты' и 'отправь письма' = ДВА разных шага в РАЗНЫХ циклах.\n"
+                "   Никогда не назначай одному агенту 'найди X и сразу отправь Y' — это гарантированный таймаут.\n"
+                "   Если контакты уже найдены → task ТОЛЬКО на отправку. Если контактов нет → task ТОЛЬКО на поиск.\n"
             )
 
             try:

@@ -21596,3 +21596,241 @@ async def parse_file(file_id: str = None, file_url: str = None, max_chars: int =
 
     lines_count = text.count('\n') + 1
     return f"📄 {filename or 'файл'} ({ext.upper() or 'TXT'}, ~{len(raw_bytes)//1024}KB, {lines_count} строк)\n\n{text}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ANALYZE_GITHUB_CODE — code review репозитория или PR через GitHub API
+# ═══════════════════════════════════════════════════════════════════════
+
+async def analyze_github_code(
+    repo_url: str,
+    pr_number: int = None,
+    file_path: str = None,
+    focus: str = 'all',
+    user_id: int = None,
+    session=None,
+) -> str:
+    """Анализирует код GitHub репозитория или PR: баги, уязвимости, архитектура."""
+    import aiohttp
+    import re
+    import json
+
+    if not repo_url:
+        return "Ошибка: укажи URL репозитория"
+
+    # Извлекаем owner/repo из URL
+    _m = re.search(r'github\.com/([A-Za-z0-9_.\-]+)/([A-Za-z0-9_.\-]+)', repo_url, re.IGNORECASE)
+    if not _m:
+        return "Ошибка: не удалось распознать репозиторий. Формат: github.com/owner/repo"
+    owner = _m.group(1)
+    repo = _m.group(2).rstrip('/')
+    if repo.lower().endswith('.git'):
+        repo = repo[:-4]
+
+    # Получаем GITHUB_TOKEN из api_keys агентов пользователя
+    github_token = None
+    if user_id and session:
+        try:
+            from models import UserAgent as _UA
+            _agents = session.query(_UA).filter_by(user_id=user_id).all()
+            for _ag in _agents:
+                _keys_raw = getattr(_ag, 'api_keys', '') or ''
+                if not _keys_raw:
+                    continue
+                try:
+                    from ai_integration.autonomous_agent import _decrypt_keys
+                    _keys_raw = _decrypt_keys(_keys_raw)
+                except Exception:
+                    pass
+                for _line in _keys_raw.splitlines():
+                    if _line.strip().upper().startswith('GITHUB_TOKEN'):
+                        _parts = _line.split('=', 1)
+                        if len(_parts) == 2:
+                            github_token = _parts[1].strip()
+                            break
+                if github_token:
+                    break
+        except Exception as _ke:
+            logger.debug(f"[GITHUB_CODE] Token lookup error: {_ke}")
+
+    _headers = {
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'ASI-Biont/code-review',
+        'X-GitHub-Api-Version': '2022-11-28',
+    }
+    if github_token:
+        _headers['Authorization'] = f'Bearer {github_token}'
+
+    _base = f'https://api.github.com/repos/{owner}/{repo}'
+    _timeout = aiohttp.ClientTimeout(total=20, connect=5)
+
+    code_payload = ''
+    source_label = ''
+
+    try:
+        async with aiohttp.ClientSession(headers=_headers, timeout=_timeout) as _sess:
+
+            # ── Вариант 1: анализ PR diff ──────────────────────────────────
+            if pr_number:
+                _pr_headers = dict(_headers)
+                _pr_headers['Accept'] = 'application/vnd.github.v3.diff'
+                async with _sess.get(f'{_base}/pulls/{pr_number}', headers=_pr_headers) as _r:
+                    if _r.status == 404:
+                        return f"PR #{pr_number} не найден в {owner}/{repo}"
+                    if _r.status == 401:
+                        return "Ошибка 401: нет доступа. Добавь GITHUB_TOKEN в настройки агента для приватных репозиториев."
+                    if _r.status != 200:
+                        return f"Ошибка GitHub API: статус {_r.status}"
+                    diff_text = await _r.text()
+
+                # Обрезаем diff до разумного размера
+                if len(diff_text) > 15000:
+                    diff_text = diff_text[:15000] + '\n... (diff обрезан)'
+
+                code_payload = diff_text
+                source_label = f"PR #{pr_number} в {owner}/{repo}"
+
+            # ── Вариант 2: конкретный файл ────────────────────────────────
+            elif file_path:
+                async with _sess.get(f'{_base}/contents/{file_path.lstrip("/")}') as _r:
+                    if _r.status == 404:
+                        return f"Файл '{file_path}' не найден в {owner}/{repo}"
+                    if _r.status != 200:
+                        return f"Ошибка GitHub API: статус {_r.status}"
+                    _data = await _r.json()
+
+                import base64 as _b64
+                _content = _data.get('content', '')
+                _decoded = _b64.b64decode(_content.replace('\n', '')).decode('utf-8', errors='replace')
+                if len(_decoded) > 12000:
+                    _decoded = _decoded[:12000] + '\n... (файл обрезан)'
+
+                code_payload = _decoded
+                source_label = f"{owner}/{repo}/{file_path}"
+
+            # ── Вариант 3: топ-файлы репозитория (без PR/file_path) ────────
+            else:
+                # Получаем дерево файлов (рекурсивно, shallow — только корень)
+                async with _sess.get(f'{_base}/git/trees/HEAD?recursive=0') as _r:
+                    if _r.status == 404:
+                        return f"Репозиторий {owner}/{repo} не найден или недоступен"
+                    if _r.status == 401:
+                        return "Ошибка 401: нет доступа. Добавь GITHUB_TOKEN для приватного репозитория."
+                    if _r.status != 200:
+                        return f"Ошибка GitHub API: статус {_r.status}"
+                    tree_data = await _r.json()
+
+                # Фильтруем только файлы с кодом, сортируем по размеру
+                _CODE_EXTS = {'.py', '.js', '.ts', '.go', '.java', '.rb', '.rs', '.cpp', '.c', '.cs', '.php'}
+                _files = [
+                    f for f in tree_data.get('tree', [])
+                    if f.get('type') == 'blob'
+                    and any(f.get('path', '').endswith(ext) for ext in _CODE_EXTS)
+                    and f.get('size', 0) < 50000  # пропускаем огромные файлы
+                ]
+                # Берём топ-5 по размеру (самые крупные — обычно самые важные)
+                _files_sorted = sorted(_files, key=lambda x: x.get('size', 0), reverse=True)[:5]
+
+                if not _files_sorted:
+                    return f"В репозитории {owner}/{repo} не найдено поддерживаемых файлов с кодом"
+
+                file_contents = []
+                for _f in _files_sorted:
+                    _fp = _f.get('path', '')
+                    async with _sess.get(f'{_base}/contents/{_fp}') as _r:
+                        if _r.status != 200:
+                            continue
+                        _d = await _r.json()
+                        import base64 as _b64
+                        try:
+                            _raw = _b64.b64decode(_d.get('content', '').replace('\n', '')).decode('utf-8', errors='replace')
+                            _raw = _raw[:3000]  # максимум 3000 символов на файл
+                            file_contents.append(f"### {_fp}\n```\n{_raw}\n```")
+                        except Exception:
+                            continue
+
+                if not file_contents:
+                    return f"Не удалось прочитать файлы из {owner}/{repo}"
+
+                code_payload = '\n\n'.join(file_contents)
+                source_label = f"{owner}/{repo} (топ-{len(file_contents)} файлов)"
+
+    except aiohttp.ClientConnectorError:
+        return "Ошибка сети: не удалось подключиться к GitHub API"
+    except aiohttp.ClientTimeout:
+        return "Timeout: GitHub API не ответил за 20 секунд. Попробуй снова."
+    except Exception as _e:
+        logger.error(f"[GITHUB_CODE] API error: {_e}")
+        return f"Ошибка при обращении к GitHub: {_e}"
+
+    if not code_payload.strip():
+        return "Не удалось получить код для анализа"
+
+    # Формируем фокус-инструкцию
+    _focus_map = {
+        'security': 'ПРИОРИТЕТ — уязвимости безопасности (SQL injection, XSS, hardcoded secrets, insecure deserialization, path traversal, OWASP Top 10)',
+        'performance': 'ПРИОРИТЕТ — узкие места производительности (N+1 queries, блокирующий I/O, утечки памяти, неэффективные алгоритмы)',
+        'architecture': 'ПРИОРИТЕТ — архитектурные проблемы (нарушения SOLID, god objects, circular dependencies, дублирование логики)',
+        'bugs': 'ПРИОРИТЕТ — потенциальные баги (race conditions, null reference, неправильная обработка ошибок, edge cases)',
+        'all': 'Найди ВСЁ: баги, уязвимости, архитектурные проблемы, дублирование, узкие места',
+    }
+    focus_instr = _focus_map.get(focus or 'all', _focus_map['all'])
+
+    # Вызываем DeepSeek для анализа
+    try:
+        import aiohttp as _aio_ds
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        _ds_url = "https://api.deepseek.com/v1/chat/completions"
+        _ds_headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        _review_prompt = f"""Ты — опытный senior-разработчик. {focus_instr}.
+
+Анализируй код из {source_label}:
+
+{code_payload}
+
+Формат ответа:
+## Найденные проблемы
+Для каждой проблемы:
+- **[SEVERITY]** Краткое название — файл:строка (если известно)
+  Описание проблемы и как исправить (1-2 предложения)
+
+Severity: 🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM, 🟢 LOW
+
+## Позитивные моменты
+Что сделано хорошо (2-3 пункта)
+
+## Топ-3 рекомендации
+Самые важные улучшения в порядке приоритета
+
+Если код хорошего качества — скажи об этом честно. Не придумывай проблем."""
+
+        _ds_payload = {
+            "model": DEEPSEEK_MODEL,
+            "messages": [{"role": "user", "content": _review_prompt}],
+            "max_tokens": 2000,
+            "temperature": 0.3,
+        }
+        _ds_timeout = _aio_ds.ClientTimeout(total=60, connect=5)
+        async with _aio_ds.ClientSession(timeout=_ds_timeout) as _ds_sess:
+            async with _ds_sess.post(_ds_url, headers=_ds_headers, json=_ds_payload) as _ds_resp:
+                if _ds_resp.status != 200:
+                    _err = await _ds_resp.text()
+                    return f"Код получен, но AI-анализ не удался (статус {_ds_resp.status}): {_err[:200]}"
+                _ds_result = await _ds_resp.json()
+
+        _analysis = (_ds_result.get('choices') or [{}])[0].get('message', {}).get('content', '')
+        if not _analysis:
+            return f"GitHub API вернул данные, но анализ не удался. Попробуй снова."
+
+        header = f"🔍 **Code Review: {source_label}**\n"
+        if not github_token:
+            header += "_(анонимный доступ: 60 запросов/час. Добавь GITHUB_TOKEN для приватных репо и увеличения лимита)_\n"
+        header += "\n"
+        return header + _analysis
+
+    except Exception as _ae:
+        logger.error(f"[GITHUB_CODE] Analysis error: {_ae}")
+        return f"Код получен из {source_label}, но анализ не удался: {_ae}"

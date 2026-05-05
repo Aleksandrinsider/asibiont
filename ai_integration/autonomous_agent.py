@@ -129,7 +129,7 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     ("60 запросов/час",
      "💡 GitHub работает без токена (60 запросов/час). Добавь GITHUB_TOKEN в настройки агента: github.com/settings/tokens → лимит вырастет до 5000"),
     ("github_token не настроен",
-     "💡 GITHUB_TOKEN не настроен. github.com/settings/tokens → Generate (repo, read:user) → добавь в настройки агента"),
+     "💡 GITHUB_TOKEN не настроен. github.com/settings/tokens → Generate (repo, read:user) → добавь в настройки агента. Также нужен для code review приватных репозиториев через analyze_github_code"),
     # NewsAPI
     ("newsapi исчерпала",
      "💡 NewsAPI исчерпал дневной лимит. newsapi.org → бесплатный ключ → добавь NEWSAPI_KEY в настройки агента"),

@@ -2129,4 +2129,34 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_github_code",
+            "description": "🔍 Проанализировать код в GitHub репозитории или Pull Request: найти баги, уязвимости, дублирование, архитектурные проблемы, предложить рефакторинг. Используй когда пользователь просит: 'проверь мой репозиторий', 'сделай code review PR', 'найди баги в коде', 'проанализируй архитектуру'. Для PR передай pr_number — анализируется только diff (быстро). Без pr_number анализируются ключевые файлы репозитория. GITHUB_TOKEN пользователя подставляется автоматически из настроек агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_url": {
+                        "type": "string",
+                        "description": "URL GitHub репозитория. Примеры: https://github.com/owner/repo, github.com/owner/repo"
+                    },
+                    "pr_number": {
+                        "type": "integer",
+                        "description": "Номер Pull Request для review (опционально). Если указан — анализируется только diff PR, что быстрее и точнее."
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "Путь к конкретному файлу для анализа (опционально). Пример: src/handlers.py"
+                    },
+                    "focus": {
+                        "type": "string",
+                        "enum": ["security", "performance", "architecture", "bugs", "all"],
+                        "description": "Фокус анализа: security — уязвимости, performance — производительность, architecture — архитектура, bugs — баги, all — всё (по умолчанию)"
+                    }
+                },
+                "required": ["repo_url"]
+            }
+        }
+    },
 ]

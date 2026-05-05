@@ -14197,11 +14197,166 @@ app.router.add_get('/en/faq', faq_handler_en)
 app.router.add_get('/en/arena', arena_public_handler_en)
 app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
+
+
+# ═══ GitHub PR Webhook ═══
+async def github_pr_webhook_handler(request):
+    """POST /webhook/github — получает события от GitHub (pull_request opened/synchronize).
+    Настройка: GitHub репозиторий → Settings → Webhooks → Add webhook
+    Payload URL: https://yourdomain.com/webhook/github
+    Content type: application/json
+    Events: Pull requests
+    Secret: значение GITHUB_WEBHOOK_SECRET из переменных окружения
+    """
+    import hashlib
+    import hmac as _hmac
+
+    # Проверяем подпись webhook (опционально, но рекомендуется)
+    _secret = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
+    if _secret:
+        _sig_header = request.headers.get('X-Hub-Signature-256', '')
+        if _sig_header:
+            try:
+                body_bytes = await request.read()
+                _expected = 'sha256=' + _hmac.new(_secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+                if not _hmac.compare_digest(_sig_header, _expected):
+                    logger.warning("[GITHUB_WH] Invalid signature")
+                    return web.json_response({'error': 'Invalid signature'}, status=401)
+                data = json.loads(body_bytes)
+            except Exception as _e:
+                logger.error(f"[GITHUB_WH] Signature check error: {_e}")
+                return web.json_response({'error': 'Bad request'}, status=400)
+        else:
+            try:
+                data = await request.json()
+            except Exception:
+                return web.json_response({'error': 'Bad request'}, status=400)
+    else:
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({'error': 'Bad request'}, status=400)
+
+    event_type = request.headers.get('X-GitHub-Event', '')
+    action = data.get('action', '')
+
+    # Обрабатываем только открытие и обновление PR
+    if event_type != 'pull_request' or action not in ('opened', 'synchronize', 'reopened'):
+        return web.json_response({'status': 'ignored', 'reason': f'{event_type}/{action}'})
+
+    pr = data.get('pull_request', {})
+    repo = data.get('repository', {})
+    pr_number = pr.get('number')
+    pr_title = pr.get('title', '')
+    pr_url = pr.get('html_url', '')
+    repo_full_name = repo.get('full_name', '')  # owner/repo
+    sender_login = data.get('sender', {}).get('login', '')
+
+    if not repo_full_name or not pr_number:
+        return web.json_response({'status': 'ignored', 'reason': 'missing data'})
+
+    logger.info(f"[GITHUB_WH] PR #{pr_number} {action} in {repo_full_name} by {sender_login}")
+
+    # Находим пользователя по github_username или GITHUB_TOKEN в api_keys
+    # (webhook может прийти от любого репозитория — ищем по owner логину)
+    repo_owner = repo_full_name.split('/')[0].lower()
+    matched_users = []
+    try:
+        with Session() as _ws:
+            from models import UserAgent as _UAgent
+            _all_agents = _ws.query(_UAgent).all()
+            for _ag in _all_agents:
+                _keys_raw = getattr(_ag, 'api_keys', '') or ''
+                if not _keys_raw:
+                    continue
+                try:
+                    from ai_integration.autonomous_agent import _decrypt_keys
+                    _keys_raw = _decrypt_keys(_keys_raw)
+                except Exception:
+                    pass
+                _keys_lower = _keys_raw.lower()
+                # Матчим по названию репозитория или owner в api_keys
+                if repo_owner in _keys_lower or repo_full_name.lower() in _keys_lower:
+                    if _ag.user_id not in matched_users:
+                        matched_users.append(_ag.user_id)
+    except Exception as _me:
+        logger.error(f"[GITHUB_WH] User match error: {_me}")
+
+    if not matched_users:
+        logger.info(f"[GITHUB_WH] No users matched for repo {repo_full_name}")
+        return web.json_response({'status': 'ok', 'matched': 0})
+
+    # Отправляем уведомление в Telegram + запускаем анализ
+    async def _notify_and_analyze(user_id: int):
+        try:
+            # Уведомление в Telegram
+            notif_text = (
+                f"🔍 **Новый PR #{pr_number}** в `{repo_full_name}`\n"
+                f"*{pr_title}*\n"
+                f"Автор: {sender_login}\n"
+                f"[Открыть PR]({pr_url})\n\n"
+                f"Запускаю code review..."
+            )
+            try:
+                await bot.send_message(user_id, notif_text, parse_mode='Markdown')
+            except Exception:
+                pass
+
+            # Запускаем анализ через autonomous_agent
+            from ai_integration.autonomous_agent import AutonomousAgent
+            _agent = AutonomousAgent(user_id=user_id)
+            _review_msg = (
+                f"Сделай code review для PR #{pr_number} в репозитории github.com/{repo_full_name}. "
+                f"Найди баги, уязвимости и предложи улучшения."
+            )
+            result = await _agent.execute(
+                user_message=_review_msg,
+                actions=[{
+                    'tool': 'analyze_github_code',
+                    'params': {
+                        'repo_url': f'https://github.com/{repo_full_name}',
+                        'pr_number': pr_number,
+                        'focus': 'all',
+                    },
+                    'reason': f'GitHub webhook: PR #{pr_number} {action}',
+                }],
+                user_id=user_id,
+            )
+
+            # Отправляем результат
+            review_text = ''
+            if isinstance(result, list) and result:
+                review_text = result[0].get('result', '') or result[0].get('error', '')
+            elif isinstance(result, str):
+                review_text = result
+
+            if review_text:
+                # Разбиваем на части если длинный
+                for _chunk_start in range(0, len(review_text), 4000):
+                    _chunk = review_text[_chunk_start:_chunk_start + 4000]
+                    try:
+                        await bot.send_message(user_id, _chunk, parse_mode='Markdown')
+                    except Exception:
+                        try:
+                            await bot.send_message(user_id, _chunk)
+                        except Exception:
+                            pass
+        except Exception as _ne:
+            logger.error(f"[GITHUB_WH] Notify/analyze error for user {user_id}: {_ne}")
+
+    # Запускаем асинхронно для каждого совпавшего пользователя
+    for _uid in matched_users[:3]:  # максимум 3 пользователя
+        asyncio.create_task(_notify_and_analyze(_uid))
+
+    return web.json_response({'status': 'ok', 'matched': len(matched_users), 'pr': pr_number})
+
+
 app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 app.router.add_get('/create_crypto_payment', create_crypto_payment_handler)
 app.router.add_post('/webhook/nowpayments', nowpayments_webhook)
 app.router.add_post('/webhook/resend', resend_webhook_handler)
+app.router.add_post('/webhook/github', github_pr_webhook_handler)
 # Agent incoming webhooks (Shopify, GitHub, Stripe, Zapier, etc.)
 app.router.add_post('/api/agent-webhook/{agent_id}/{token}', agent_webhook_handler)
 app.router.add_get('/api/agent-webhook-token/{agent_id}', api_agent_webhook_token_handler)
