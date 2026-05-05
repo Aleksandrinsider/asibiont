@@ -8391,7 +8391,7 @@ async def api_notes_handler(request):
                 }})
 
             # GET
-            notes = session_db.query(Note).filter_by(user_id=user.id).order_by(Note.created_at.desc()).limit(100).all()
+            notes = session_db.query(Note).filter_by(user_id=user.id).order_by(Note.created_at.desc()).all()
             return web.json_response({'notes': [{
                 'id': n.id,
                 'title': n.title,
