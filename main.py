@@ -2398,7 +2398,7 @@ async def chat_progress_handler(request):
 
             if msg.get('type') == 'done':
                 break
-    except (ConnectionResetError, asyncio.CancelledError):
+    except (ConnectionResetError, BrokenPipeError, ConnectionError, asyncio.CancelledError):
         pass
     finally:
         # Очищаем очередь
@@ -9376,14 +9376,14 @@ async def sse_activities_handler(request):
                     elif asyncio.get_running_loop().time() - last_hb >= hb_interval:
                         await response.write(b': heartbeat\n\n')
                         last_hb = asyncio.get_running_loop().time()
-            except (ConnectionResetError, asyncio.CancelledError):
+            except (ConnectionResetError, BrokenPipeError, ConnectionError, asyncio.CancelledError):
                 break
             except Exception as _e:
                 logger.warning(f"[SSE] query error: {_e}")
             await asyncio.sleep(poll_interval)
 
         return response
-    except (ConnectionResetError, asyncio.CancelledError):
+    except (ConnectionResetError, BrokenPipeError, ConnectionError, asyncio.CancelledError):
         pass
     except Exception as e:
         logger.warning(f"[SSE] stream error: {e}")
@@ -13130,9 +13130,9 @@ async def api_arena_stream_handler(request):
         async for chunk in global_feed_sse_generator():
             try:
                 await response.write(chunk.encode('utf-8'))
-            except (ConnectionResetError, asyncio.CancelledError):
+            except (ConnectionResetError, BrokenPipeError, ConnectionError, asyncio.CancelledError):
                 break
-    except (ConnectionResetError, asyncio.CancelledError):
+    except (ConnectionResetError, BrokenPipeError, ConnectionError, asyncio.CancelledError):
         pass
     except Exception as e:
         logger.error(f"[ARENA] stream error: {e}", exc_info=True)
