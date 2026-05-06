@@ -20267,7 +20267,24 @@ async def generate_video(
                     _video_urls.append((_ci + 1, _cp, None))
 
         if not _video_urls or all(u is None for _, _, u in _video_urls):
-            return "Видео не сгенерировано (таймаут). Попробуй ещё раз или упрости промпт."
+            # Fallback: видеогенератор недоступен → генерируем картинку и сообщаем пользователю
+            logger.info("[GENERATE_VIDEO] All clips failed — fallback to generate_image")
+            try:
+                _img_result = await generate_image(
+                    prompt=prompt,
+                    user_id=user_id,
+                    session=session,
+                    close_session=False,
+                )
+                # Убираем флаг close_session=False — сессию закрывает вызывающий
+                return (
+                    f"Видеогенератор сейчас не отвечает — бывает, перегруз. "
+                    f"Но картинку я сделал, и вот что предлагаю.\n\n"
+                    f"Вместо ролика сделал картинку:\n\n{_img_result}"
+                )
+            except Exception as _img_fb_err:
+                logger.warning("[GENERATE_VIDEO] Image fallback also failed: %s", _img_fb_err)
+            return "Видеогенератор сейчас перегружен — попробуй чуть позже или попроси картинку."
 
         format_label = {"9:16": "вертикальное (Reels/TikTok)", "16:9": "горизонтальное", "1:1": "квадратное"}.get(aspect_ratio, aspect_ratio)
         _total_sec = _duration_sec * _num_clips
