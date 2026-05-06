@@ -20362,8 +20362,20 @@ class AnchorEngine:
                 )
             except asyncio.TimeoutError:
                 logger.warning("[ANCHOR-DDG] Enrichment timed out (15s) — DDG likely down, skipping")
+                # Немедленно записываем ошибку в service_health, чтобы следующий цикл
+                # создал service_degraded:ddg якорь и пропустил enrichment
+                try:
+                    from ai_integration.api_client import _rec_err
+                    _rec_err('ddg', 'Enrichment timed out (15s)')
+                except Exception:
+                    pass
             except Exception as _ddg_err:
                 logger.warning(f"[ANCHOR-DDG] Enrichment error (skipping): {_ddg_err}")
+                try:
+                    from ai_integration.api_client import _rec_err
+                    _rec_err('ddg', f'Enrichment error: {_ddg_err}')
+                except Exception:
+                    pass
         else:
             logger.debug("[ANCHOR-DDG] DDG service degraded — skipping web enrichment")
 
