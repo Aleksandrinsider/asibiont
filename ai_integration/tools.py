@@ -1602,13 +1602,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "generate_video",
-            "description": "🎬 Сгенерировать короткое видео (5–10 сек) через Replicate (Wan-2.1). Ключевые слова: сними ролик, создай видео, сгенерируй видео, reels, тикток-видео. Промпт пиши на английском. Требует REPLICATE_API_TOKEN в api_keys агента. ВАЖНО: Replicate URL видео временный (~1 ч) — сохрани результат или сразу скачай.",
+            "description": "🎬 Сгенерировать короткое видео через Replicate (Wan-2.1). Ключевые слова: сними ролик, создай видео, reels, тикток-видео. Промпт пиши на английском. Требует REPLICATE_API_TOKEN. ⚠️ Одна генерация = максимум 5–10 сек. Если пользователь просит 15–30 сек — используй num_clips=2 или 3: система сгенерирует несколько сцен и даст инструкцию по склейке в CapCut.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "prompt": {
                         "type": "string",
-                        "description": "Детальное описание видео на английском. Что происходит, движение, свет, стиль. Пример: 'a futuristic cityscape at night with flying cars and neon lights, cinematic, 4k'"
+                        "description": "Описание видео на английском. Если num_clips>1 — опиши общую идею ролика, система сама разобьёт на сцены. Пример: 'a futuristic cityscape at night with flying cars and neon lights, cinematic'"
                     },
                     "aspect_ratio": {
                         "type": "string",
@@ -1617,8 +1617,13 @@ TOOLS = [
                     },
                     "duration": {
                         "type": "integer",
-                        "description": "Длительность видео в секундах: 5 или 10. По умолчанию 5.",
+                        "description": "Длительность одного клипа в секундах: 5 или 10. По умолчанию 5.",
                         "enum": [5, 10]
+                    },
+                    "num_clips": {
+                        "type": "integer",
+                        "description": "Количество клипов (сцен) для длинных роликов. 1 = один клип (по умолчанию). 2 = ~15–20 сек итого. 3 = ~25–30 сек итого. При num_clips>1 система автоматически разобьёт идею на сцены.",
+                        "enum": [1, 2, 3]
                     }
                 },
                 "required": ["prompt"]

@@ -20113,11 +20113,13 @@ async def generate_video(
     prompt: str,
     aspect_ratio: str = "9:16",
     duration: int = 5,
+    num_clips: int = 1,
     user_id: int = None,
     session=None,
     close_session: bool = True,
 ) -> str:
-    """Генерация короткого видео (5–10 сек) через Replicate (Wan-2.1 text-to-video)."""
+    """Генерация короткого видео (5–10 сек) через Replicate (Wan-2.1 text-to-video).
+    При num_clips > 1 генерирует несколько сцен для длинных роликов."""
     if not session:
         session = Session()
         close_session = True
@@ -20161,74 +20163,138 @@ async def generate_video(
         }
         _width, _height = _size_map.get(aspect_ratio, (480, 832))
         _duration_sec = duration if duration in (5, 10) else 5
+        _num_clips = max(1, min(int(num_clips or 1), 3))
 
         import aiohttp as _aiohttp_vid
         import asyncio as _asyncio_vid
 
+        # Если несколько клипов — разбиваем идею на сцены с помощью AI
+        _clip_prompts = [prompt]
+        if _num_clips > 1:
+            try:
+                from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+                _scene_system = (
+                    "You are a video director. Split the given video idea into "
+                    f"{_num_clips} short distinct scenes for a {_num_clips * _duration_sec}-second reel. "
+                    "Each scene should be a self-contained visual moment. "
+                    f"Reply with exactly {_num_clips} lines, one scene description per line (in English, cinematic style). "
+                    "No numbering, no extra text."
+                )
+                _ds_headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                _ds_payload = {
+                    "model": DEEPSEEK_MODEL,
+                    "messages": [
+                        {"role": "system", "content": _scene_system},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 300,
+                    "temperature": 0.7,
+                }
+                async with _aiohttp_vid.ClientSession(timeout=_aiohttp_vid.ClientTimeout(total=20)) as _ds_s:
+                    async with _ds_s.post(
+                        "https://api.deepseek.com/v1/chat/completions",
+                        headers=_ds_headers,
+                        json=_ds_payload,
+                    ) as _ds_r:
+                        _ds_data = await _ds_r.json()
+                _scenes_text = (_ds_data.get('choices') or [{}])[0].get('message', {}).get('content', '').strip()
+                _scene_lines = [l.strip() for l in _scenes_text.splitlines() if l.strip()][:_num_clips]
+                if len(_scene_lines) == _num_clips:
+                    _clip_prompts = _scene_lines
+                    logger.info(f"[GENERATE_VIDEO] Split into {_num_clips} scenes: {_scene_lines}")
+            except Exception as _scene_err:
+                logger.warning(f"[GENERATE_VIDEO] Scene split failed: {_scene_err}, using single prompt")
+                _clip_prompts = [prompt] * _num_clips
+
         # Используем Wan-2.1 — доступна через Replicate без ревью
         _model = "wavespeedai/wan-2.1-t2v-480p"
-        _input = {
-            "prompt": prompt,
-            "negative_prompt": "blurry, low quality, distorted, ugly, watermark",
-            "width": _width,
-            "height": _height,
-            "num_frames": _duration_sec * 16,  # 16 FPS
-            "guidance_scale": 7.5,
-            "num_inference_steps": 30,
-            "fast_mode": "Balanced",
-        }
         _headers = {
             "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
             "Content-Type": "application/json",
         }
 
-        async with _safe_http() as _http_vid:
-            # Запускаем предикшн (видео обычно не поддерживает Prefer:wait → polling)
-            async with _http_vid.post(
+        async def _generate_one_clip(http_session, clip_prompt: str, clip_idx: int) -> str:
+            """Генерирует один клип и возвращает URL."""
+            _input = {
+                "prompt": clip_prompt,
+                "negative_prompt": "blurry, low quality, distorted, ugly, watermark",
+                "width": _width,
+                "height": _height,
+                "num_frames": _duration_sec * 16,
+                "guidance_scale": 7.5,
+                "num_inference_steps": 30,
+                "fast_mode": "Balanced",
+            }
+            async with http_session.post(
                 f"https://api.replicate.com/v1/models/{_model}/predictions",
                 headers=_headers,
                 json={"input": _input},
                 timeout=_aiohttp_vid.ClientTimeout(total=30),
-            ) as _resp_vid:
-                _data_vid = await _resp_vid.json()
-
-            if _resp_vid.status not in (200, 201):
-                _err_vid = _data_vid.get("detail", str(_data_vid))
-                return f"Ошибка Replicate: {_err_vid}"
-
-            _prediction_id = _data_vid.get("id")
-            _output_vid = _data_vid.get("output")
-
-            # Polling — видео генерируется 60–120 сек
-            if _output_vid is None and _prediction_id:
-                for _attempt in range(50):
+            ) as _resp:
+                _data = await _resp.json()
+            if _resp.status not in (200, 201):
+                raise RuntimeError(_data.get("detail", str(_data)))
+            _pred_id = _data.get("id")
+            _output = _data.get("output")
+            if _output is None and _pred_id:
+                for _ in range(50):
                     await _asyncio_vid.sleep(4)
-                    async with _http_vid.get(
-                        f"https://api.replicate.com/v1/predictions/{_prediction_id}",
+                    async with http_session.get(
+                        f"https://api.replicate.com/v1/predictions/{_pred_id}",
                         headers=_headers,
                         timeout=_aiohttp_vid.ClientTimeout(total=15),
-                    ) as _poll_vid:
-                        _poll_data = await _poll_vid.json()
-                    _status_vid = _poll_data.get("status")
-                    if _status_vid == "succeeded":
-                        _output_vid = _poll_data.get("output")
+                    ) as _poll:
+                        _poll_data = await _poll.json()
+                    _st = _poll_data.get("status")
+                    if _st == "succeeded":
+                        _output = _poll_data.get("output")
                         break
-                    elif _status_vid in ("failed", "canceled"):
-                        _err_vid = _poll_data.get("error", "Unknown error")
-                        return f"Генерация видео не удалась: {_err_vid}"
+                    elif _st in ("failed", "canceled"):
+                        raise RuntimeError(_poll_data.get("error", "Unknown error"))
+            if not _output:
+                raise RuntimeError("Timeout")
+            return _output[0] if isinstance(_output, list) else _output
 
-            if not _output_vid:
-                return "Видео не сгенерировано (таймаут). Попробуй ещё раз или упрости промпт."
+        _video_urls = []
+        async with _safe_http() as _http_vid:
+            for _ci, _cp in enumerate(_clip_prompts):
+                try:
+                    _url = await _generate_one_clip(_http_vid, _cp, _ci)
+                    _video_urls.append((_ci + 1, _cp, _url))
+                    logger.info(f"[GENERATE_VIDEO] Clip {_ci+1}/{_num_clips} done: {_url[:60]}")
+                except Exception as _clip_err:
+                    logger.warning(f"[GENERATE_VIDEO] Clip {_ci+1} failed: {_clip_err}")
+                    _video_urls.append((_ci + 1, _cp, None))
 
-            _video_url = _output_vid[0] if isinstance(_output_vid, list) else _output_vid
+        if not _video_urls or all(u is None for _, _, u in _video_urls):
+            return "Видео не сгенерировано (таймаут). Попробуй ещё раз или упрости промпт."
 
         format_label = {"9:16": "вертикальное (Reels/TikTok)", "16:9": "горизонтальное", "1:1": "квадратное"}.get(aspect_ratio, aspect_ratio)
-        return (
-            f"🎬 Видео готово! {format_label}, {_duration_sec} сек.\n\n"
-            f"🔗 Ссылка для скачивания (действует ~1 час):\n{_video_url}\n\n"
-            f"_Скачай видео по ссылке и загрузи в Instagram Reels / TikTok вручную — "
-            f"прямая публикация через API требует верификации приложения._"
-        )
+        _total_sec = _duration_sec * _num_clips
+
+        if _num_clips == 1:
+            _url_single = _video_urls[0][2]
+            return (
+                f"🎬 Видео готово! {format_label}, {_duration_sec} сек.\n\n"
+                f"🔗 Ссылка для скачивания (действует ~1 час):\n{_url_single}\n\n"
+                f"_Скачай видео по ссылке и загрузи в Instagram Reels / TikTok вручную._"
+            )
+        else:
+            _lines = [f"🎬 Готово {len([u for _,_,u in _video_urls if u])} из {_num_clips} клипов! {format_label}, ~{_total_sec} сек суммарно.\n"]
+            for _idx, _cp, _url in _video_urls:
+                if _url:
+                    _lines.append(f"📹 Сцена {_idx}: {_cp[:60]}...\n🔗 {_url}\n")
+                else:
+                    _lines.append(f"❌ Сцена {_idx}: не удалось сгенерировать\n")
+            _lines.append(
+                "\n✂️ **Как склеить в один ролик:**\n"
+                "1. Скачай все клипы по ссылкам выше (ссылки действуют ~1 час)\n"
+                "2. Открой **CapCut** (бесплатно, iOS/Android/ПК)\n"
+                "3. Нажми «Новый проект» → добавь все клипы в нужном порядке\n"
+                "4. Можно добавить музыку, субтитры, переходы\n"
+                "5. Экспорт → загрузи в Instagram Reels или TikTok"
+            )
+            return '\n'.join(_lines)
 
     except Exception as e:
         logger.error(f"[GENERATE_VIDEO] Error: {e}", exc_info=True)
