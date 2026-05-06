@@ -14991,9 +14991,9 @@ async def send_outreach_email(
                 logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
                 return f" Ошибка отправки: {str(e)}"
 
-        # Anti-spam задержка между письмами (10 сек)
+        # Anti-spam задержка между письмами (5 сек — сокращено с 10 для увеличения дневного объёма)
         import asyncio as _asyncio_delay
-        await _asyncio_delay.sleep(10)
+        await _asyncio_delay.sleep(5)
 
         # Сохраняем в БД (обновляем draft или создаём новый)
         if existing and existing.status == 'draft':

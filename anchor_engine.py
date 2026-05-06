@@ -25429,7 +25429,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(5).all()  # макс 5 за один вызов: 5 × (compose ~40s) ≈ 200s < outer wait_for 240s
+                ).limit(15).all()  # макс 15 за один вызов: 15 × (compose ~40s) ≈ 600s — достаточно времени при outer_timeout_sec=1800
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
