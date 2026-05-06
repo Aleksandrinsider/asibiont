@@ -2781,21 +2781,27 @@ async def delegate_task(
                 # Показываем title задачи как есть — ИИ уже написал его в нужной форме.
                 # Никаких regex-обрезаний и таблиц спряжений: "учи ИИ, не кастрируй текст".
                 _task_lines = [ln.strip() for ln in (_task_text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n') if ln.strip()]
-                # Берём первую содержательную строку (title задачи) как текст поручения
+                # Собираем строки до первого структурного заголовка.
+                # НЕ берём только первую строку — LLM иногда переносит фразу на следующую
+                # строку (например "email (один\nконтакт)."), что обрезало бы текст.
                 _SKIP_HEADERS = (
                     'данные для работы', 'ключевые данные', 'детали', 'описание',
                     'шаги', 'план', 'задача', 'дедлайн', 'ожидание в отчёте',
                     'ожидание в отчете', 'каналы', 'активные цели',
                 )
-                _base = ''
+                _base_parts = []
                 for _ln in _task_lines:
                     _ln_lc = _ln.lower().rstrip(' :')
                     if any(_ln_lc.startswith(h) for h in _SKIP_HEADERS):
-                        continue
+                        break
                     if _ln.endswith(':') and len(_ln) < 80 and not _ren.search(r'[.!?]', _ln[:-1]):
-                        continue
-                    _base = _ln
-                    break
+                        break
+                    _base_parts.append(_ln)
+                    # Достаточно когда собрали полное предложение или 300 символов
+                    _joined = ' '.join(_base_parts)
+                    if len(_joined) >= 300 or _ren.search(r'[.!?]\s*$', _joined):
+                        break
+                _base = ' '.join(_base_parts).strip()
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip()
                 _generic = f'{_agent_name}, продолжи работу по текущей задаче.'
                 if not _base:
