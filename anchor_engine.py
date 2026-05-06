@@ -6544,7 +6544,7 @@ class AnchorEngine:
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             # Не даём email-тихому контуру съедать весь бюджет _process_user.
-            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '4'))
+            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '6'))
             # Fairness: если есть новые отправки/ответы/поиск лидов, ограничиваем follow-up до 1 за цикл,
             # чтобы follow-up не вытеснял первые письма.
             _prefer_new_flow = [
@@ -6570,8 +6570,8 @@ class AnchorEngine:
                     async with self._ai_semaphore:
                         # email_need_leads — самый тяжёлый путь; ограничиваем бюджет чтобы не уронить весь _process_user (300s)
                         _is_need_leads = ea.anchor_type == 'email_need_leads'
-                        # email_outreach_send: AI compose (≤60s) + SMTP (≤30s) per draft, 5 drafts max → ~250s needed
-                        _ea_max = 240 if _is_need_leads else 250
+                        # email_outreach_send: AI compose (≤60s) + send (≤30s) per draft, 8 drafts max → ~500s needed
+                        _ea_max = 240 if _is_need_leads else 500
                         _ea_timeout = min(_ea_max, max(120, _time_left() - 25))
                         _email_session = Session()
                         try:
@@ -23361,7 +23361,7 @@ class AnchorEngine:
                     # Не считаем snoozed anchors (suppress_until в будущем) — они ждут, не активные
                     Anchor.suppress_until.is_(None) | (Anchor.suppress_until <= datetime.now(timezone.utc)),
                 ).count()
-                if _pending_send_count >= 3:
+                if _pending_send_count >= 5:
                     logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
                     continue
                 # Дополнительная защита: не создаём новый anchor если есть quota-snoozed anchor
@@ -25429,7 +25429,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(15).all()  # макс 15 за один вызов: 15 × (compose ~40s) ≈ 600s — достаточно времени при outer_timeout_sec=1800
+                ).limit(8).all()  # макс 8 за anchor: 8 × ~55s ≈ 440s < _ea_max=500s
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
