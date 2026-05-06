@@ -6395,6 +6395,7 @@ def _has_explicit_mention(message: str) -> bool:
 def _universal_user_intent_ack(message: str, lang: str = 'ru') -> str:
     """Короткое универсальное подтверждение пользовательского намерения.
     Используется как safety-net, чтобы не оставлять сообщение без реакции.
+    Отражает СУТЬ того что написал пользователь — не шаблонное «принял».
     """
     m = (message or '').strip()
     if not m:
@@ -6414,8 +6415,32 @@ def _universal_user_intent_ack(message: str, lang: str = 'ru') -> str:
             'Got it. We exclude paid placements and proceed only with organic channels and new contacts.'
         )
 
+    # "ищите сами" / "сами найдите" / "find it yourselves"
+    if any(p in ml for p in ('ищите сами', 'сами найд', 'find it yourself', 'search yourself', 'find yourself')):
+        return (
+            'Понял — запускаю агентов сами найдут нужные контакты.'
+            if lang != 'en' else
+            'Got it — launching agents to find the contacts themselves.'
+        )
+
+    # Упоминание подключения интеграции / токена / API
+    if any(p in ml for p in ('интеграц', 'подключ', 'добавим', 'github', 'гит', 'api', 'токен', 'connect', 'integration')):
+        return (
+            'Отлично, жду подключения — как только интеграция появится, агенты смогут использовать её напрямую. Сейчас запустил поиск через доступные каналы.'
+            if lang != 'en' else
+            'Great, waiting for the connection — once the integration is set up, agents will use it directly. For now launching search through available channels.'
+        )
+
+    # Разрешение действовать / "давай" / "вперёд"
+    if any(p in ml for p in ('давай', 'вперёд', 'go ahead', 'do it', 'launch', 'запуска', 'начина', 'старт')):
+        return (
+            'Запускаю — агенты уже получили задачи.'
+            if lang != 'en' else
+            'Launching — agents have received their tasks.'
+        )
+
     # Универсальный fallback для утверждений/ограничений/решений
-    if any(w in ml for w in ('не ', 'без ', 'только ', 'нельзя', 'запрещ', 'stop ', 'don\'t ', 'no ')):
+    if any(w in ml for w in ('не ', 'без ', 'только ', 'нельзя', 'запрещ', 'stop ', "don't ", 'no ')):
         return (
             'Принял ограничение. Учту это в следующих действиях и скорректирую план.'
             if lang != 'en' else
@@ -6431,9 +6456,9 @@ def _universal_user_intent_ack(message: str, lang: str = 'ru') -> str:
         )
 
     return (
-        'Принял. Продолжаю и учитываю это в работе.'
+        'Принял. Запустил работу по твоему запросу.'
         if lang != 'en' else
-        'Got it. Continuing with this applied.'
+        'Got it. Started working on your request.'
     )
 
 

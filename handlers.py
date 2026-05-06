@@ -1177,9 +1177,15 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                 if not response_text or not response_text.strip():
                     response_text = 'Не удалось обработать запрос. Попробуй переформулировать.' if lang != 'en' else 'Could not process your request. Please try rephrasing.'
             
-            # Если агент уже ответил (через директора) — не отправляем и не сохраняем
+            # Если агент уже ответил (через директора) — не дублируем длинный ответ ASI,
+            # но всё равно отправляем короткий ack пользователю чтобы он понял что запрос принят
             if _agent_handled:
-                logger.info(f"[PTM] Agent handled for user {user_id}, skipping ASI response")
+                logger.info(f"[PTM] Agent handled for user {user_id}, sending ack only")
+                if response_text and response_text.strip():
+                    try:
+                        await message.bot.send_message(message.chat.id, response_text.strip())
+                    except Exception as _e:
+                        logger.debug("suppressed ack send: %s", _e)
             else:
                 # ── Обработка markdown изображений: ![текст](url) → send_photo(url, caption=текст) ──
                 # Markdown изображения не поддерживаются в Telegram напрямую — извлекаем URL и отправляем через send_photo
