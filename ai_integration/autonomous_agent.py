@@ -5581,7 +5581,7 @@ class HybridAutonomousAgent:
         except Exception as _gfix_err:
             logger.debug("[GENDER_FIX] skipped: %s", _gfix_err)
 
-        # Встраиваем картинку в ответ если generate_image отработал успешно
+        # Встраиваем картинку/видео в ответ если generate_image/generate_video отработали успешно
         # (как прямой вызов, так и через delegate_task — когда агент делает generate_image внутри)
         import re as _re
         for _r in execution_results:
@@ -5594,6 +5594,12 @@ class HybridAutonomousAgent:
                     if _img_url not in final:
                         final = final + f'\n\n![изображение]({_img_url})'
                         logger.info(f"[IMAGE] Injected image markdown into response: {_img_url[:80]}")
+            elif _r.get('tool') == 'generate_video' and _r.get('success'):
+                # Видео возвращает текст с URL(s) — просто добавляем результат если его нет в ответе
+                _vid_url_m = _re.search(r'https?://\S+', _res_text)
+                if _vid_url_m and _vid_url_m.group(0).rstrip(')') not in final:
+                    final = final + f'\n\n{_res_text}'
+                    logger.info(f"[VIDEO] Injected generate_video result into response")
             elif _r.get('tool') == 'delegate_task' and _r.get('success'):
                 # Извлекаем URL картинки из ответа делегированного агента
                 _img_md = _re.search(r'!\[[^\]]*\]\((https?://[^)]+)\)', _res_text)
@@ -9292,6 +9298,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _task_l_inf = (task or '').lower()
             if any(w in _task_l_inf for w in ('опублик', 'publish', 'разместить', 'разместить пост', 'пост', 'create_post', 'publish_to_telegram', 'в telegram', 'в канал', 'в тг', 'generate_image', 'картинк', 'изображен')):
                 _inferred_tools.update({'create_post', 'publish_to_telegram', 'generate_image'})
+            if any(w in _task_l_inf for w in ('видео', 'ролик', 'reels', 'reel', 'тикток', 'tiktok', 'сними', 'generate_video', 'video clip', 'видеоролик')):
+                _inferred_tools.update({'generate_video', 'save_note'})
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
             _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
             if _inferred_tools and not _base_only:
@@ -9388,6 +9396,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'update_goal_progress': 'обновить прогресс цели',
             'send_message_to_user': 'сообщение пользователю',
             'set_contact_alert': 'алерт на контакт',
+            'generate_video': 'генерация видео',
         }
         if _exclude_for_agent:
             _my_tools = [t['function']['name'] for t in _all_tools_info
@@ -9459,7 +9468,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Адаптивные таймауты: тяжёлые инструменты получают больше времени, лёгкие — меньше
     _TOOL_TIMEOUTS: dict[str, int] = {
         'research_topic': 60, 'web_search': 30, 'get_news_trends': 30,
-        'negotiate_by_email': 50, 'run_agent_action': 130, 'generate_image': 50,
+        'negotiate_by_email': 50, 'run_agent_action': 130, 'generate_image': 50, 'generate_video': 260,
         'schedule_background_task': 45,
         'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
         'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
@@ -9494,7 +9503,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         'check_emails',
         # Универсальные действия (обучение, здоровье, финансы, творчество)
         'save_note', 'search_notes', 'add_task', 'set_reminder', 'run_agent_action',
-        'update_goal_progress', 'generate_image', 'delegate_task',
+        'update_goal_progress', 'generate_image', 'generate_video', 'delegate_task',
     }
 
     # ── Универсальная история действий агента за 24ч (anti-repeat для ВСЕХ интеграций) ──
