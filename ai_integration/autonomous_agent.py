@@ -9295,10 +9295,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
             # ── Task-keyword override: если задача явно требует публикации → всегда добавляем инструменты ──
             _task_l_inf = (task or '').lower()
-            if any(w in _task_l_inf for w in ('опублик', 'publish', 'разместить', 'разместить пост', 'пост', 'create_post', 'publish_to_telegram', 'в telegram', 'в канал', 'в тг', 'generate_image', 'картинк', 'изображен')):
+            _has_video_keywords = any(w in _task_l_inf for w in (
+                'видео', 'ролик', 'reels', 'reel', 'тикток', 'tiktok', 'сними', 'generate_video', 'video clip', 'видеоролик',
+            ))
+            if any(w in _task_l_inf for w in ('опублик', 'publish', 'разместить', 'разместить пост', 'пост', 'create_post', 'publish_to_telegram', 'в telegram', 'в канал', 'в тг', 'generate_image', 'картинк', 'изображен')) and not _has_video_keywords:
+                # Картинка добавляется ТОЛЬКО если нет видео-ключевых
                 _inferred_tools.update({'create_post', 'publish_to_telegram', 'generate_image'})
-            if any(w in _task_l_inf for w in ('видео', 'ролик', 'reels', 'reel', 'тикток', 'tiktok', 'сними', 'generate_video', 'video clip', 'видеоролик')):
+            if _has_video_keywords:
                 _inferred_tools.update({'generate_video', 'save_note'})
+                # Исключаем generate_image из набора чтобы AI не выбрал картинку вместо видео
+                _inferred_tools.discard('generate_image')
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
             _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
             if _inferred_tools and not _base_only:
