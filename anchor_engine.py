@@ -6560,7 +6560,7 @@ class AnchorEngine:
                 _cycle_batch = _follow_ups[:_EMAIL_SILENT_MAX_PER_CYCLE]
 
             for _ea_idx, ea in enumerate(_cycle_batch):
-                _min_time_needed = 120 if ea.anchor_type == 'email_need_leads' else 15
+                _min_time_needed = 120 if ea.anchor_type == 'email_need_leads' else 90
                 if _time_left() < _min_time_needed:
                     logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping {ea.anchor_type} #{ea.id} (only {_time_left():.0f}s left, need {_min_time_needed})")
                     break
@@ -6570,9 +6570,9 @@ class AnchorEngine:
                     async with self._ai_semaphore:
                         # email_need_leads — самый тяжёлый путь; ограничиваем бюджет чтобы не уронить весь _process_user (300s)
                         _is_need_leads = ea.anchor_type == 'email_need_leads'
-                        # email_outreach_send: AI compose (≤60s) + SMTP (≤30s) per draft, 2 drafts max → ~180s needed
-                        _ea_max = 240 if _is_need_leads else 180
-                        _ea_timeout = min(_ea_max, max(90, _time_left() - 25))
+                        # email_outreach_send: AI compose (≤60s) + SMTP (≤30s) per draft, 5 drafts max → ~250s needed
+                        _ea_max = 240 if _is_need_leads else 250
+                        _ea_timeout = min(_ea_max, max(120, _time_left() - 25))
                         _email_session = Session()
                         try:
                             await asyncio.wait_for(
