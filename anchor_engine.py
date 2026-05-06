@@ -23533,14 +23533,15 @@ class AnchorEngine:
                 # Отправленные/delivered/replied уже обработаны — не блокируют поиск новых
                 drafts_in_pipeline = sum(1 for o in _camp_outreach if o.status == 'draft')
 
-                # Если кампания зависла (> 3ч активна, 0 отправлено и 0 черновиков) — HIGH приоритет
+                # Если кампания зависла (> 3ч активна, < 3 отправлено и 0 черновиков) — HIGH приоритет
+                # emails_sent < 3: даже кампания с 1-2 письмами считается зависшей и получает HIGH приоритет
                 _camp_age_h = 0
                 if campaign.created_at:
                     _ct = campaign.created_at
                     if _ct.tzinfo is None:
                         _ct = _ct.replace(tzinfo=timezone.utc)
                     _camp_age_h = (now_utc - _ct).total_seconds() / 3600
-                _is_stuck = _camp_age_h >= 3 and (campaign.emails_sent or 0) == 0
+                _is_stuck = _camp_age_h >= 3 and (campaign.emails_sent or 0) < 3
 
                 # Запускаем поиск если есть квота и мало черновиков
                 if remaining_total > drafts_in_pipeline:
@@ -26118,10 +26119,10 @@ class AnchorEngine:
                 except Exception as _e_nl:
                     logger.debug("[ANCHOR] email_need_leads streak check: %s", _e_nl)
 
-                # ── Если streak >= 3 — AI сам предлагает другой поисковый запрос ──
+                # ── Если streak >= 2 — AI сам предлагает другой поисковый запрос ──
                 _base_audience = anchor_data.get('target_audience', campaign.target_audience or '')
                 _effective_audience = _base_audience
-                if _zero_streak_count >= 3:
+                if _zero_streak_count >= 2:
                     logger.info(
                         f"[ANCHOR] email_need_leads #{anchor.id}: {_zero_streak_count} consecutive zeros — "
                         f"asking AI to suggest alternative search angle"
