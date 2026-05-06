@@ -1796,7 +1796,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 logger.info(f"[SAVE_NOTE] Blog image skipped by user rule: {_matched_img_rule[:80]}")
             if content:
                 # Дефолт если нет user-стиля: базовый watercolor.
-                _style = (_extract_image_style_from_memory(user) or 'watercolor illustration, soft artistic style, muted tones, painterly texture').strip()
+                _style = (_extract_image_style_from_memory(user) or 'vector Pixar style, vibrant colors, clean lines, 3D animated look, cinematic lighting').strip()
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker and not _skip_image_by_rule:
                     try:
@@ -9368,7 +9368,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             if _force_sync_image:
                 try:
                     # Дефолт если нет user-стиля: базовый watercolor.
-                    _style_req = _user_style_pref or 'watercolor illustration, soft artistic style, muted tones, painterly texture'
+                    _style_req = _user_style_pref or 'vector Pixar style, vibrant colors, clean lines, 3D animated look, cinematic lighting'
                     if _explicit_visual_prompt and _style_req:
                         _img_style_req = f"{_style_req}, {_explicit_visual_prompt}"
                     elif _explicit_visual_prompt:
@@ -9454,7 +9454,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     _bg_session = Session()
                     try:
                         # Дефолт если нет user-стиля: базовый watercolor.
-                        _style_bg = 'watercolor illustration, soft artistic style, muted tones, painterly texture'
+                        _style_bg = 'vector Pixar style, vibrant colors, clean lines, 3D animated look, cinematic lighting'
                         try:
                             _post_user_bg = _bg_session.query(User).filter_by(telegram_id=_user_id_bg).first()
                             if _post_user_bg:
@@ -19992,7 +19992,7 @@ async def generate_image(
 
         # Объединяем базовый стиль запроса и пользовательский стиль из памяти.
         # Базовый дефолт: используется если нет user-стиля и не задан явный стиль.
-        _PLATFORM_DEFAULT_STYLE = 'watercolor illustration, soft artistic style, muted tones, painterly texture'
+        _PLATFORM_DEFAULT_STYLE = 'vector Pixar style, vibrant colors, clean lines, 3D animated look, cinematic lighting'
         _base_style = (style or '').strip()
         _user_style = _extract_image_style_from_memory(user) or None
         if _base_style and _user_style:
