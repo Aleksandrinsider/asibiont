@@ -1254,6 +1254,18 @@
 
             </div>
 
+            <!-- Настроим под вас -->
+            <div style="margin: 40px 0 0 0; padding: 28px 32px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 12px; display: flex; gap: 24px; align-items: flex-start;">
+                <div style="width:40px;height:40px;border:1px solid #D1D9E0;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2a10 10 0 1 1 0 20A10 10 0 0 1 12 2z" stroke="#374151" stroke-width="1.5"/><path d="M8 12s1.5 2 4 2 4-2 4-2" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/><path d="M9 9h.01M15 9h.01" stroke="#374151" stroke-width="2" stroke-linecap="round"/></svg>
+                </div>
+                <div>
+                    <h2 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1F2328;">{% if lang == 'en' %}Set up for you{% else %}Настроим под вас{% endif %}</h2>
+                    <p style="margin: 0; font-size: 14px; color: #59636E; line-height: 1.6;">{% if lang == 'en' %}Write to us — and we'll configure agents for your business: select integrations, define tasks, train for your niche. Works from day one, no lengthy onboarding required.{% else %}Напишите нам — и мы настроим агентов под ваш бизнес: подберём интеграции, пропишем задачи, обучим под вашу нишу. Работает с первого дня без долгого онбординга.{% endif %}</p>
+                    <a href="https://t.me/aleksandrinsider" target="_blank" style="display: inline-block; margin-top: 14px; padding: 8px 16px; background: #374151; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">{% if lang == 'en' %}Write to us{% else %}Написать нам{% endif %}</a>
+                </div>
+            </div>
+
         </div>
 
         <!-- Call to Action -->
