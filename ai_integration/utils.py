@@ -1774,7 +1774,7 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
     _last_timeout_err = None
     for _attempt in (1, 2):
         try:
-            timeout = _aio_tr.ClientTimeout(total=70, connect=10)
+            timeout = _aio_tr.ClientTimeout(total=120, connect=15)
             connector = _aio_tr.TCPConnector(force_close=True)
             async with _safe_http(timeout=timeout, connector=connector) as session_tr:
                 async with session_tr.post(
