@@ -12816,14 +12816,35 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 logger.warning("[DIRECTOR] error, fallback to normal: %s", _de)
 
         if _director_response is not None:
-            # Агент ответил напрямую — ASI молчит (ответ уже в DB)
+            # Агент ответил напрямую — ASI подтверждает пользователю коротким живым ответом
             if _director_response == "__agent_handled__":
                 try:
                     from i18n import get_user_lang as _gul_ch
                     _ack_lang = _gul_ch(user_id)
                 except Exception:
                     _ack_lang = 'ru'
-                _ack_text = _universal_user_intent_ack(message or '', lang=_ack_lang)
+                # Генерируем ответ через LLM — он видит сообщение пользователя и отвечает по контексту.
+                # Не используем keyword-matching: AI лучше понимает намерение любого сообщения.
+                try:
+                    _ack_sys = (
+                        "You are ASI Biont — a smart AI assistant that just delegated a task to agents. "
+                        "Reply to the user in 1-2 short sentences: acknowledge what they said and confirm agents are working. "
+                        "Be natural, brief, like a real person. No bullet points. No markdown. Language: English."
+                        if _ack_lang == 'en' else
+                        "Ты ASI Biont — умный ИИ-ассистент, только что запустивший агентов по запросу пользователя. "
+                        "Ответь 1-2 короткими фразами: отрази суть сказанного пользователем и подтверди что агенты работают. "
+                        "Живо, по-человечески, без шаблонов. Никаких bullet points, никакого markdown. Язык: русский."
+                    )
+                    _ack_msgs = [
+                        {"role": "system", "content": _ack_sys},
+                        {"role": "user", "content": message or ''},
+                    ]
+                    _ack_text = await _quick_ai_call_raw(_ack_msgs, max_tokens=80, _caller='ack', temperature=0.7, _timeouts=[12, 20])
+                    if not _ack_text or not _ack_text.strip():
+                        raise ValueError("empty")
+                except Exception as _ack_err:
+                    logger.debug("[AGENT] ack ai call failed (%s), using fallback", _ack_err)
+                    _ack_text = _universal_user_intent_ack(message or '', lang=_ack_lang)
                 return {
                     'response': _ack_text,
                     'tool_calls': [],
