@@ -7306,8 +7306,9 @@ class AnchorEngine:
                                 else int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '900'))
                             )
                             _n_coord_agents = len(_coord_real)
+                            _coord_step_env = int(os.getenv('COORD_STEP_TIMEOUT_SEC', '220'))
                             _coord_timeout = min(
-                                max(200, 90 + _n_coord_agents * 120 + 60),
+                                max(300, 90 + _n_coord_agents * _coord_step_env + 60),
                                 _outer_wrap - 60,  # резерв 60s для post-coord delivery
                             )
                             _coord_ok = await asyncio.wait_for(
@@ -10214,9 +10215,10 @@ class AnchorEngine:
                     # Динамический таймаут агента: если outer_timeout_sec передан из _process_user_inner
                     # через wait_for-бюджет → используем не более половины оставшегося бюджета
                     # на попытку (2 попытки × timeout/попытку ≤ outer_timeout_sec - запас 30s).
-                    _agent_exec_timeout = 150  # default safe per-attempt
+                    _agent_exec_timeout = 180  # default safe per-attempt
                     if outer_timeout_sec and outer_timeout_sec > 60:
-                        _agent_exec_timeout = max(60, min(150, (outer_timeout_sec - 30) // 2))
+                        # min 100s: даже при малом бюджете Hugo/кастомные агенты успевают сделать 1 шаг
+                        _agent_exec_timeout = max(100, min(240, (outer_timeout_sec - 30) // 2))
                     for _try_idx in (1, 2):
                         try:
                             _raw = await asyncio.wait_for(
@@ -12040,6 +12042,25 @@ class AnchorEngine:
                     _next_ag.name, _agent_chain_count,
                 )
                 return
+            # Guard: если агент уже в процессе chain — не запускаем второй параллельно
+            # (Beatrice может получить chain от 3 разных агентов — берём только первый)
+            _agent_chain_in_progress = (
+                session.query(_AAL2.id)
+                .filter(
+                    _AAL2.user_id == _user_id,
+                    _AAL2.activity_type == 'agent_chain_continue',
+                    _AAL2.ref_id == _next_ag.id,
+                    _AAL2.status == 'in_progress',
+                    _AAL2.created_at >= datetime.now(timezone.utc) - timedelta(minutes=15),
+                )
+                .first()
+            )
+            if _agent_chain_in_progress:
+                logger.info(
+                    "[ANCHOR-CHAIN] busy-guard: %s already has chain in_progress — postponing (будет в следующем цикле)",
+                    _next_ag.name,
+                )
+                return
 
 
             from models import AgentActivityLog as _AAL3
@@ -12135,7 +12156,8 @@ class AnchorEngine:
                 _exec_agent_for_director(
                     _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
                 ),
-                timeout=120,
+                # Email/generate-задачи занимают 180-220s → настраивается через env
+                timeout=int(os.getenv('ANCHOR_CHAIN_TIMEOUT_SEC', '200')),
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
             _next_result = re.sub(r'\n{2,}', '\n', (_next_result or '')).strip()
@@ -15853,7 +15875,8 @@ class AnchorEngine:
                     logger.debug('[COORD] plan_prompt: %d chars (~%d tokens)', _prompt_chars, _prompt_chars // 4)
                 # Координаторский промпт крупный (20k+ символов) → нужны расширенные таймауты
                 # В часы пиковой нагрузки DeepSeek обрабатывает 5000+ входных токенов до 90-120с
-                _coord_plan_timeouts = [90, 150] if _prompt_chars > 15000 else [60, 100]
+                # Крупный промпт (>15K) → DeepSeek может думать 90-120s в пиковые часы
+                _coord_plan_timeouts = [120, 200] if _prompt_chars > 15000 else [70, 120]
                 _plan_json = await _quick_ai_call_raw(
                     [{"role": "user", "content": _plan_prompt}],
                     max_tokens=_plan_max_tokens,
@@ -18780,26 +18803,27 @@ class AnchorEngine:
                 # их результаты передаются как «сообщения коллег» — текущий агент видит их
                 # и реагирует естественно, как в рабочем чате.
 
+                _coord_step_t = int(os.getenv('COORD_STEP_TIMEOUT_SEC', '220'))
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=150,  # 150s: 3 агента × 150с = 450с < 15 мин (порог stuck-очистки)
+                        timeout=_coord_step_t,  # Email: 180-220s; env COORD_STEP_TIMEOUT_SEC
                     )
                 except asyncio.TimeoutError:
                     _raw = None  # FIX: define _raw to prevent UnboundLocalError
-                    _ae_msg = f'Превысил лимит 150с — задача слишком сложная для одного цикла, нужно разбить на шаги'
-                    logger.warning("[COORD] agent %s timeout after 150s: %s", _ag_name, _ag_task[:100])
+                    _ae_msg = f'Превысил лимит {_coord_step_t}с — задача слишком сложная для одного цикла, нужно разбить на шаги'
+                    logger.warning("[COORD] agent %s timeout after %ds: %s", _ag_name, _coord_step_t, _ag_task[:100])
                     self._cancel_agent_task(
                         session,
                         _step_task_id,
-                        'timeout_200s',
+                        f'timeout_{_coord_step_t}s',
                         _ae_msg,
                         ['Упростить задачу до 1 конкретного действия за раз', 'Разбить на 2-3 последовательных шага'],
                     )
                     # Более информативный контекст для следующих агентов
-                    _results_summary.append(f"{_ag_name}: ⏱️ таймаут (задача заняла >150s)")
+                    _results_summary.append(f"{_ag_name}: ⏱️ таймаут (задача заняла >{_coord_step_t}s)")
                     _prev_steps_context += (
-                        f"• {_ag_name}: таймаут после 150с на задаче «{_ag_task[:100]}» — "
+                        f"• {_ag_name}: таймаут после {_coord_step_t}с на задаче «{_ag_task[:100]}» — "
                         f"задача, видимо, требует разбиения на подзадачи или смены инструмента\n"
                     )
                     # Сохраняем видимое сообщение в чат — пользователь должен видеть что агент работал
@@ -18812,7 +18836,7 @@ class AnchorEngine:
                         _verb_split = 'разобью' if _ag_gender == 'female' else 'разобью'
                         _tmo_text = (
                             f"{_verb_work} над задачей «{_tmo_task_oneline}», "
-                            f"но не {_verb_fit} в лимит времени 150с. "
+                            f"но не {_verb_fit} в лимит времени {_coord_step_t}с. "
                             f"Задача, видимо, слишком большая — {_verb_split} на меньшие шаги в следующем цикле."
                         )
                         session.add(Interaction(
