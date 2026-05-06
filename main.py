@@ -7512,14 +7512,21 @@ async def on_startup(app):
 
     # Set webhook for production mode (with guard against flood)
     if bot and not LOCAL:
-        # Не переустанавливаем webhook чаще чем раз в 5 минут (защита от Telegram flood limit)
+        # Не переустанавливаем webhook если уже стоит нужный URL (защита от Telegram flood limit).
+        # globals()-guard не работает после перезапуска процесса — используем get_webhook_info.
         import time as _t_mod
-        _webhook_guard = globals().get('_webhook_last_attempt', 0)
-        _now = _t_mod.time()
-        if _now - _webhook_guard < 300:  # 5 минут
-            logger.info("[WEBHOOK] Skipped (attempted %d seconds ago); next attempt in %d seconds", int(_now - _webhook_guard), int(300 - (_now - _webhook_guard)))
+        webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
+        _need_set = True
+        try:
+            _wh_info = await asyncio.wait_for(bot.get_webhook_info(), timeout=10)
+            if _wh_info.url == webhook_url:
+                logger.info("[WEBHOOK] Already set to correct URL, skipping set_webhook")
+                _need_set = False
+        except Exception as _wh_check_err:
+            logger.debug("[WEBHOOK] get_webhook_info failed (%s), will attempt set", _wh_check_err)
+        if not _need_set:
+            pass
         else:
-            webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
             _set_ok = False
             for _attempt in range(5):
                 try:
@@ -7553,7 +7560,6 @@ async def on_startup(app):
                     logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/5 after error: {e}")
             if not _set_ok:
                 logger.warning("[WEBHOOK] Bot starts without confirmed webhook; platform will retry on next restart")
-            globals()['_webhook_last_attempt'] = _t_mod.time()
 
 
 async def on_shutdown(app):
