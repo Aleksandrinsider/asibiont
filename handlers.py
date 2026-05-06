@@ -429,6 +429,25 @@ async def start_handler(message: Message):
             is_new_user = True
             # Начисляем бесплатные токены
             grant_signup_tokens(user_id, session=session)
+            # Реферальная программа: начисляем реферу 500 токенов за нового пользователя
+            if referrer_id and referrer:
+                try:
+                    from token_service import add_tokens
+                    add_tokens(referrer.telegram_id, 500, reason='referral_bonus', session=session)
+                    logger.info(f"Referral bonus: 500 tokens to referrer {referrer.telegram_id} for inviting {user_id}")
+                    # Уведомляем реферера
+                    _ref_name = message.from_user.first_name or message.from_user.username or 'новый пользователь'
+                    _ref_lang = getattr(referrer, 'language', 'ru') or 'ru'
+                    if _ref_lang == 'en':
+                        _ref_msg = f"🎉 {_ref_name} joined via your referral link!\n\n+500 tokens added to your balance as a thank-you.\n\nBalance: /balance"
+                    else:
+                        _ref_msg = f"🎉 {_ref_name} зарегистрировался по твоей реферальной ссылке!\n\n+500 токенов зачислено на баланс.\n\nБаланс: /balance"
+                    try:
+                        await message.bot.send_message(referrer.telegram_id, _ref_msg)
+                    except Exception:
+                        pass
+                except Exception as _ref_err:
+                    logger.warning(f"Referral bonus failed for referrer {referrer_id}: {_ref_err}")
             # Now user exists in DB — fetch avatar and store permanent file_id
             try:
                 from main import get_user_avatar_url
@@ -525,6 +544,43 @@ async def broadcast_handler(message: Message):
         await message.reply(result)
     finally:
         session.close()
+
+
+@router.message(Command("refer"))
+async def refer_handler(message: Message):
+    """Реферальная программа — показываем ссылку и статистику"""
+    user_id = message.from_user.id
+    lang = get_user_lang(user_id)
+    from config import WEB_APP_URL as _WU
+    ref_link = f"https://t.me/asibiont_bot?start=ref{user_id}"
+    # Подсчитываем сколько людей зарегистрировалось по ссылке
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        invited_count = 0
+        if user:
+            from models import User as _U
+            invited_count = session.query(_U).filter_by(referrer_id=user.id).count()
+    finally:
+        session.close()
+    earned = invited_count * 500
+    if lang == 'en':
+        text = (
+            f"🔗 Your referral link:\n{ref_link}\n\n"
+            f"For every new user who registers via your link — you get +500 tokens.\n\n"
+            f"📊 Invited: {invited_count} users\n"
+            f"🪙 Earned: {earned} tokens\n\n"
+            f"Share the link — grow together!"
+        )
+    else:
+        text = (
+            f"🔗 Твоя реферальная ссылка:\n{ref_link}\n\n"
+            f"За каждого нового пользователя, зарегистрировавшегося по твоей ссылке — тебе +500 токенов.\n\n"
+            f"📊 Приглашено: {invited_count} чел.\n"
+            f"🪙 Заработано: {earned} токенов\n\n"
+            f"Поделись ссылкой — растём вместе!"
+        )
+    await message.bot.send_message(message.chat.id, text)
 
 
 @router.message(Command("lang"))

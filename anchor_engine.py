@@ -21527,8 +21527,8 @@ class AnchorEngine:
         anchors = []
 
         balance = user.token_balance or 0
-        # Порог: менее 50 токенов (≈3 проактивных сообщения)
-        if balance >= 50:
+        # Порог: менее 200 токенов — предупреждаем заранее, не когда уже всё кончилось
+        if balance >= 200:
             return anchors
 
         # Не предупреждаем если совсем 0 — тогда _process_user_inner и так пропустит
@@ -21541,7 +21541,9 @@ class AnchorEngine:
             user_id=user.id,
             anchor_type='token_low_balance',
             source='tokens:low_balance',
-            topic=_t(user, f'Баланс токенов: {balance} — хватит на ~{msgs_left} сообщений', f'Token balance: {balance} — enough for ~{msgs_left} messages'),
+            topic=_t(user,
+                f'Токенов осталось {balance} — хватит примерно на {msgs_left} сообщений. Пополни баланс: /buy',
+                f'Token balance low: {balance} tokens (~{msgs_left} messages left). Top up: /buy'),
             priority=AnchorPriority.HIGH,
             data=json.dumps({
                 'balance': balance,
