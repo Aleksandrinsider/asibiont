@@ -20109,6 +20109,135 @@ async def generate_image(
             session.close()
 
 
+async def generate_video(
+    prompt: str,
+    aspect_ratio: str = "9:16",
+    duration: int = 5,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+) -> str:
+    """Генерация короткого видео (5–10 сек) через Replicate (Wan-2.1 text-to-video)."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import REPLICATE_API_TOKEN as _platform_replicate_key
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        # Личный токен имеет приоритет
+        REPLICATE_API_TOKEN = _platform_replicate_key
+        try:
+            from models import UserAgent as _UA_vid
+            for _ag_vid in session.query(_UA_vid).filter(
+                _UA_vid.author_id == user.id,
+                _UA_vid.status != 'disabled',
+                _UA_vid.user_api_keys.isnot(None),
+            ).all():
+                _env_vid = {}
+                for _ln_vid in (_ag_vid.user_api_keys or '').splitlines():
+                    _ln_vid = _ln_vid.strip()
+                    if '=' in _ln_vid and not _ln_vid.startswith('#'):
+                        _k_vid, _, _v_vid = _ln_vid.partition('=')
+                        _env_vid[_k_vid.strip().upper()] = _v_vid.strip()
+                if _env_vid.get('REPLICATE_API_TOKEN'):
+                    REPLICATE_API_TOKEN = _env_vid['REPLICATE_API_TOKEN']
+                    logger.info(f'[GENERATE_VIDEO] Using personal REPLICATE_API_TOKEN from agent {_ag_vid.name}')
+                    break
+        except Exception as _vid_lookup_err:
+            logger.debug(f'[GENERATE_VIDEO] Personal token lookup: {_vid_lookup_err}')
+
+        if not REPLICATE_API_TOKEN:
+            return "Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
+
+        # Соотношение → размеры для Wan-2.1
+        _size_map = {
+            "9:16": (480, 832),   # вертикальный — Reels/TikTok
+            "16:9": (832, 480),   # горизонтальный
+            "1:1":  (624, 624),   # квадрат
+        }
+        _width, _height = _size_map.get(aspect_ratio, (480, 832))
+        _duration_sec = duration if duration in (5, 10) else 5
+
+        import aiohttp as _aiohttp_vid
+        import asyncio as _asyncio_vid
+
+        # Используем Wan-2.1 — доступна через Replicate без ревью
+        _model = "wavespeedai/wan-2.1-t2v-480p"
+        _input = {
+            "prompt": prompt,
+            "negative_prompt": "blurry, low quality, distorted, ugly, watermark",
+            "width": _width,
+            "height": _height,
+            "num_frames": _duration_sec * 16,  # 16 FPS
+            "guidance_scale": 7.5,
+            "num_inference_steps": 30,
+            "fast_mode": "Balanced",
+        }
+        _headers = {
+            "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
+            "Content-Type": "application/json",
+        }
+
+        async with _safe_http() as _http_vid:
+            # Запускаем предикшн (видео обычно не поддерживает Prefer:wait → polling)
+            async with _http_vid.post(
+                f"https://api.replicate.com/v1/models/{_model}/predictions",
+                headers=_headers,
+                json={"input": _input},
+                timeout=_aiohttp_vid.ClientTimeout(total=30),
+            ) as _resp_vid:
+                _data_vid = await _resp_vid.json()
+
+            if _resp_vid.status not in (200, 201):
+                _err_vid = _data_vid.get("detail", str(_data_vid))
+                return f"Ошибка Replicate: {_err_vid}"
+
+            _prediction_id = _data_vid.get("id")
+            _output_vid = _data_vid.get("output")
+
+            # Polling — видео генерируется 60–120 сек
+            if _output_vid is None and _prediction_id:
+                for _attempt in range(50):
+                    await _asyncio_vid.sleep(4)
+                    async with _http_vid.get(
+                        f"https://api.replicate.com/v1/predictions/{_prediction_id}",
+                        headers=_headers,
+                        timeout=_aiohttp_vid.ClientTimeout(total=15),
+                    ) as _poll_vid:
+                        _poll_data = await _poll_vid.json()
+                    _status_vid = _poll_data.get("status")
+                    if _status_vid == "succeeded":
+                        _output_vid = _poll_data.get("output")
+                        break
+                    elif _status_vid in ("failed", "canceled"):
+                        _err_vid = _poll_data.get("error", "Unknown error")
+                        return f"Генерация видео не удалась: {_err_vid}"
+
+            if not _output_vid:
+                return "Видео не сгенерировано (таймаут). Попробуй ещё раз или упрости промпт."
+
+            _video_url = _output_vid[0] if isinstance(_output_vid, list) else _output_vid
+
+        format_label = {"9:16": "вертикальное (Reels/TikTok)", "16:9": "горизонтальное", "1:1": "квадратное"}.get(aspect_ratio, aspect_ratio)
+        return (
+            f"🎬 Видео готово! {format_label}, {_duration_sec} сек.\n\n"
+            f"🔗 Ссылка для скачивания (действует ~1 час):\n{_video_url}\n\n"
+            f"_Скачай видео по ссылке и загрузи в Instagram Reels / TikTok вручную — "
+            f"прямая публикация через API требует верификации приложения._"
+        )
+
+    except Exception as e:
+        logger.error(f"[GENERATE_VIDEO] Error: {e}", exc_info=True)
+        return f"Ошибка генерации видео: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 # ═══════════════════════════════════════════════════════
 # КОНТЕНТ-КАМПАНИИ — автономная публикация постов
 # ═══════════════════════════════════════════════════════

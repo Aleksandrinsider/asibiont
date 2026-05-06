@@ -290,6 +290,7 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'calls': 'run_agent_action(action="send_message"|"send_sms"|"send") или http_api_request — WhatsApp/Twilio/телефония по REST API',
     'script': 'run_agent_action(action="ДЕЙСТВИЕ") — конкретные action-имена см. в профиле агента',
     'image_gen': 'generate_image(prompt="...")',
+    'video_gen': 'generate_video(prompt="...", aspect_ratio="9:16", duration=5)',
     'storage': 'run_agent_action(action="upload"|"download"|"list_files") или http_api_request — S3/GCS/Dropbox по REST API',
     'analytics': 'run_agent_action(action="get_metrics"|"get_report") или http_api_request — Google Analytics, Metrica и др.',
     'ms_teams': 'run_agent_action(action="send_message") или http_api_request(url="https://graph.microsoft.com/v1.0/...", auth_key="MS_GRAPH_TOKEN")',
@@ -2414,6 +2415,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _aic_can.append("📢 publish_to_discord: отправка webhook в Discord-сервер пользователя")
     _aic_can.append("🔍 web_search, research_topic — всегда доступны (но если есть API — используй API!)")
     _aic_can.append("🎨 generate_image(prompt='...', style='watercolor') — всегда доступен, без внешних ключей")
+    _aic_can.append("🎬 generate_video(prompt='...', aspect_ratio='9:16') — генерация видео-роликов (Reels/TikTok формат), требует REPLICATE_API_TOKEN")
     # ── Явный перечень НЕнастроенных интеграций ──
     # AI должен ЧЁТКО видеть что подключено и что НЕТ — без угадывания.
     _IMPORTANT_CATS = [
@@ -3325,6 +3327,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "                 action='replicate_run' model='...' — запустить ML-модель\n"
            if _has_ai_api else '')
         + ("  Изображения:   action='generate_image' prompt='...' (Replicate/Stable Diffusion)\n"
+           "  Видео:         action='generate_video' prompt='...' aspect_ratio='9:16' (Replicate Wan-2.1, Reels/TikTok)\n"
            if _has_imggen else '')
         + ("  Webhook/HTTP:  action='trigger_webhook' url='...' data='...' / 'http_get' / 'api_call'\n"
            if _has_webhook else '')
