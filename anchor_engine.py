@@ -5756,10 +5756,11 @@ class AnchorEngine:
         is_night = user_now.hour >= NIGHT_START_HOUR or user_now.hour < MORNING_START_HOUR
         if is_night:
             # Проверяем есть ли pending task reminders — если есть, продолжаем для них
+            # Используем datetime.utcnow() (naive) т.к. Task.reminder_time — DateTime без timezone=True
             has_pending = session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.reminder_sent == False,
-                Task.reminder_time <= datetime.now(timezone.utc),
+                Task.reminder_time <= datetime.utcnow(),
                 Task.status.in_(['pending', 'in_progress', 'active'])
             ).first() is not None
             # Проверяем есть ли непрочитанные email-ответы (CRITICAL — нельзя блокировать)
@@ -6254,7 +6255,7 @@ class AnchorEngine:
             key=lambda a: (
                 _EMAIL_SILENT_ORDER.get(a.anchor_type, 9),
                 -_priority_rank(getattr(a, 'priority', None)),
-                a.created_at or datetime.min.replace(tzinfo=timezone.utc),
+                a.created_at.replace(tzinfo=timezone.utc) if a.created_at else datetime.min.replace(tzinfo=timezone.utc),
             )
         )
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
@@ -25724,7 +25725,43 @@ class AnchorEngine:
                                 return _json_compose.loads(_match.group(0))
                             raise ValueError('compose json parse failed')
 
-                        parsed = _parse_email_compose_json(ai_result)
+                        # ── Retry compose parse: если JSON не распарсился — перегенерируем ──
+                        _parse_retry_key = f'{d_obj.id}:parse_retry'
+                        try:
+                            parsed = _parse_email_compose_json(ai_result)
+                        except ValueError:
+                            if _parse_retry_key not in _draft_failures:
+                                _draft_failures.append(_parse_retry_key)
+                                logger.warning(
+                                    f"[ANCHOR] AI compose JSON parse failed for {redact_email(email)}, retrying with stricter prompt"
+                                )
+                                try:
+                                    _retry_parse_prompt = compose_prompt + (
+                                        "\n\n⚠️ PREVIOUS RESPONSE WAS NOT VALID JSON. "
+                                        "Return ONLY a valid JSON object: {\"subject\": \"...\", \"body\": \"...\"} "
+                                        "No markdown, no code fences, no extra text."
+                                    )
+                                    _retry_ai = await asyncio.wait_for(
+                                        api.deepseek_analyze(
+                                            prompt=_retry_parse_prompt,
+                                            system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields. No markdown, no code blocks.",
+                                            max_tokens=500,
+                                            temperature=0.3,
+                                        ),
+                                        timeout=60,
+                                    )
+                                    if _retry_ai:
+                                        parsed = _parse_email_compose_json(_retry_ai)
+                                    else:
+                                        raise ValueError('retry returned empty')
+                                except Exception as _retry_parse_err:
+                                    logger.warning(
+                                        f"[ANCHOR] Compose parse retry also failed for {redact_email(email)}: {_retry_parse_err}"
+                                    )
+                                    raise
+                            else:
+                                raise
+
                         subject = parsed.get('subject', '')
                         body = parsed.get('body', '')
 
