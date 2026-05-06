@@ -4858,9 +4858,8 @@ class HybridAutonomousAgent:
                     _platform_publish.update({'publish_to_telegram', 'create_post'})
                 if profile_data.get('discord_webhook') or _active_dc:
                     _platform_publish.update({'publish_to_discord', 'create_post'})
-                # create_post всегда доступен (сохранение записи без канала)
-                # create_post и generate_image всегда доступны (создание контента без канала)
-                _platform_publish.update({'create_post', 'generate_image'})
+                # create_post и generate_image/generate_video всегда доступны (создание контента без канала)
+                _platform_publish.update({'create_post', 'generate_image', 'generate_video'})
                 _effective_allowed = _agent_tools_allowed | _platform_publish
                 _forbidden = _all_tool_names - _effective_allowed
                 tools_to_exclude = tools_to_exclude | _forbidden
