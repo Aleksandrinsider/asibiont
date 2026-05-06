@@ -11704,8 +11704,8 @@ async def resend_webhook_handler(request):
                 from sqlalchemy import text as _wh_text
                 session_db.execute(_wh_text("SET LOCAL statement_timeout = 45000; SET LOCAL lock_timeout = 10000"))
                 _wh_timeout_disabled = True
-            except Exception:
-                pass
+            except Exception as _set_err:
+                logger.warning(f"[RESEND_WEBHOOK] Failed to set timeouts: {_set_err}")
             # --- Skip outgoing delivery notifications (not inbound replies) ---
             if event_type == 'email.sent':
                 return web.json_response({'status': 'ok', 'event': 'sent_ack'})
@@ -11843,14 +11843,15 @@ async def resend_webhook_handler(request):
                                 logger.warning(f"[RESEND_WEBHOOK] Failed to sync contact bounce: {_e_bc}")
                                 try:
                                     session_db.rollback()
-                                except Exception:
-                                    pass
+                                except Exception as _rb2:
+                                    logger.debug(f"[RESEND_WEBHOOK] rollback failed: {_rb2}")
                             # Очищаем follow-up для bounced/complained
                             if outreach.next_follow_up_at:
                                 outreach.next_follow_up_at = None
                                 try:
                                     session_db.commit()
-                                except Exception:
+                                except Exception as _fc_err:
+                                    logger.warning(f"[RESEND_WEBHOOK] Failed to clear follow-up: {_fc_err}")
                                     session_db.rollback()
                             # Логируем жалобы в AAL для видимости в дашборде
                             if event_type == 'email.complained':
@@ -11862,8 +11863,8 @@ async def resend_webhook_handler(request):
                                         _cmp = session_db.query(_EC_cmp).filter_by(id=outreach.campaign_id).first()
                                         if _cmp:
                                             _camp_name = (_cmp.name or '')[:60]
-                                    except Exception:
-                                        pass
+                                    except Exception as _ec_err:
+                                        logger.debug(f"[RESEND_WEBHOOK] campaign name fetch failed: {_ec_err}")
                                     session_db.add(_AAL_cmp(
                                         user_id=outreach.user_id,
                                         agent_name='resend',
@@ -12148,11 +12149,12 @@ async def resend_webhook_handler(request):
                     from sqlalchemy import text as _wh_text
                     session_db.execute(_wh_text("RESET statement_timeout"))
                     session_db.commit()
-                except Exception:
+                except Exception as _rst_err:
+                    logger.warning(f"[RESEND_WEBHOOK] Failed to reset timeout: {_rst_err}")
                     try:
                         session_db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as _rb_err:
+                        logger.debug(f"[RESEND_WEBHOOK] Rollback also failed: {_rb_err}")
             session_db.close()
 
         return web.json_response({'status': 'ok'})
