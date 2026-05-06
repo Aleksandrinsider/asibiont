@@ -20155,13 +20155,7 @@ async def generate_video(
         if not REPLICATE_API_TOKEN:
             return "Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
-        # Соотношение → размеры для Wan-2.1
-        _size_map = {
-            "9:16": (480, 832),   # вертикальный — Reels/TikTok
-            "16:9": (832, 480),   # горизонтальный
-            "1:1":  (624, 624),   # квадрат
-        }
-        _width, _height = _size_map.get(aspect_ratio, (480, 832))
+        # Соотношение: aspect_ratio передаётся напрямую в модель
         _duration_sec = duration if duration in (5, 10) else 5
         _num_clips = max(1, min(int(num_clips or 1), 3))
 
@@ -20217,13 +20211,12 @@ async def generate_video(
             """Генерирует один клип и возвращает URL."""
             _input = {
                 "prompt": clip_prompt,
-                "negative_prompt": "blurry, low quality, distorted, ugly, watermark",
-                "width": _width,
-                "height": _height,
-                "num_frames": _duration_sec * 16,
-                "guidance_scale": 7.5,
-                "num_inference_steps": 30,
+                "negative_prompt": "blurry, low quality, distorted, ugly, watermark, text",
+                "aspect_ratio": aspect_ratio,   # "9:16", "16:9", "1:1" — напрямую в API
                 "fast_mode": "Balanced",
+                "sample_steps": 30,
+                "sample_guide_scale": 5,
+                "sample_shift": 5,
             }
             async with http_session.post(
                 f"https://api.replicate.com/v1/models/{_model}/predictions",
@@ -20237,7 +20230,7 @@ async def generate_video(
             _pred_id = _data.get("id")
             _output = _data.get("output")
             if _output is None and _pred_id:
-                for _ in range(50):
+                for _ in range(65):   # 65 × 4s = 260s max
                     await _asyncio_vid.sleep(4)
                     async with http_session.get(
                         f"https://api.replicate.com/v1/predictions/{_pred_id}",
@@ -20253,6 +20246,7 @@ async def generate_video(
                         raise RuntimeError(_poll_data.get("error", "Unknown error"))
             if not _output:
                 raise RuntimeError("Timeout")
+            # output — URI (строка) или список URI
             return _output[0] if isinstance(_output, list) else _output
 
         _video_urls = []
