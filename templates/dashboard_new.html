@@ -1769,6 +1769,18 @@
                             <option value="en" {% if lang == 'en' %}selected{% endif %}>???? English</option>
                         </select>
                     </div>
+                    <!-- Bio + Content Strategy — full width row -->
+                    <div style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">О себе</label>
+                            <textarea id="quick-bio" rows="3" placeholder="Кратко о вас: кто вы, чем занимаетесь, что предлагаете..." style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;"></textarea>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Аудитория и стратегия автопилота</label>
+                            <textarea id="quick-content-strategy" rows="3" placeholder="Кому пишем, какой тон, темы постов, цели кампаний..." style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;"></textarea>
+                            <p style="margin: 4px 0 0 0; font-size: 11px; color: #9CA3AF;">Используется автопилотом для поиска лидов и публикаций</p>
+                        </div>
+                    </div>
                     <!-- Password change section -->
                     <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 10px; margin-top: 2px;">
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
