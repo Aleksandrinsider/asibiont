@@ -1,5 +1,10 @@
 # ASI Biont
 
+[![Python](https://img.shields.io/badge/python-3.11-blue?logo=python)](https://www.python.org/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Telegram](https://img.shields.io/badge/try-bot-blue?logo=telegram)](https://t.me/asibiont_bot)
+[![Website](https://img.shields.io/badge/web-asibiont.com-green?logo=web)](https://asibiont.com)
+
 **AI отвечают. ASI Biont — действует.**
 
 Не чат-бот, а AI-агент. Сам ведёт задачи, находит исполнителей, делегирует и постит контент в Telegram. Без промптов — просто скажите, что нужно.
