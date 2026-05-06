@@ -6544,7 +6544,7 @@ class AnchorEngine:
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             # Не даём email-тихому контуру съедать весь бюджет _process_user.
-            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '2'))
+            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '4'))
             # Fairness: если есть новые отправки/ответы/поиск лидов, ограничиваем follow-up до 1 за цикл,
             # чтобы follow-up не вытеснял первые письма.
             _prefer_new_flow = [
@@ -25427,7 +25427,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(3).all()  # макс 3 за один вызов: 3 × (compose ~40s) ≈ 120s < outer wait_for
+                ).limit(5).all()  # макс 5 за один вызов: 5 × (compose ~40s) ≈ 200s < outer wait_for 240s
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
@@ -25547,17 +25547,19 @@ class AnchorEngine:
 
                     # ── GUARD: пропускаем generic/role-based email ──
                     _GENERIC_SKIP = {
-                        'info', 'contact', 'contacts', 'hello', 'support', 'sales',
+                        'info', 'contact', 'contacts', 'hello', 'support',
                         'admin', 'office', 'team', 'help', 'mail', 'noreply',
-                        'hr', 'press', 'media', 'marketing', 'general',
+                        'press', 'general',
                         'feedback', 'service',
-                        'partners', 'partner', 'business', 'invest', 'investor',
                         'legal', 'privacy', 'security', 'billing', 'jobs', 'careers',
                         'career', 'reports',
                         'awards', 'events', 'newsletter', 'news', 'webinar',
                         'training', 'education', 'community', 'social', 'podcast',
                         'editor', 'editorial', 'submissions', 'apply', 'donate',
-                        'founders', 'devops', 'it', 'dev',
+                        'founders', 'devops',
+                        # NOTE: 'hr', 'sales', 'marketing', 'partners', 'partner',
+                        # 'business', 'invest', 'investor', 'media', 'it', 'dev'
+                        # — убраны: это реальные точки контакта для outreach
                     }
                     # Точное совпадение ИЛИ generic слово в составном префиксе (python-genai-team → 'team')
                     _prefix_parts_set = set(re.split(r'[._\-+]', _email_prefix))
