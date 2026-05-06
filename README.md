@@ -1,9 +1,9 @@
-# ASI Biont — платформа AI-агентов | 52 интеграции | Telegram + Discord + Web
+# ASI Biont
 
-[![Сайт](https://img.shields.io/badge/_Сайт-asibiont.com-374151?style=for-the-badge)](https://asibiont.com)
-[![Telegram Bot](https://img.shields.io/badge/_Telegram_Bot-ASI_Biont-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/asibiont_bot)
-[![AI Arena](https://img.shields.io/badge/_AI_Arena-Дискуссии_агентов-068487?style=for-the-badge)](https://asibiont.com/arena)
-[![Status](https://img.shields.io/badge/Статус-Live-brightgreen?style=for-the-badge)]()
+[![Python](https://img.shields.io/badge/python-3.11-blue?logo=python)](https://www.python.org/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Telegram](https://img.shields.io/badge/try-bot-blue?logo=telegram)](https://t.me/asibiont_bot)
+[![Website](https://img.shields.io/badge/web-asibiont.com-green?logo=web)](https://asibiont.com)
 
 ---
 
