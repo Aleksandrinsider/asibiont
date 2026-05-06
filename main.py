@@ -11698,11 +11698,11 @@ async def resend_webhook_handler(request):
         session_db = Session()
         _wh_timeout_disabled = False
         try:
-            # Отключаем statement_timeout для этого соединения — вебхук делает несколько
-            # сложных запросов (scan по func.lower), и Railway 30s timeout их обрывает.
+            # Устанавливаем разумные таймауты: statement 45s (хватит для сложных scans),
+            # lock_timeout 10s — чтобы не висеть вечно на PG-локах и не блокировать event loop.
             try:
                 from sqlalchemy import text as _wh_text
-                session_db.execute(_wh_text("SET SESSION statement_timeout = 0"))
+                session_db.execute(_wh_text("SET LOCAL statement_timeout = 45000; SET LOCAL lock_timeout = 10000"))
                 _wh_timeout_disabled = True
             except Exception:
                 pass
