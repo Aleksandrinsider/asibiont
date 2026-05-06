@@ -10397,6 +10397,7 @@ async def api_profile_handler(request):
             'interests': _pick_own('interests'),
             'languages': profile.languages if profile else None,
             'bio': (profile.bio if profile else None),  # always show original bio — not an AI translation
+            'content_strategy': (profile.content_strategy if profile else None),
             'status_text': _pick_own('status_text'),
             'average_rating': profile.average_rating if profile else 0,
             'rating_count': profile.rating_count if profile else 0,

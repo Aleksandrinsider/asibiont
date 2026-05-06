@@ -177,6 +177,12 @@
         }
 
         /* --- Markdown rendering in AI messages --------------------------- */
+        /* AI/агентские сообщения — не выделяем жирным (только user) */
+        .message.ai .message-text strong { font-weight: 400; color: inherit; }
+        .message.ai .message-text em { font-style: normal; }
+        .message.ai .message-text h1, .message.ai .message-text h2,
+        .message.ai .message-text h3, .message.ai .message-text h4,
+        .message.ai .message-text h5 { font-weight: 400; }
         .message-text p { margin: 0 0 6px 0; }
         .message-text p:last-child { margin-bottom: 0; }
         .message-text p:empty { display: none; margin: 0; }
@@ -1765,8 +1771,8 @@
                     <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n-html="ai-lang-req">Язык общения AI <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <select id="quick-language" required style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #374151; cursor: pointer;">
-                            <option value="ru" {% if lang == 'ru' %}selected{% endif %}>???? Русский</option>
-                            <option value="en" {% if lang == 'en' %}selected{% endif %}>???? English</option>
+                            <option value="ru" {% if lang == 'ru' %}selected{% endif %}>Русский</option>
+                            <option value="en" {% if lang == 'en' %}selected{% endif %}>English</option>
                         </select>
                     </div>
                     <!-- Bio + Content Strategy — full width row -->
@@ -2076,6 +2082,9 @@
                         const safeTitle = title ? ` title="${escapeHtml(title)}"` : '';
                         return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="color: #068487; text-decoration: underline;"${safeTitle}>${text}</a>`;
                     };
+                    // AI-сообщения: убираем жирный/курсив на уровне рендера
+                    renderer.strong = function(text) { return text; };
+                    renderer.em = function(text) { return text; };
                     let html = marked.parse(text, { renderer });
                     // Убираем пустые <p> (marked создаёт их при лишних пустых строках)
                     html = html.replace(/<p>\s*<\/p>/gi, '');
@@ -15267,51 +15276,78 @@ except Exception as e:
         
         function openQuickProfileModal() {
             const modal = document.getElementById('quick-profile-modal');
-            if (modal) {
-                // Заполняем текущие данные профиля
-                const firstNameField = document.getElementById('quick-first-name');
-                const genderField = document.getElementById('quick-gender');
-                const countryField = document.getElementById('quick-country');
-                const cityField = document.getElementById('quick-city');
-                const birthdateField = document.getElementById('quick-birthdate');
-                const companyField = document.getElementById('quick-company');
-                const positionField = document.getElementById('quick-position');
-                const interestsField = document.getElementById('quick-interests');
-                const skillsField = document.getElementById('quick-skills');
-                const goalsField = document.getElementById('quick-goals');
-                const websiteField = document.getElementById('quick-website');
-                const bioField = document.getElementById('quick-bio');
-                const contentStrategyField = document.getElementById('quick-content-strategy');
-                const telegramChannelField = document.getElementById('quick-telegram-channel');
-                const discordWebhookField = document.getElementById('quick-discord-webhook');
-                
-                // Получаем текущие данные из профиля
-                {% if profile %}
-                if (firstNameField) firstNameField.value = {{ (user.first_name or "") | tojson }};
-                if (genderField) genderField.value = {{ (profile.gender or "") | tojson }};
-                if (countryField) countryField.value = {{ (profile.country or "") | tojson }};
-                if (cityField) cityField.value = {{ (profile.city or "") | tojson }};
-                if (birthdateField) {
-                    birthdateField.value = {{ (profile.birthdate or "") | tojson }};
-                }
-                if (companyField) companyField.value = {{ (profile.company or "") | tojson }};
-                if (positionField) positionField.value = {{ (profile.position or "") | tojson }};
-                if (interestsField) interestsField.value = {{ (profile.interests or "") | tojson }};
-                if (skillsField) skillsField.value = {{ (profile.skills or "") | tojson }};
-                if (goalsField) goalsField.value = {{ (profile.goals or "") | tojson }};
-                if (websiteField) websiteField.value = {{ (profile.website or "") | tojson }};
-                if (bioField) bioField.value = {{ (profile.bio or "") | tojson }};
-                if (contentStrategyField) contentStrategyField.value = {{ (profile.content_strategy or "") | tojson }};
-                {% endif %}
-                {% if telegram_channel %}
-                if (telegramChannelField) telegramChannelField.value = {{ (telegram_channel or "") | tojson }};
-                {% endif %}
-                {% if discord_webhook %}
-                if (discordWebhookField) discordWebhookField.value = {{ (discord_webhook or "") | tojson }};
-                {% endif %}
-                
-                modal.style.display = 'flex';
+            if (!modal) return;
+            
+            // Сначала заполняем из серверного контекста (быстро)
+            const firstNameField = document.getElementById('quick-first-name');
+            const genderField = document.getElementById('quick-gender');
+            const countryField = document.getElementById('quick-country');
+            const cityField = document.getElementById('quick-city');
+            const birthdateField = document.getElementById('quick-birthdate');
+            const companyField = document.getElementById('quick-company');
+            const positionField = document.getElementById('quick-position');
+            const interestsField = document.getElementById('quick-interests');
+            const skillsField = document.getElementById('quick-skills');
+            const goalsField = document.getElementById('quick-goals');
+            const websiteField = document.getElementById('quick-website');
+            const bioField = document.getElementById('quick-bio');
+            const contentStrategyField = document.getElementById('quick-content-strategy');
+            const telegramChannelField = document.getElementById('quick-telegram-channel');
+            const discordWebhookField = document.getElementById('quick-discord-webhook');
+            
+            // Получаем текущие данные из профиля (серверный контекст)
+            {% if profile %}
+            if (firstNameField) firstNameField.value = {{ (user.first_name or "") | tojson }};
+            if (genderField) genderField.value = {{ (profile.gender or "") | tojson }};
+            if (countryField) countryField.value = {{ (profile.country or "") | tojson }};
+            if (cityField) cityField.value = {{ (profile.city or "") | tojson }};
+            if (birthdateField) {
+                birthdateField.value = {{ (profile.birthdate or "") | tojson }};
             }
+            if (companyField) companyField.value = {{ (profile.company or "") | tojson }};
+            if (positionField) positionField.value = {{ (profile.position or "") | tojson }};
+            if (interestsField) interestsField.value = {{ (profile.interests or "") | tojson }};
+            if (skillsField) skillsField.value = {{ (profile.skills or "") | tojson }};
+            if (goalsField) goalsField.value = {{ (profile.goals or "") | tojson }};
+            if (websiteField) websiteField.value = {{ (profile.website or "") | tojson }};
+            if (bioField) bioField.value = {{ (profile.bio or "") | tojson }};
+            if (contentStrategyField) contentStrategyField.value = {{ (profile.content_strategy or "") | tojson }};
+            {% endif %}
+            {% if telegram_channel %}
+            if (telegramChannelField) telegramChannelField.value = {{ (telegram_channel or "") | tojson }};
+            {% endif %}
+            {% if discord_webhook %}
+            if (discordWebhookField) discordWebhookField.value = {{ (discord_webhook or "") | tojson }};
+            {% endif %}
+            
+            // Показываем модалку сразу (с серверными данными), пока грузим свежие
+            modal.style.display = 'flex';
+            
+            // Асинхронно подгружаем свежие данные с сервера — это важно, если
+            // AI-агент изменил bio / content_strategy / другие поля после загрузки страницы
+            fetch('/api/profile', { credentials: 'include' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (!data || !data.profile) return;
+                    var p = data.profile;
+                    if (firstNameField && p.first_name != null) firstNameField.value = p.first_name;
+                    if (genderField && p.gender != null) genderField.value = p.gender;
+                    if (countryField && p.country != null) countryField.value = p.country;
+                    if (cityField && p.city != null) cityField.value = p.city;
+                    if (birthdateField && p.birthdate != null) birthdateField.value = p.birthdate;
+                    if (companyField && p.company != null) companyField.value = p.company;
+                    if (positionField && p.position != null) positionField.value = p.position;
+                    if (interestsField && p.interests != null) interestsField.value = p.interests;
+                    if (skillsField && p.skills != null) skillsField.value = p.skills;
+                    if (goalsField && p.goals != null) goalsField.value = p.goals;
+                    if (websiteField && p.website != null) websiteField.value = p.website;
+                    if (bioField && p.bio != null) bioField.value = p.bio;
+                    if (contentStrategyField && p.content_strategy != null) contentStrategyField.value = p.content_strategy;
+                    if (telegramChannelField && p.telegram_channel != null) telegramChannelField.value = p.telegram_channel;
+                })
+                .catch(function() {
+                    // Если fetch не удался — оставляем серверные данные, это нормально
+                });
         }
         
         async function unlinkTelegram() {
