@@ -2412,9 +2412,11 @@
                     }
                 } catch(e) {}
                 // Показываем финальный ответ ASI (если есть и не показан из SSE)
-                if (finalText) {
-                    addMessage(finalText, 'ai', null, null, finalAgentInfo || null);
-                }
+                try {
+                    if (finalText) {
+                        addMessage(finalText, 'ai', null, null, finalAgentInfo || null);
+                    }
+                } catch(e) {}
                 setTimeout(async () => {
                     try { await updateTasks(); await updateProfile(); await updatePeople(); await loadGoalsProgress(); } catch(e) {}
                 }, 500);
@@ -2485,6 +2487,8 @@
                 };
                 evtSource.onerror = function() {
                     if (evtSource) { evtSource.close(); evtSource = null; }
+                    hideTypingIndicator();
+                    window.sendingMessage = false;
                 };
             } catch(e) {
                 // SSE не поддерживается
@@ -2522,6 +2526,14 @@
                     if (data.background) {
                         // Фоновый режим: SSE уже получает прогресс, HTTP вернулся сразу
                         // Не закрываем SSE — он сам закроется при получении type='final'/'done'
+                        // Страховочный таймаут: если SSE не закрылся за 120с — разблокируем UI
+                        setTimeout(() => {
+                            if (window.sendingMessage) {
+                                window.sendingMessage = false;
+                                hideTypingIndicator();
+                                if (evtSource) { evtSource.close(); evtSource = null; }
+                            }
+                        }, 120000);
                         return; // sendingMessage сбросится в SSE handler
                     }
                     // Синхронный режим (fallback: SSE недоступен или старый путь)
