@@ -25765,7 +25765,30 @@ class AnchorEngine:
                                 pass
                             _match = _re_compose.search(r'\{[\s\S]*\}', _txt)
                             if _match:
-                                return _json_compose.loads(_match.group(0))
+                                _raw_obj = _match.group(0)
+                                try:
+                                    return _json_compose.loads(_raw_obj)
+                                except Exception:
+                                    # Частый кейс: модель дописывает мусор после валидного JSON-объекта.
+                                    try:
+                                        _decoder = _json_compose.JSONDecoder()
+                                        _obj, _idx = _decoder.raw_decode(_raw_obj)
+                                        if isinstance(_obj, dict):
+                                            return _obj
+                                    except Exception:
+                                        pass
+                            # Последний шанс: вытаскиваем subject/body regex-ом из почти-JSON ответа.
+                            _sub_m = _re_compose.search(r'"subject"\s*:\s*"([\s\S]*?)"\s*(?:,|\})', _txt)
+                            _body_m = _re_compose.search(r'"body"\s*:\s*"([\s\S]*?)"\s*(?:,|\})', _txt)
+                            if _sub_m and _body_m:
+                                _subject_raw = _sub_m.group(1)
+                                _body_raw = _body_m.group(1)
+                                try:
+                                    _subject = bytes(_subject_raw, 'utf-8').decode('unicode_escape')
+                                    _body = bytes(_body_raw, 'utf-8').decode('unicode_escape')
+                                except Exception:
+                                    _subject, _body = _subject_raw, _body_raw
+                                return {'subject': _subject.strip(), 'body': _body.strip()}
                             raise ValueError('compose json parse failed')
 
                         # ── Retry compose parse: если JSON не распарсился — перегенерируем ──
@@ -26705,6 +26728,11 @@ class AnchorEngine:
                 try:
                     _s_to = Session()
                     try:
+                        try:
+                            from sqlalchemy import text as _to_text
+                            _s_to.execute(_to_text("SET SESSION statement_timeout = 0"))
+                        except Exception:
+                            pass
                         _a_to = _s_to.query(Anchor).filter_by(id=anchor.id).first()
                         if _a_to and not _a_to.delivered_at:
                             _a_to.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=15)
@@ -28052,20 +28080,28 @@ class AnchorEngine:
                     try:
                         _now_sup = datetime.now(timezone.utc)
                         _stale_threshold = timedelta(minutes=5)
-                        _stale_ids = [
-                            a.id for a in anchors
-                            if (_now_sup - (a.created_at.replace(tzinfo=timezone.utc) if a.created_at and a.created_at.tzinfo is None else (a.created_at or _now_sup))).total_seconds() > _stale_threshold.total_seconds()
-                        ]
-                        if _stale_ids:
+                        # После rollback ORM-объекты в anchors могут быть invalid/deleted.
+                        # Используем только IDs и SQL-фильтр по created_at.
+                        _candidate_ids = [int(_id) for _id in (anchor_ids or []) if _id]
+                        if _candidate_ids:
                             _sup_sess = Session()
                             try:
-                                _sup_sess.query(Anchor).filter(Anchor.id.in_(_stale_ids)).update(
-                                    {'delivered_at': _now_sup}, synchronize_session=False
-                                )
+                                _cutoff = _now_sup - _stale_threshold
+                                try:
+                                    from sqlalchemy import text as _sup_text
+                                    _sup_sess.execute(_sup_text("SET SESSION statement_timeout = 0"))
+                                except Exception:
+                                    pass
+                                _updated = _sup_sess.query(Anchor).filter(
+                                    Anchor.id.in_(_candidate_ids),
+                                    Anchor.delivered_at.is_(None),
+                                    Anchor.created_at <= _cutoff,
+                                ).update({'delivered_at': _now_sup}, synchronize_session=False)
                                 _sup_sess.commit()
                             finally:
                                 _sup_sess.close()
-                            logger.warning(f"[ANCHOR] ⚠️ Suppressed {len(_stale_ids)} anchors after send_message failure to {user.telegram_id} — они будут пересозданы при следующем scan если условие актуально")
+                            if _updated:
+                                logger.warning(f"[ANCHOR] ⚠️ Suppressed {_updated} anchors after send_message failure to {user.telegram_id} — они будут пересозданы при следующем scan если условие актуально")
                     except Exception as _sup_err:
                         logger.error(f"[ANCHOR] Failed to suppress anchors after send failure: {_sup_err}")
             else:

@@ -3073,6 +3073,35 @@ class HybridAutonomousAgent:
             elif _fix_note:
                 out = _fix_note
 
+            # RSS upstream может кратковременно отдавать 502/Bad Gateway.
+            # Нормализуем в мягкое предупреждение, чтобы автопилот не «ломался» на временном сбое фида.
+            try:
+                _rss_actions2 = {'check_news', 'read_rss', 'check_news_and_markets', 'check_markets', 'fetch_rss', 'get_feed'}
+                _is_rss_action = (action or '').lower() in _rss_actions2
+                _combined_out = (out or '') + '\n' + (err or '')
+                _rss_transient = (
+                    'http error 502' in _combined_out.lower() or
+                    'bad gateway' in _combined_out.lower() or
+                    'temporarily unavailable' in _combined_out.lower()
+                )
+                if _is_rss_action and _rss_transient:
+                    _line = ''
+                    for _ln in (out or err or '').splitlines():
+                        _ln_s = _ln.strip()
+                        if _ln_s:
+                            _line = _ln_s
+                            break
+                    out = (
+                        "⚠️ RSS-источник временно недоступен (502 Bad Gateway). "
+                        "Это внешний сбой провайдера фида, не ошибка системы. "
+                        "Попробую снова в следующем цикле."
+                        + (f"\nДетали: {_line[:220]}" if _line else '')
+                    )
+                    err = ''
+                    logger.warning("[ACTION] %s transient RSS upstream failure normalized", action)
+            except Exception as _rss_norm_err:
+                logger.debug("[ACTION] rss normalization skipped: %s", _rss_norm_err)
+
             # Self-heal: если скрипт вернул "не поддерживает действие" и подсказал
             # список поддерживаемых, делаем 1 ретрай с первым поддерживаемым action.
             _unsupported_text = (out or err or '').lower()

@@ -21401,7 +21401,14 @@ async def execute_code(code: str, timeout: int = 10, user_id: int = None) -> str
         return "Ошибка: код слишком длинный (максимум 10 000 символов)"
 
     import textwrap as _tw
-    code = _tw.dedent(code).strip()
+    import re as _re_exec
+
+    # Нормализуем типичный вывод LLM: fenced-блоки и лишние отступы/пустые строки.
+    _raw_code = str(code or '').replace('\ufeff', '').replace('\r\n', '\n')
+    _fenced = _re_exec.search(r"```(?:python|py)?\s*\n([\s\S]*?)\n```", _raw_code, flags=_re_exec.IGNORECASE)
+    if _fenced:
+        _raw_code = _fenced.group(1)
+    code = _tw.dedent(_raw_code).strip('\n ')
 
     timeout = min(max(int(timeout or 10), 1), 30)
 
@@ -21454,6 +21461,24 @@ exec(_CODE, {'__builtins__': builtins, '__name__': '__sandbox__'})
 
         out = stdout.decode('utf-8', errors='replace')
         err = stderr.decode('utf-8', errors='replace')
+
+        # Второй шанс: для частого кейса "unexpected indent" от LLM-переносов.
+        if proc.returncode != 0 and 'IndentationError: unexpected indent' in err:
+            _retry_code = '\n'.join([ln.lstrip() for ln in code.splitlines()]).strip()
+            if _retry_code and _retry_code != code:
+                _retry_wrapper = safe_wrapper.replace(repr(code), repr(_retry_code), 1)
+                _proc2 = await asyncio.create_subprocess_exec(
+                    sys.executable, '-c', _retry_wrapper,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    _out2, _err2 = await asyncio.wait_for(_proc2.communicate(), timeout=timeout)
+                    if _proc2.returncode == 0:
+                        out, err = _out2.decode('utf-8', errors='replace'), _err2.decode('utf-8', errors='replace')
+                except asyncio.TimeoutError:
+                    _proc2.kill()
+                    await _proc2.communicate()
 
         # Убираем шум из stderr (предупреждения Python)
         err_lines = [l for l in err.splitlines() if l.strip() and 'DeprecationWarning' not in l and 'ResourceWarning' not in l]
