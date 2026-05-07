@@ -13543,122 +13543,11 @@ except Exception as e:
             await loadChatHistoryPage(1);
         }
 
-        // Функция для проверки новых сообщений (ID-based, не count-based)
-        async function checkForNewMessages() {
-            try {
-                const response = await fetch(`/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}`, {
-                    credentials: 'include',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    },
-                    cache: 'no-store'
-                });
-                if (!await checkAuth(response)) return;
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.interactions && data.interactions.length > 0) {
-                        // Проверяем по ID, а не по количеству (API лимитирует 100 записей)
-                        const sortedInteractions = data.interactions.sort((a, b) => a.id - b.id);
-                        let hasNew = false;
-                        const _normMsg = s => (s || '').trim().replace(/\s+/g, ' ');
-                        sortedInteractions.forEach((interaction) => {
-                            const msgId = interaction.id;
-                            if (msgId > _chatMaxSeenId) _chatMaxSeenId = msgId;
-                            if (!displayedMessageIds.has(msgId)) {
-                                // Не дублируем сообщение пользователя, пока post-send синк не завершился
-                                if (interaction.message_type === 'user' && window._pendingUserMsgText &&
-                                    _normMsg(interaction.content) === _normMsg(window._pendingUserMsgText)) {
-                                    displayedMessageIds.add(msgId); // отметить как показанное, не рендерить
-                                    return;
-                                }
-                                // Не дублируем сообщения агентов уже показанные через SSE persist
-                                const _ssePollShown = window._sseShownTexts || new Set();
-                                let _iCmpPoll = _normMsg(interaction.content || '');
-                                if ((interaction.content || '').trim().startsWith('{')) {
-                                    try { const _pp = JSON.parse(interaction.content); if (_pp.__agent && _pp.text) _iCmpPoll = _normMsg(_pp.text); } catch(e) {}
-                                }
-                                if (_ssePollShown.has(_iCmpPoll)) {
-                                    displayedMessageIds.add(msgId); // засчитать как показанное, не рендерить
-                                    return;
-                                }
-                                addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
-                                displayedMessageIds.add(msgId);
-                                hasNew = true;
-                            }
-                        });
-                        lastMessageCount = data.interactions.length;
-                        
-                        // Прокрутить чат вниз, если есть новые и пользователь внизу
-                        if (hasNew) {
-                            const messages = document.getElementById('chat-messages');
-                            if (messages) {
-                                const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
-                                if (isNearBottom) {
-                                    setTimeout(() => messages.scrollTop = messages.scrollHeight, 100);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking for new messages:', error);
-            }
-        }
-
-        async function checkForNewPosts() {
-            try {
-                const response = await fetch('/api/feed?t=' + Date.now(), {
-                    credentials: 'include',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    },
-                    cache: 'no-store'
-                });
-                if (!await checkAuth(response)) return;
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.posts && data.posts.length > lastPostCount) {
-                        // Есть новые посты
-                        const newPosts = data.posts.slice(0, data.posts.length - lastPostCount);
-                        
-                        // Получить список избранных контактов
-                        const favoriteContacts = await getFavoriteContactsFromServer();
-                        
-                        // Проверить, есть ли новые посты от избранных контактов
-                        const hasNewPostsFromFavorites = newPosts.some(post => {
-                            const username = post.author.username || '';
-                            const usernameClean = username.replace('@', '');
-                            return favoriteContacts.includes(usernameClean);
-                        });
-                        
-                        // Показать индикатор новых постов только если есть посты от избранных
-                        const indicator = document.getElementById('new-posts-indicator');
-                        if (indicator && currentView !== 'feed' && hasNewPostsFromFavorites) {
-                            indicator.style.display = 'inline-block';
-                        }
-                        
-                        // Если мы находимся в ленте, добавляем новые посты в начало
-                        if (currentView === 'feed') {
-                            const feedContainer = document.getElementById('feed-posts');
-                            if (feedContainer) {
-                                newPosts.reverse().forEach((post) => {
-                                    // Пропускаем посты, уже отображённые в DOM
-                                    if (post && post.id && feedContainer.querySelector('[data-post-id="' + post.id + '"]')) return;
-                                    const postDiv = createPostElement(post);
-                                    feedContainer.insertBefore(postDiv, feedContainer.firstChild);
-                                });
-                            }
-                        }
-                        
-                        lastPostCount = data.posts.length;
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking for new posts:', error);
-            }
-        }
+        // ===== CONSOLIDATED POLLING SYSTEM =====
+        // Two pollers: updateChat() every 15s and main cycle every 30s
+        // Removed: checkForNewMessages(), checkForNewPosts() (duplicates)
+        // Main polling loop starts at line 17346 when isLoggedIn=true
+        // =========================================
 
         function createPostElement(post) {
             const postDiv = document.createElement('div');
@@ -16121,30 +16010,12 @@ except Exception as e:
             updateHeaderTime();
             setInterval(updateHeaderTime, 5000);
             
-            // Обновлять счетчик времени каждые 10 секунд (оптимизировано)
-            setInterval(() => {
-                const nextReminderEl = document.getElementById('next-reminder');
-                if (nextReminderEl && nextReminderEl.style.display !== 'none') {
-                    updateTasks();
-                }
-            }, 10000);
-            
-            // Проверять новые сообщения каждые 15 секунд (всегда, даже если не в чате — чтобы напоминания и проактивные сообщения появлялись сразу)
-            setInterval(() => {
-                checkForNewMessages();
-            }, 15000);
-            
-            // Проверять новые посты каждые 30 секунд
-            setInterval(() => {
-                checkForNewPosts();
-            }, 30000);
-            
             // Проверять новые сообщения при фокусе окна
             window.addEventListener('focus', () => {
                 if (currentView === 'chat') {
-                    checkForNewMessages();
+                    updateChat();
                 }
-                checkForNewPosts();
+                checkNewPosts();
             });
         });
         
