@@ -12491,13 +12491,6 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
             return None  # Отмена — сброс миссии
 
-    # Немедленное подтверждение — пользователь видит что запрос принят (≤0.5с)
-    if progress_callback:
-        try:
-            await progress_callback("⏳", persist=False)
-        except Exception:
-            pass
-
     decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=400, _caller='director_decision')
     if not decision_raw:
         return None
