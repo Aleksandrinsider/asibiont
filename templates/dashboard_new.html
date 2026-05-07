@@ -2511,7 +2511,13 @@
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
-                if (!await checkAuth(response)) return;
+                if (!await checkAuth(response)) {
+                    // 401/403 — сессия истекла, страница перезагрузится, разблокируем UI
+                    if (evtSource) { evtSource.close(); evtSource = null; }
+                    hideTypingIndicator();
+                    window.sendingMessage = false;
+                    return;
+                }
                 let data;
                 try {
                     data = await response.json();

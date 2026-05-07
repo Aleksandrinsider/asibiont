@@ -2374,18 +2374,26 @@ async def chat_progress_handler(request):
     )
     await response.prepare(request)
 
-    # Создаём очередь если ещё нет
+    # Создаём очередь если ещё нет (обычно уже создана в chat_handler)
     if user_id not in _chat_progress_queues:
         _chat_progress_queues[user_id] = asyncio.Queue()
 
-    queue = _chat_progress_queues[user_id]
+    # Запоминаем ссылку на СВОЮ очередь — если chat_handler заменит её новой,
+    # мы это обнаружим и выйдем (предотвращает stale SSE handler)
+    my_queue = _chat_progress_queues[user_id]
 
     try:
         while True:
+            # Проверяем что наша очередь не устарела (новый запрос создал свежую)
+            if _chat_progress_queues.get(user_id) is not my_queue:
+                logger.debug('[SSE] stale handler detected for user %s, closing', user_id)
+                break
             try:
-                msg = await asyncio.wait_for(queue.get(), timeout=60)
+                msg = await asyncio.wait_for(my_queue.get(), timeout=30)
             except asyncio.TimeoutError:
-                # keepalive
+                # keepalive + staleness check
+                if _chat_progress_queues.get(user_id) is not my_queue:
+                    break
                 await response.write(b': keepalive\n\n')
                 continue
 
@@ -2401,15 +2409,18 @@ async def chat_progress_handler(request):
     except (ConnectionResetError, BrokenPipeError, ConnectionError, asyncio.CancelledError):
         pass
     finally:
-        # Очищаем очередь
-        _chat_progress_queues.pop(user_id, None)
+        # Очищаем очередь только если она наша (не заменена новым запросом)
+        if _chat_progress_queues.get(user_id) is my_queue:
+            _chat_progress_queues.pop(user_id, None)
 
     return response
 
 
-async def _chat_bg_task(user_id: int, message: str, context, file_content, user_db_id, web_progress_callback):
+async def _chat_bg_task(user_id: int, message: str, context, file_content, user_db_id, web_progress_callback,
+                        owned_queue=None):
     """Фоновая задача: запускает AI и доставляет финальный ответ через SSE.
     HTTP /chat возвращает {'background': True} немедленно, не дожидаясь AI.
+    owned_queue: ссылка на СВОЮ очередь, созданную chat_handler для этого запроса.
     """
     response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
     ai_result: dict = {'agent_info': None}
@@ -2468,8 +2479,8 @@ async def _chat_bg_task(user_id: int, message: str, context, file_content, user_
         finally:
             session_db.close()
     finally:
-        # Доставляем финальный ответ через SSE, затем закрываем стрим
-        queue = _chat_progress_queues.get(user_id)
+        # Доставляем финальный ответ через SSE в СВОЮ очередь (не в чужую очередь нового запроса)
+        queue = owned_queue if owned_queue is not None else _chat_progress_queues.get(user_id)
         if queue:
             if response and response.strip():
                 await queue.put({
@@ -2501,14 +2512,16 @@ async def chat_handler(request):
         context = get_context_from_db(user_id, limit=10)
         logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
 
-        # ═══ Создаём SSE-очередь заранее (race condition fix) ═══
-        if user_id not in _chat_progress_queues:
-            _chat_progress_queues[user_id] = asyncio.Queue()
+        # ═══ Создаём СВЕЖУЮ SSE-очередь (предотвращает race condition) ═══
+        # Сигнализируем старому chat_progress_handler (если жив) закрыться:
+        # он увидит что his_queue is not _chat_progress_queues[user_id] и выйдет.
+        _fresh_queue = asyncio.Queue()
+        _chat_progress_queues[user_id] = _fresh_queue
 
         async def web_progress_callback(text, persist=False):
-            queue = _chat_progress_queues.get(user_id)
-            if queue:
-                await queue.put({'type': 'progress', 'text': text, 'persist': persist})
+            # Пишем только в ту очередь которую создали для THIS запроса
+            if _chat_progress_queues.get(user_id) is _fresh_queue:
+                await _fresh_queue.put({'type': 'progress', 'text': text, 'persist': persist})
 
         # Быстрая синхронная часть: сохраняем сообщение, проверяем токены
         user_db_id = None
@@ -2532,7 +2545,8 @@ async def chat_handler(request):
 
         # Запускаем AI в фоне — HTTP отвечает немедленно, агенты доставляются через SSE
         asyncio.create_task(_chat_bg_task(
-            user_id, message, context, file_content, user_db_id, web_progress_callback
+            user_id, message, context, file_content, user_db_id, web_progress_callback,
+            owned_queue=_fresh_queue
         ))
         return web.json_response({'response': '', 'background': True})
 
