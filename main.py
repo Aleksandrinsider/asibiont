@@ -11703,7 +11703,7 @@ async def resend_webhook_handler(request):
             # lock_timeout 10s — чтобы не висеть вечно на PG-локах и не блокировать event loop.
             try:
                 from sqlalchemy import text as _wh_text
-                session_db.execute(_wh_text("SET LOCAL statement_timeout = 45000; SET LOCAL lock_timeout = 10000"))
+                session_db.execute(_wh_text("SET LOCAL statement_timeout = 45000; SET LOCAL lock_timeout = 25000"))
                 _wh_timeout_disabled = True
             except Exception as _set_err:
                 logger.warning(f"[RESEND_WEBHOOK] Failed to set timeouts: {_set_err}")
@@ -12161,7 +12161,12 @@ async def resend_webhook_handler(request):
         return web.json_response({'status': 'ok'})
 
     except Exception as e:
-        logger.error(f"[RESEND_WEBHOOK] Error: {e}", exc_info=True)
+        # LockNotAvailable — не блокирующая ошибка, Resend переотправит webhook самостоятельно.
+        # Не логируем полный traceback (только warning) чтобы не засорять логи.
+        if 'LockNotAvailable' in str(e):
+            logger.warning(f"[RESEND_WEBHOOK] LockNotAvailable (will rely on Resend retry): {e}")
+        else:
+            logger.error(f"[RESEND_WEBHOOK] Error: {e}", exc_info=True)
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
 

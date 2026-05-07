@@ -6891,10 +6891,16 @@ class AnchorEngine:
             # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
             data = anchor.data or {}
             if isinstance(data, str):
-                data = json.loads(data)
+                try:
+                    data = json.loads(data)
+                except (json.JSONDecodeError, TypeError):
+                    data = {}
+            # Если после всех преобразований data не dict — сбрасываем в пустой dict
+            if not isinstance(data, dict):
+                data = {}
             if anchor.anchor_type == 'goal_autopilot_review':
                 # Промпт будет перестроен ПОСЛЕ выбора агента с учётом его интеграций
-                _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
+                _goals_for_prompt = data.get('goals', [])
                 # ── Filter out deleted/completed goals (anchor snapshot may be stale) ──
                 if _goals_for_prompt:
                     try:
@@ -12593,6 +12599,8 @@ class AnchorEngine:
         Returns True если хотя бы один шаг выполнен или токены кончились (anchor помечен).
         Returns False → вызывающий должен использовать fallback round-robin.
         """
+        # Инициализируем ДО try — иначе except не увидит _aal_id_c если исключение до строки ~16996
+        _aal_id_c = None
         try:
             from ai_integration.autonomous_agent import (
                 _exec_agent_for_director, _quick_ai_call_raw, _parse_agent_integrations,
@@ -16993,7 +17001,6 @@ class AnchorEngine:
 
             # ── AAL запись ──
             from models import AgentActivityLog as _AAL_c, Session as _AAL_Sess
-            _aal_id_c = None
             # Для content сохраняем только цели, а не полный системный промпт
             _goals_for_content = '; '.join(
                 f"{g.get('title', '')[:50]} ({g.get('progress', 0)}%)"
