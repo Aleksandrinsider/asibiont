@@ -5680,6 +5680,10 @@ class AnchorEngine:
                     logger.debug(f"[ANCHOR] User {user_id}: ⛔ advisory lock busy (another process), skip")
                     return
                 use_xact_lock = True
+                # Устанавливаем lock_timeout = 15s чтобы синхронные DB-запросы не блокировали
+                # asyncio event loop на минуты при lock contention.
+                # Это локальная настройка для текущей транзакции (SET LOCAL).
+                session.execute(text("SET LOCAL lock_timeout = 15000"))
             except Exception as _lock_err:
                 # SQLite или другая БД без advisory locks — продолжаем без них
                 logger.debug(f"[ANCHOR] User {user_id}: advisory lock unavailable ({_lock_err}), proceeding without lock")
@@ -5727,6 +5731,7 @@ class AnchorEngine:
             return _deadline - _time_inner.monotonic()
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
+        await asyncio.sleep(0)  # Yield event loop после DB-запроса — не блокируем heartbeat
         if not user:
             logger.debug(f"[ANCHOR] User {user_id}: не найден в БД, пропуск")
             return
@@ -6428,7 +6433,9 @@ class AnchorEngine:
                                     pass
                         else:
                             logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
-                            _ap_dispatch_budget = max(30, _time_left() - 15)
+                            # Кап бюджета: макс 300s (5 мин), чтобы не блокировать event loop
+                            # и не затягивать обработку других пользователей.
+                            _ap_dispatch_budget = max(30, min(300, _time_left() - 15))
                             async with self._ai_semaphore:
                                 try:
                                     await asyncio.wait_for(
@@ -6444,7 +6451,7 @@ class AnchorEngine:
 
                     if _chat_review_anchors and not _processed_goal:
                         logger.info(f"[ANCHOR] User {user_id}: 💬 Processing chat AI review (today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
-                        _chat_dispatch_budget = max(30, _time_left() - 15)
+                        _chat_dispatch_budget = max(30, min(300, _time_left() - 15))
                         async with self._ai_semaphore:
                             try:
                                 await asyncio.wait_for(
@@ -6473,7 +6480,7 @@ class AnchorEngine:
         # Маршрутизируем через _dispatch_agent_for_anchor → агент получает tools.
         if custom_agent_anchors and has_proactive_tokens and _time_left() > 30:
             for _ca in custom_agent_anchors[:1]:
-                _ca_dispatch_budget = max(30, _time_left() - 15)
+                _ca_dispatch_budget = max(30, min(300, _time_left() - 15))
                 async with self._ai_semaphore:
                     try:
                         await asyncio.wait_for(
@@ -6762,6 +6769,9 @@ class AnchorEngine:
         try:
             from ai_integration.autonomous_agent import _exec_agent_for_director
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
+            # Timezone-зависимые форматтеры времени для отображения в логах/поручениях
+            _utz_disp = AnchorEngine._get_user_tz(user)
+            _fmt_t_p_disp = lambda dt: AnchorEngine._fmt_user_time(dt, _utz_disp, '%H:%M')
 
             # ── Guard: предотвращаем дублирование при параллельных scan-циклах ──
             # Проверяем: нет ли недавнего dispatch в in_progress (< 10 мин).
@@ -8158,7 +8168,7 @@ class AnchorEngine:
                                         _lar_txt = (_lar_d.get('text', '') or '').strip()[:800]
                                         if _lar_txt and len(_lar_txt) > 20:
                                             _lar_tools = _lar_d.get('__tools_used', [])
-                                            _lar_ts = _fmt_t_p(_lar.created_at)
+                                            _lar_ts = _fmt_t_p_disp(_lar.created_at)
                                             _last_agent_reply_c = (
                                                 f"[{_lar_ts}] {_chosen_name}: {_lar_txt[:800]}"
                                                 + (f" [инструменты: {', '.join(_lar_tools[:6])}]" if _lar_tools else '')
@@ -9017,8 +9027,8 @@ class AnchorEngine:
                         _coord_zac_ex = 'зациклилась' if _coord_is_fem else 'зациклился'
                         _coord_zac_3p = 'зациклена' if _coord_is_fem else 'зациклен'
                         # Gender list for other agents (used in coord prompt)
-                        _other_fem_agents = [p['name'] for p in (_profiles or []) if p['name'] != _chosen_name and _detect_agent_is_female(p['name'])]
-                        _other_masc_agents = [p['name'] for p in (_profiles or []) if p['name'] != _chosen_name and not _detect_agent_is_female(p['name'])]
+                        _other_fem_agents = [p['name'] for p in (data.get('team_profiles', [])) if p['name'] != _chosen_name and _detect_agent_is_female(p['name'])]
+                        _other_masc_agents = [p['name'] for p in (data.get('team_profiles', [])) if p['name'] != _chosen_name and not _detect_agent_is_female(p['name'])]
                         _gender_note_c = ''
                         if _other_fem_agents or _other_masc_agents:
                             _gender_note_c = '\nРОД ДРУГИХ АГЕНТОВ (когда упоминаешь их в поручении):\n'
@@ -9634,6 +9644,10 @@ class AnchorEngine:
 
                             # ── Telegram-guard для coord_text: если email-only агент получает
                             # Telegram-поручение — заменяем прямо здесь, до сохранения в чат ──
+                            # Строим карту категорий возможностей агентов из team_profiles
+                            _agent_caps_categories = {}
+                            for _tp_cat in (_team_profiles or []):
+                                _agent_caps_categories[_tp_cat.get('name', '')] = set(_tp_cat.get('capabilities', []))
                             _caps_chosen_ct = _agent_caps_categories.get(_chosen_name, set())
                             if 'telegram' not in _caps_chosen_ct and _coord_text:
                                 _ct_lower_tg = _coord_text.lower()
@@ -13517,7 +13531,11 @@ class AnchorEngine:
                         _EO_diag.status.in_(['sent', 'delivered', 'opened', 'replied', 'bounced', 'failed']),
                     ).limit(200).all()
                     if _eo_all:
-                        _diag = _build_email_diagnostics(_eo_all, _email_sent, _email_reply_rate)
+                        # Вычисляем reply_rate из статусов
+                        _n_replied_diag = sum(1 for o in _eo_all if o.status == 'replied')
+                        _n_interested_diag = sum(1 for o in _eo_all if o.status == 'interested')
+                        _email_reply_rate = round((_n_replied_diag + _n_interested_diag) / max(len(_eo_all), 1) * 100, 1)
+                        _diag = self._build_email_diagnostics(_eo_all, _email_sent, _email_reply_rate)
                         if _diag:
                             _email_analytics_str = _diag
             except Exception as _ead_err:
@@ -18227,6 +18245,7 @@ class AnchorEngine:
                         session.commit()
                         _step_task_id = _step_task.id
 
+                    _assignment_health = {}
                     _hint_lines = []
                     if _loop_risk_step:
                         _gap = int(_assignment_health.get('gap', 0) or 0)
@@ -22042,18 +22061,23 @@ class AnchorEngine:
         # ── Enrich per_agent_history with delegation chains from Task table ──
         try:
             from models import Task as _Task_deleg
+            from models import UserAgent as _UA_deleg
             _deleg_tasks = session.query(_Task_deleg).filter(
                 _Task_deleg.user_id == user.id,
                 _Task_deleg.source == 'agent',
                 _Task_deleg.delegated_to_username.isnot(None),
                 _Task_deleg.created_at >= now_utc - timedelta(hours=24),
             ).order_by(_Task_deleg.created_at.desc()).limit(20).all()
+            # Кешируем агентов отдельным запросом (т.к. _team_agents_raw ещё не загружен)
+            _deleg_agents = {
+                _da.id: _da.name
+                for _da in (session.query(_UA_deleg).filter(
+                    _UA_deleg.author_id == user.id,
+                    _UA_deleg.status.in_(['active', 'paused']),
+                ).all() or [])
+            }
             for _dt in _deleg_tasks:
-                _from_name = None
-                for _p_dt in agents:
-                    if _p_dt.id == _dt.created_by_agent_id:
-                        _from_name = _p_dt.name
-                        break
+                _from_name = _deleg_agents.get(_dt.created_by_agent_id)
                 if not _from_name:
                     continue
                 _to_name = _dt.delegated_to_username or ''
@@ -24477,7 +24501,7 @@ class AnchorEngine:
                             async with http.post(
                                 user.discord_webhook,
                                 json={"content": post_text},
-                                timeout=_aiohttp_dc.ClientTimeout(total=15)
+                                timeout=aiohttp.ClientTimeout(total=15)
                             ) as resp:
                                 if resp.status in (200, 204):
                                     dc_log = AgentActivityLog(
@@ -24790,7 +24814,7 @@ class AnchorEngine:
                             async with http.post(
                                 user.discord_webhook,
                                 json={"content": post_text},
-                                timeout=_aiohttp_cc.ClientTimeout(total=15)
+                                timeout=aiohttp.ClientTimeout(total=15)
                             ) as resp:
                                 dc_ok = resp.status in (200, 204)
                 except Exception as dc_err:
