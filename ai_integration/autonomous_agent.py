@@ -3567,6 +3567,36 @@ class HybridAutonomousAgent:
                 params['title'] = (user_message or 'задача')[:80]
                 logger.info(f"[FIX_PARAMS] delegate_task: generated title from message")
 
+        if tool_name == 'send_message_to_user':
+            # AI часто использует короткие имена: to/username/recipient → recipient_username
+            if 'recipient_username' not in params:
+                for _k in ('to', 'username', 'recipient', 'user', 'target'):
+                    if _k in params:
+                        params['recipient_username'] = params.pop(_k)
+                        logger.info("[FIX_PARAMS] send_message_to_user: renamed %s → recipient_username", _k)
+                        break
+            # message/text/content → message_context
+            if 'message_context' not in params:
+                for _k in ('message', 'text', 'content', 'body', 'msg'):
+                    if _k in params:
+                        params['message_context'] = params.pop(_k)
+                        logger.info("[FIX_PARAMS] send_message_to_user: renamed %s → message_context", _k)
+                        break
+            # purpose/goal/reason → intent
+            if 'intent' not in params:
+                for _k in ('purpose', 'goal', 'reason', 'subject', 'topic'):
+                    if _k in params:
+                        params['intent'] = params.pop(_k)
+                        logger.info("[FIX_PARAMS] send_message_to_user: renamed %s → intent", _k)
+                        break
+                if 'intent' not in params:
+                    params['intent'] = 'связаться'
+            # Дефолты если всё равно нет обязательных полей
+            if not params.get('recipient_username'):
+                params['recipient_username'] = ''
+            if not params.get('message_context'):
+                params['message_context'] = params.get('intent', '')
+
         if tool_name == 'find_relevant_contacts_for_task':
             if 'description' in params and 'task_description' not in params:
                 params['task_description'] = params.pop('description')
