@@ -4167,7 +4167,7 @@ class HybridAutonomousAgent:
                 try:
                     _u_ctx = _s_ctx.query(_U_ctx).filter_by(telegram_id=user_id).first()
                     if _u_ctx:
-                        _since_ctx = _dt_ctx.now(_tz_ctx.utc) - _td_ctx(hours=2)
+                        _since_ctx = _dt_ctx.now(_tz_ctx.utc) - _td_ctx(hours=24)
                         _recent_agent = (
                             _s_ctx.query(_Intr_ctx)
                             .filter(
@@ -4176,7 +4176,7 @@ class HybridAutonomousAgent:
                                 _Intr_ctx.created_at >= _since_ctx,
                             )
                             .order_by(_Intr_ctx.created_at.desc())
-                            .limit(5)
+                            .limit(10)
                             .all()
                         )
                         if _recent_agent:
@@ -4191,12 +4191,19 @@ class HybridAutonomousAgent:
                                         _ra_txt = str(_ra_j.get('text') or _ra_txt)
                                 except Exception:
                                     pass
-                                _agent_ctx_lines.append(f"  [{_ra_name}]: {_ra_txt[:300]}")
+                                _ra_time = ''
+                                try:
+                                    _ra_time = f" ({_ra.created_at.strftime('%H:%M')})" if _ra.created_at else ''
+                                except Exception:
+                                    pass
+                                _agent_ctx_lines.append(f"  [{_ra_name}{_ra_time}]: {_ra_txt[:600]}")
                             if _agent_ctx_lines:
                                 dynamic_context += (
-                                    "\n\n[НЕДАВНИЕ СООБЩЕНИЯ АГЕНТОВ]\n"
+                                    "\n\n[СООБЩЕНИЯ АГЕНТОВ ЗА ПОСЛЕДНИЕ 24 ЧАСА]\n"
                                     + '\n'.join(_agent_ctx_lines)
-                                    + "\n→ Если пользователь отвечает на вопрос/сообщение агента — продолжай в контексте, не проси уточнить."
+                                    + "\n→ КРИТИЧНО: если пользователь отвечает на сообщение агента выше — ты УЖЕ ЗНАЕШЬ контекст."
+                                    + "\n→ НЕ пиши 'не понял контекст', 'уточните о чём вы' — отвечай по существу."
+                                    + "\n→ Тема очевидна из переписки выше — продолжай разговор, не переспрашивай."
                                 )
                 finally:
                     _s_ctx.close()
