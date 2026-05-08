@@ -15982,6 +15982,12 @@ class AnchorEngine:
             if not _plan:
                 return False
 
+            # Санитизация: AI иногда возвращает массив строк вместо массива объектов
+            _plan = [_s for _s in _plan if isinstance(_s, dict)]
+            if not _plan:
+                logger.warning("[COORD] plan has no valid dict steps after parse")
+                return False
+
             # Дедупликация плана: один агент + один инструмент для ОДНОЙ цели = бессмысленное повторение
             # Но разрешаем одному агенту использовать тот же инструмент для РАЗНЫХ целей
             _seen_agent_tool_goal: set = set()
