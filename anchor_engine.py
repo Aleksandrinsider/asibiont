@@ -16907,6 +16907,9 @@ class AnchorEngine:
                             pass
 
                     for _fbs in _fb_steps:
+                        if not isinstance(_fbs, dict):
+                            logger.warning("[COORD] fairness backfill: skip non-dict step (%s)", type(_fbs).__name__)
+                            continue
                         _fbs_agent = (_fbs.get('agent') or '').strip()
                         _fbs_task = (_fbs.get('task') or '').strip()
                         _fbs_tool = (_fbs.get('tool') or 'research_topic').strip()
@@ -17321,7 +17324,11 @@ class AnchorEngine:
                         if _nm:
                             _next_parsed = json.loads(_nm.group())
                             if _next_parsed:
-                                _step = _next_parsed[0]
+                                _next_step = _next_parsed[0]
+                                if not isinstance(_next_step, dict):
+                                    logger.warning("[COORD] dynamic next step skipped: non-dict (%s)", type(_next_step).__name__)
+                                    break
+                                _step = _next_step
                                 logger.info("[COORD] dynamic next step %d: %s → %s",
                                             _executed + 1, _step.get('agent'), _step.get('tool'))
                             else:
