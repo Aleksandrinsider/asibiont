@@ -16928,6 +16928,14 @@ class AnchorEngine:
             except Exception as _fa_err:
                 logger.debug("[COORD] fairness backfill skipped: %s", _fa_err)
 
+            # Финальный защитный слой: LLM/repair может вернуть мусорные элементы.
+            # Не даём non-dict объектам дойти до дальнейших .get(...) ниже.
+            _plan = [p for p in (_plan or []) if isinstance(p, dict)]
+            _sm_directives = [d for d in (_sm_directives or []) if isinstance(d, dict)]
+            if not _plan:
+                logger.warning("[COORD] plan normalization: no dict steps after final cleanup")
+                return False
+
             logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan])
             # Diagnostic: какие агенты в итоговом плане
             _agents_in_plan = {p.get('agent', '').strip() for p in _plan if p.get('agent', '').strip()}
@@ -16979,6 +16987,9 @@ class AnchorEngine:
             # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
             _covered_goals = {(_p.get('goal') or '').strip().lower() for _p in _plan}
             for _sd_fb in _sm_directives:
+                if not isinstance(_sd_fb, dict):
+                    logger.warning("[COORD] sm_directives skip non-dict item (%s)", type(_sd_fb).__name__)
+                    continue
                 _sd_goal_fb = (_sd_fb.get('goal') or '').strip()
                 if _sd_goal_fb.lower() not in _covered_goals:
                     logger.info("[COORD] post-filter: goal '%s' uncovered → ASI fallback", _sd_goal_fb[:40])
@@ -17011,7 +17022,7 @@ class AnchorEngine:
 
             logger.info("[COORD] user %d: plan=%s (sm_directives=%s)", user.id,
                         [(p.get('agent'), p.get('tool')) for p in _plan],
-                        [(d.get('goal', '')[:30], d.get('tool')) for d in _sm_directives])
+                        [(d.get('goal', '')[:30], d.get('tool')) for d in _sm_directives if isinstance(d, dict)])
 
             # ── Биллинг + anchor.delivered_at ПЕРЕД первым AI-вызовом ──
             from token_service import has_enough_tokens as _het_c, spend_tokens as _sp_c
