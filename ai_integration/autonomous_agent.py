@@ -5015,7 +5015,7 @@ class HybridAutonomousAgent:
             if _is_fast_convo:
                 logger.info(f"[FAST_CONVO] Skipping tools for conversational message")
                 _fc_resp = await self.call_ai(
-                    messages, use_tools=False, max_tokens=500,
+                    messages, use_tools=False, max_tokens=800,
                     api_timeout=API_TIMEOUT_NORMAL)
                 _fc_content = _fc_resp['choices'][0]['message'].get('content', '')
                 return await self._finalize_response(
@@ -5478,7 +5478,7 @@ class HybridAutonomousAgent:
             # Safety net: если вышли из цикла без return — генерируем ответ
             try:
                 final_resp = await self.call_ai(
-                    messages, use_tools=False, temperature=0.7, max_tokens=300,
+                    messages, use_tools=False, temperature=0.7, max_tokens=1000,
                     api_timeout=API_TIMEOUT_NORMAL)
                 final_text = final_resp['choices'][0]['message'].get('content') or ''
             except Exception as _safety_err:
@@ -5634,7 +5634,7 @@ class HybridAutonomousAgent:
                         {'role': 'user', 'content': user_message or 'Привет'},
                     ]
                     _fallback_resp = await self.call_ai(
-                        _fb_msgs, use_tools=False, max_tokens=300,
+                        _fb_msgs, use_tools=False, max_tokens=800,
                         api_timeout=API_TIMEOUT_NORMAL)
                     final = (_fallback_resp['choices'][0]['message'].get('content', '') or '').strip()
                 except Exception as _fb_err:
@@ -5743,7 +5743,7 @@ class HybridAutonomousAgent:
                         {'role': 'user', 'content': f'Запрос: {user_message}\n\nРезультаты:\n{_synth_data[:2000]}'},
                     ]
                     _synth_resp = await self.call_ai(
-                        _synth_msgs, use_tools=False, max_tokens=400,
+                        _synth_msgs, use_tools=False, max_tokens=800,
                         api_timeout=API_TIMEOUT_NORMAL)
                     _synth_text = (_synth_resp['choices'][0]['message'].get('content', '') or '').strip()
                     if _synth_text and len(_synth_text) > 20:
