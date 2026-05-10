@@ -5754,6 +5754,36 @@ class HybridAutonomousAgent:
                 except Exception as _synth_err:
                     logger.warning(f"[QUALITY] Synthesis call failed: {_synth_err}")
 
+        # UX guard: после reply_to_outreach_email в RU-чате не показываем длинный EN-черновик письма.
+        # Пользователю нужен статус действия, а не копия деловой переписки с подписью.
+        try:
+            _used_reply_tool = 'reply_to_outreach_email' in tools_used
+            _lang_ru_pref = (_lang_pref != 'en')
+            if _used_reply_tool and _lang_ru_pref and final:
+                import re as _re_reply_guard
+                _latin_words = len(_re_reply_guard.findall(r'\b[a-zA-Z]{4,}\b', final))
+                _has_signature = bool(_re_reply_guard.search(
+                    r'(?im)^\s*(best|regards|sincerely)\b|(?im)^\s*AI\s+Analyst\b', final
+                ))
+                _has_mail_like_body = final.count('\n') >= 5 and _latin_words >= 20
+                if _has_signature or _has_mail_like_body:
+                    final = (
+                        "Ответ по email отправлен. Я ответил(а) в текущей переписке, "
+                        "без запуска нового outreach."
+                    )
+                    logger.info("[QUALITY] reply_to_outreach_email guard: replaced verbose EN draft with RU status")
+        except Exception as _reply_guard_err:
+            logger.debug("[QUALITY] reply guard skipped: %s", _reply_guard_err)
+
+        # Финальная очистка технического мусора (включая DSML-токены вида </｜｜)
+        try:
+            from .utils import clean_technical_details as _ctd_tail
+            _clean_tail = _ctd_tail(final or '')
+            if _clean_tail and _clean_tail.strip():
+                final = _clean_tail.strip()
+        except Exception as _tail_clean_err:
+            logger.debug("[QUALITY] tail clean skipped: %s", _tail_clean_err)
+
         self._save_and_learn(user_message, user_id, execution_results, final)
         return final
 
