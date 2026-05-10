@@ -4024,6 +4024,51 @@ class HybridAutonomousAgent:
                 extracted = {k: v for k, v in params.items() if k not in ('user_id', 'session')}
                 logger.info(f"[FIX_PARAMS] Extracted: {extracted}")
 
+        # === execute_code: AI sometimes calls without 'code' parameter ===
+        elif tool_name == 'execute_code':
+            if 'code' not in params or not params.get('code'):
+                # Try alternative parameter names or extract from message
+                fallback_code = (
+                    params.pop('python_code', None) or 
+                    params.pop('script', None) or 
+                    params.pop('program', None) or
+                    params.pop('command', None)
+                )
+                if fallback_code:
+                    params['code'] = fallback_code
+                    logger.info(f"[FIX_PARAMS] execute_code: extracted code from fallback field")
+                elif user_message:
+                    # If user_message looks like Python code, use it
+                    msg_clean = (user_message or '').strip()
+                    if any(kw in msg_clean for kw in ('print(', 'for ', 'if ', 'def ', 'import ', '=')):
+                        params['code'] = msg_clean[:5000]
+                        logger.info(f"[FIX_PARAMS] execute_code: extracted code from user_message")
+                    else:
+                        # No code provided — block the call
+                        params['__skip__'] = True
+                        params['__block_error__'] = (
+                            "⛔ execute_code вызван без кода (code parameter отсутствует). "
+                            "Напиши Python-код для выполнения: вычисления, анализ данных, форматирование. "
+                            "Доступны: math, json, datetime, re, statistics. Сеть и файлы НЕ доступны."
+                        )
+                        logger.warning("[FIX_PARAMS] execute_code: blocked — no code provided")
+                        return params
+                else:
+                    # Absolutely no code found
+                    params['__skip__'] = True
+                    params['__block_error__'] = (
+                        "⛔ execute_code вызван без кода. Укажи Python-код для выполнения."
+                    )
+                    logger.warning("[FIX_PARAMS] execute_code: blocked — no code source found")
+                    return params
+            # Ensure timeout is within bounds
+            if 'timeout' in params:
+                try:
+                    timeout_val = int(params.get('timeout', 10))
+                    params['timeout'] = min(max(timeout_val, 1), 30)
+                except (ValueError, TypeError):
+                    params['timeout'] = 10
+
         return params
 
     # ===== BILINGUAL TOOL INSTRUCTIONS =====
