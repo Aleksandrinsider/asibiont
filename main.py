@@ -7957,29 +7957,11 @@ async def api_interactions_handler(request):
         # Filter interactions:
         # 1. Skip cleared history
         # 2. Skip empty content
-        # 3. Skip explicit noise patterns (meaningless short AI filler messages)
+        # 3. User requested full AI-chat transparency: do not hide noise/internal AI messages
         # 4. Deduplicate only within a 5-minute window (prevents burst duplicates,
         #    but allows same message content from different autopilot cycles to show)
-        _NOISE_PATTERNS = (
-            'анализирует цели...',   # intro "X анализирует цели..." — only noise, result follows
-            'Задача передана',       # таймаут-placeholder из office_engine
-            'результат будет позже', # то же
-        )
-        # Internal coordinator/assignment anchor types — saved for AI context, hidden from user
-        _HIDDEN_ANCHOR_TYPES = {
-            # coordinator_plan        — ВИДИМ (стартовый анонс «Запускаю автопилот…»)
-            # coordinator_assignment  — ВИДИМ (ASI даёт задание агентам — показываем как директиву)
-            # coordinator_result      — ВИДИМ (результаты шагов агентов)
-            # coordinator_summary     — ВИДИМ (итоговый отчёт цикла)
-            # agent_chain_transfer    — ВИДИМ (межагентское общение)
-            # agent_chain_continue    — ВИДИМ (агент продолжает работу)
-            # asi_director_review     — ВИДИМ (ASI комментирует работу агента)
-            # autopilot_escalation    — ВИДИМ (предупреждения о стагнации)
-            'coordinator_agent_request',  # запрос агента на интеграцию (внутренний)
-            'coordinator_intg_recommend', # рекомендация интеграции (внутренний)
-            'goal_autopilot_review',      # проверка результата цикла (внутренний)
-            'asi_self_analysis',          # «Анализирую цели…» (внутренний)
-        }
+        _NOISE_PATTERNS = ()
+        _HIDDEN_ANCHOR_TYPES = set()
         filtered_interactions = []
         # Dedup window: (message_type, full-content-hash) → last seen timestamp
         _dedup_recent: dict = {}  # key → timestamp of last occurrence
@@ -8005,7 +7987,7 @@ async def api_interactions_handler(request):
                         # coordinator_assignment = показываем (ASI даёт задание агенту — видна «жизнь» офиса)
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
-            # Skip noise messages (very short AI/agent messages with template text)
+            # Skip noise messages (disabled by user request: show all AI chat messages)
             _check_text_norm = _check_text.strip().lower()
             if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text_norm) < 80:
                 # Be strict: hide only exact short placeholders, not meaningful short statuses.
