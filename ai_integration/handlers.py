@@ -3167,7 +3167,8 @@ async def delegate_task(
                         logger.info(f"[DELEGATE] Inline exec result for {_agent_name}: {len(_result or '')} chars")
                     except _asyncio_dt.TimeoutError:
                         logger.warning(f"[DELEGATE] agent exec timeout ({_agent_name}), 60s limit")
-                        _result = f"Задача передана {_agent_name}, результат будет чуть позже."
+                        # Важно: не писать "Задача передана X" от имени самого X — это выглядит нелогично.
+                        _result = "Принял задачу в работу, вернусь с результатом чуть позже."
                     except Exception as _exec_err:
                         logger.warning(f"[DELEGATE] agent exec error ({_agent_name}): {_exec_err}", exc_info=True)
                         _result = None
@@ -3213,6 +3214,7 @@ async def delegate_task(
                     elif _result_stripped.lower() in (
                         'задачу выполнил.', 'задачу выполнила.', 'данных нет.', 'результат будет чуть позже.',
                         'задачу принял.', 'принял в работу.', 'задачу приняла.',
+                        'принял задачу в работу, вернусь с результатом чуть позже.',
                     ):
                         _needs_rework = True
                     elif _result_stripped.startswith('BLOCKED:'):
