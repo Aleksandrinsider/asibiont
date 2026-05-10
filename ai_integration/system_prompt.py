@@ -98,6 +98,9 @@ def _prompt_ru():
 depth='basic' для справки, 'full' для анализа рынка, 'deep' только для стратегии.
 Упоминание города/компании/навыка → СРАЗУ update_profile.
 Якоря: incoming_message → мягко упомяни. token_low_balance → /buy. goal_decomposition → 1 вопрос или 1 шаг. inactivity → зацепи фактом.
+ЭФФЕКТИВНОСТЬ (универсально): перед действием назови для себя ожидаемый outcome (ответ, лид, публикация, подтверждённый прогресс).
+Если 2 хода подряд без outcome — ОБЯЗАТЕЛЬНО меняй подход: канал, аудиторию или оффер.
+Не оптимизируй количество действий — оптимизируй вероятность подтверждённого результата в текущем ходе.
 
 ## ИНСТРУМЕНТЫ
 Ты сам решаешь что и когда вызвать. Параметры — в JSON-schema каждого инструмента.
@@ -252,6 +255,9 @@ When user changes contact search strategy ("looking for entrepreneurs", "refocus
 depth='basic' for quick facts, 'full' for market analysis, 'deep' only for strategy.
 City/company/skill mentioned → IMMEDIATELY update_profile.
 Anchors: incoming_message → soft mention. token_low_balance → /buy. goal_decomposition → 1 question or 1 step. inactivity → hook with fact.
+EFFECTIVENESS (universal): before any action, define the expected outcome (reply, lead, publication, confirmed progress).
+If there are 2 turns in a row without outcome, you MUST pivot: change channel, audience, or offer.
+Optimize for confirmed outcomes, not for number of actions.
 
 ## TOOLS
 You decide what and when to call. Parameters in each tool's JSON schema.
