@@ -16135,6 +16135,10 @@ class AnchorEngine:
                 _rotation_filtered = []
                 _agent_rotation_count: dict = {}
                 for _prf in _plan:
+                    # Guard: skip non-dict steps
+                    if not isinstance(_prf, dict):
+                        logger.warning("[COORD] rotation-filter loop: skip non-dict step (%s)", type(_prf).__name__)
+                        continue
                     _prf_agent = (_prf.get('agent') or '').strip()
                     _prf_tool = (_prf.get('tool') or '').strip().lower()
                     _bans_for_agent = _agent_cycle_bans.get(_prf_agent.lower(), set())
@@ -16168,6 +16172,10 @@ class AnchorEngine:
 
             _plan_cap_fixed = []
             for _pcf in _plan:
+                # Guard: skip non-dict steps from any LLM output anomalies
+                if not isinstance(_pcf, dict):
+                    logger.warning("[COORD] cap-mismatch loop: skip non-dict step (%s)", type(_pcf).__name__)
+                    continue
                 _pcf_agent = (_pcf.get('agent') or '').strip()
                 _pcf_task_l = (_pcf.get('task') or '').lower()
                 _pcf_tool_l = (_pcf.get('tool') or '').lower()
@@ -16203,6 +16211,10 @@ class AnchorEngine:
             _goal_titles_lower = {g['title'].lower().strip() for g in _goals if g.get('title')}
             _plan_goal_filtered = []
             for _pgf in _plan:
+                # Guard: skip non-dict steps
+                if not isinstance(_pgf, dict):
+                    logger.warning("[COORD] goal-filter loop: skip non-dict step (%s)", type(_pgf).__name__)
+                    continue
                 _pgf_task = (_pgf.get('task') or '').lower().strip()
                 _pgf_task_clean = _pgf_task.rstrip('.!?')
                 _is_goal_copy = False
@@ -16227,6 +16239,10 @@ class AnchorEngine:
             _seen_campaign_tools: set = set()
             _plan_campaign_deduped = []
             for _pcd in _plan:
+                # Guard: skip non-dict steps
+                if not isinstance(_pcd, dict):
+                    logger.warning("[COORD] campaign-dedup loop: skip non-dict step (%s)", type(_pcd).__name__)
+                    continue
                 _pcd_tool = (_pcd.get('tool') or '').strip().lower()
                 if _pcd_tool in _SINGLETON_CAMPAIGN_TOOLS:
                     if _pcd_tool in _seen_campaign_tools:
@@ -16241,6 +16257,10 @@ class AnchorEngine:
             if _plan and _goal_titles_lower:
                 _plan_active_goals = []
                 for _pag in _plan:
+                    # Guard: skip non-dict steps
+                    if not isinstance(_pag, dict):
+                        logger.warning("[COORD] active-goals loop: skip non-dict step (%s)", type(_pag).__name__)
+                        continue
                     _pag_goal = (_pag.get('goal') or '').lower().strip()
                     if not _pag_goal or any(
                         len(set(_pag_goal.split()) & set(_gt.split())) / max(len(set(_gt.split())), 1) > 0.5
@@ -16262,6 +16282,10 @@ class AnchorEngine:
                 })
                 _plan_rss_fixed = []
                 for _prss in _plan:
+                    # Guard: skip non-dict steps
+                    if not isinstance(_prss, dict):
+                        logger.warning("[COORD] rss-fixed loop: skip non-dict step (%s)", type(_prss).__name__)
+                        continue
                     _prss_agent = (_prss.get('agent') or '').strip()
                     _prss_task_l = (_prss.get('task') or '').lower()
                     _prss_tool_l = (_prss.get('tool') or '').lower()
@@ -16296,6 +16320,10 @@ class AnchorEngine:
                 _recent_done_lower = _recent_done_str.lower()
                 _plan_content_deduped = []
                 for _pcd in _plan:
+                    # Guard: skip non-dict steps
+                    if not isinstance(_pcd, dict):
+                        logger.warning("[COORD] content-dedup loop: skip non-dict step (%s)", type(_pcd).__name__)
+                        continue
                     _pcd_task = (_pcd.get('task') or '').lower()
                     # Извлекаем ключевые слова (>4 символов) для нечёткого сравнения
                     _pcd_words = {w for w in _pcd_task.split() if len(w) > 4}
@@ -16562,6 +16590,10 @@ class AnchorEngine:
                 if any(_agent_banned_concepts.values()):
                     _plan_sid_filtered = []
                     for _psid in _plan:
+                        # Guard: skip non-dict steps
+                        if not isinstance(_psid, dict):
+                            logger.warning("[COORD] semantic-dedup loop: skip non-dict step (%s)", type(_psid).__name__)
+                            continue
                         _psid_agent = (_psid.get('agent') or '').lower().strip()
                         _psid_task = (_psid.get('task') or '').lower()
                         _banned_kws = _agent_banned_concepts.get(_psid_agent, set())
@@ -16594,6 +16626,10 @@ class AnchorEngine:
             _plan_normalized = []
             import re as _re_norm_plan
             for _p_norm in _plan:
+                # Guard: skip non-dict steps (critical for avoiding .get() AttributeError)
+                if not isinstance(_p_norm, dict):
+                    logger.warning("[COORD] normalize loop: skip non-dict step (%s)", type(_p_norm).__name__)
+                    continue
                 _ag_norm = (_p_norm.get('agent') or '').strip()
                 _ag_norm_l = _ag_norm.lower()
                 _tool_norm = (_p_norm.get('tool') or '').strip().lower()
@@ -16952,9 +16988,9 @@ class AnchorEngine:
                 logger.warning("[COORD] plan normalization: no dict steps after final cleanup")
                 return False
 
-            logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan])
+            logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan if isinstance(p, dict)])
             # Diagnostic: какие агенты в итоговом плане
-            _agents_in_plan = {p.get('agent', '').strip() for p in _plan if p.get('agent', '').strip()}
+            _agents_in_plan = {p.get('agent', '').strip() for p in _plan if isinstance(p, dict) and p.get('agent', '').strip()}
             _all_agent_names = {p.get('name', '').strip() for p in _profiles if p.get('name', '').strip()}
             _missing_from_plan = _all_agent_names - _agents_in_plan
             if _missing_from_plan:
@@ -17022,6 +17058,10 @@ class AnchorEngine:
             _plan_seen_agents: set = set()
             _plan_capped: list = []
             for _cp in _plan:
+                # Guard: skip non-dict steps
+                if not isinstance(_cp, dict):
+                    logger.warning("[COORD] hard-cap loop: skip non-dict step (%s)", type(_cp).__name__)
+                    continue
                 _cp_ag = (_cp.get('agent') or '').strip()
                 if not _cp_ag:
                     continue
@@ -17037,7 +17077,7 @@ class AnchorEngine:
                 _plan = _plan_capped
 
             logger.info("[COORD] user %d: plan=%s (sm_directives=%s)", user.id,
-                        [(p.get('agent'), p.get('tool')) for p in _plan],
+                        [(p.get('agent'), p.get('tool')) for p in _plan if isinstance(p, dict)],
                         [(d.get('goal', '')[:30], d.get('tool')) for d in _sm_directives if isinstance(d, dict)])
 
             # ── Биллинг + anchor.delivered_at ПЕРЕД первым AI-вызовом ──
@@ -17254,6 +17294,16 @@ class AnchorEngine:
                 logger.debug("[COORD] coord_user_fin_amounts error: %s", _cufe)
 
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
+            
+            # FINAL DEFENSIVE CHECK: ensure all steps in queue are dicts before execution
+            _plan_contains_non_dict = [i for i, s in enumerate(_step_queue) if not isinstance(s, dict)]
+            if _plan_contains_non_dict:
+                logger.warning("[COORD] ⚠️ CRITICAL: _step_queue contains %d non-dict items at indices %s. Filtering...", 
+                               len(_plan_contains_non_dict), _plan_contains_non_dict[:10])
+                _step_queue = [s for s in _step_queue if isinstance(s, dict)]
+                if not _step_queue:
+                    logger.error("[COORD] ⛔ FATAL: all plan steps are non-dict after filtering!")
+                    return False
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
             _retry_done: dict = {}  # retry-флаги локальны для цикла (не persist между циклами)
 
