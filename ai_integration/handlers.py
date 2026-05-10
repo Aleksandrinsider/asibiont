@@ -45,6 +45,16 @@ _FEMALE_AGENT_NAMES = {
     'фаина', 'элина', 'элла', 'эмма', 'юлия', 'яна', 'ярослава',
 }
 
+# ── Message intent labels ──
+_INTENT_LABELS = {
+    'meeting': ' встреча',
+    'collaboration': ' сотрудничество',
+    'idea': ' идея',
+    'project_invite': ' приглашение в проект',
+    'question': ' вопрос',
+    'reply': ' ответ',
+}
+
 def _is_fem_agent(name: str) -> bool:
     """Определяет женский ли род агента по имени."""
     name = (name or '').strip().lower()
@@ -11306,7 +11316,7 @@ async def send_message_to_user(
         ).first()
         if same_intent_recent:
             sent_str = same_intent_recent.created_at.strftime('%H:%M') if same_intent_recent.created_at else '?'
-            return (f"⏸ Агент уже отправлял сообщение @{recipient_clean} с целью «{intent_labels.get(intent, intent)}» "
+            return (f"⏸ Агент уже отправлял сообщение @{recipient_clean} с целью «{_INTENT_LABELS.get(intent, intent)}» "
                     f"в {sent_str} (меньше 6 часов назад). Повторная отправка заблокирована.")
         import asyncio
         
@@ -11321,7 +11331,7 @@ async def send_message_to_user(
         
         recipient_name = recipient.first_name or recipient.username or "Пользователь"
         
-        intent_label = intent_labels.get(intent, intent)
+        intent_label = _INTENT_LABELS.get(intent, intent)
         
         # Генерируем через DeepSeek
         generated_message = await _generate_user_message_async(
@@ -12121,15 +12131,7 @@ def get_incoming_messages(
             sender = _inbox_sender_by_id.get(msg.sender_id)
             sender_name = f"@{sender.username}" if sender and sender.username else "Пользователь"
             
-            intent_labels = {
-                'meeting': ' встреча',
-                'collaboration': ' сотрудничество', 
-                'idea': ' идея',
-                'project_invite': ' приглашение в проект',
-                'question': ' вопрос',
-                'reply': ' ответ'
-            }
-            intent_str = intent_labels.get(msg.intent, msg.intent or '')
+            intent_str = _INTENT_LABELS.get(msg.intent, msg.intent or '')
             
             time_ago = ""
             if msg.created_at:

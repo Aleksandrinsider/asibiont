@@ -16088,6 +16088,10 @@ class AnchorEngine:
             _phase_filtered = []
             _agent_kept: set = set()
             for _pf_step in _plan:
+                # Safety guard: skip non-dict steps (should not occur after initial sanitization, but defensive)
+                if not isinstance(_pf_step, dict):
+                    logger.warning("[COORD] phase-filter: skip non-dict step (%s)", type(_pf_step).__name__)
+                    continue
                 _pf_agent = (_pf_step.get('agent') or '').strip()
                 _pf_tool = (_pf_step.get('tool') or '').strip().lower()
                 _pf_goal_type = _crd_goal_type({'title': (_pf_step.get('goal') or '')})
@@ -16750,6 +16754,10 @@ class AnchorEngine:
                 _re_qf.IGNORECASE,
             )
             for _qf_step in _plan:
+                # Safety guard: skip non-dict steps
+                if not isinstance(_qf_step, dict):
+                    logger.warning("[COORD] quality-filter: skip non-dict step (%s)", type(_qf_step).__name__)
+                    continue
                 _qf_task = (_qf_step.get('task') or '').strip()
                 _qf_tool = (_qf_step.get('tool') or '').strip()
                 if _VAGUE_TASK_RE.search(_qf_task) and len(_qf_task) < 60:
@@ -16761,6 +16769,10 @@ class AnchorEngine:
             # Принцип: ИИ должен ДУМАТЬ от профиля, а не заполнять шаблон — мы лишь даём ему контекст.
             _profiles_by_name_qf = {p.get('name', '').strip().lower(): p for p in _profiles}
             for _qf2_step in _plan:
+                # Safety guard: skip non-dict steps
+                if not isinstance(_qf2_step, dict):
+                    logger.warning("[COORD] quality-enrich: skip non-dict step (%s)", type(_qf2_step).__name__)
+                    continue
                 _qf2_task = (_qf2_step.get('task') or '').strip()
                 _qf2_tool = (_qf2_step.get('tool') or '').lower().strip()
                 _qf2_goal = (_qf2_step.get('goal') or '').strip()
@@ -17250,6 +17262,10 @@ class AnchorEngine:
                 # ── Получаем следующий шаг ──
                 if _step_queue:
                     _step = _step_queue.pop(0)
+                    # Guard: skip non-dict steps that may come from LLM mixed-type arrays
+                    if not isinstance(_step, dict):
+                        logger.warning("[COORD] static step skipped: non-dict (%s)", type(_step).__name__)
+                        continue
                 elif _executed > 0 and _prev_steps_context:
                     # ── Динамическое решение следующего шага на основе накопленных результатов ──
                     try:
