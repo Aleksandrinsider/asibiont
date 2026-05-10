@@ -15993,6 +15993,12 @@ class AnchorEngine:
             if not _plan:
                 return False
 
+            # Диагностика: логируем тип каждого элемента если есть non-dict
+            _non_dicts = [(_i, type(_s).__name__, repr(_s)[:100]) for _i, _s in enumerate(_plan) if not isinstance(_s, dict)]
+            if _non_dicts:
+                logger.warning("[COORD] 🔍 DIAGNOSTIC: _plan contains %d non-dict items: %s", 
+                               len(_non_dicts), _non_dicts[:5])
+
             # Санитизация: AI иногда возвращает массив строк вместо массива объектов
             _plan = [_s for _s in _plan if isinstance(_s, dict)]
             if not _plan:
