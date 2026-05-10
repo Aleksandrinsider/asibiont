@@ -9307,9 +9307,16 @@ except Exception as e:
 
             const cleanTitle = _tlCleanText(a.title, true);
 
-            // Для autopilot/coordinator показываем result (итог), а не content (промпт)
-            const _isAutoType = a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary';
-            let _rawDisplay = (_isAutoType && a.result) ? a.result : (a.content || a.result || '');
+            // Для coordinator_summary показываем полный content (result может быть укороченным превью).
+            // Для goal_autopilot_dispatch оставляем приоритет result как более человекочитаемого итога.
+            let _rawDisplay = '';
+            if (a.activity_type === 'coordinator_summary') {
+                _rawDisplay = a.content || a.result || '';
+            } else if (a.activity_type === 'goal_autopilot_dispatch') {
+                _rawDisplay = a.result || a.content || '';
+            } else {
+                _rawDisplay = a.content || a.result || '';
+            }
             // Человекочитаемые замены технических результатов
             if (_rawDisplay === 'timeout/process_restart') _rawDisplay = 'Рабочий цикл был прерван перезапуском сервера. Агенты продолжат работу в следующем цикле.';
             else if (_rawDisplay === 'no_new_results') _rawDisplay = '';  // не показываем "нет новых результатов" — и так видно из заголовка
