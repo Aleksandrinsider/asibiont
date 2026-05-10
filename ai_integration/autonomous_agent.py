@@ -11710,6 +11710,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         agent.get('name', '?'), len(_final_text or ''), _tools_used[:5], _total_ap_tokens,
         'set' if _early_text is not None else 'None',
     )
+    
+    # ── Капитализация первой буквы перед возвратом ──
+    # LLM иногда генерирует ответ со строчной буквы — нормализуем
+    if _final_text and len(_final_text) > 0 and _final_text[0].isalpha() and _final_text[0].islower():
+        _final_text = _final_text[0].upper() + _final_text[1:]
+    
     return _final_text, _tools_used, _total_ap_tokens
 
 
