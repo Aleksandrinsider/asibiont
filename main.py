@@ -9623,19 +9623,8 @@ async def api_reports_handler(request):
                     ).count()
                     today_start_p = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
                     today_posts = [p for p in user_posts if p.created_at and p.created_at.replace(tzinfo=dt_timezone.utc) >= today_start_p]
-                    today_post_ids = [p.id for p in today_posts]
                     post_stats['total_today'] = len(today_posts)
-                    if today_post_ids:
-                        post_stats['likes_today'] = session_db.query(PostLike).filter(
-                            PostLike.post_id.in_(today_post_ids)
-                        ).count()
-                        post_stats['views_today'] = session_db.query(PostView).filter(
-                            PostView.post_id.in_(today_post_ids)
-                        ).count()
-                        post_stats['comments_today'] = session_db.query(Comment).filter(
-                            Comment.post_id.in_(today_post_ids)
-                        ).count()
-                    # Also count likes/views/comments received today on ANY of user's posts
+                    # Likes/views/comments received today on ANY of user's posts (last 7d)
                     post_stats['likes_today'] = session_db.query(PostLike).filter(
                         PostLike.post_id.in_(post_ids),
                         PostLike.created_at >= today_start_p
@@ -9793,6 +9782,7 @@ async def api_reports_handler(request):
                     today_start_d = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
                     delegated_to_me_today = session_db.query(Task).filter(
                         Task.delegated_to_username == my_username,
+                        Task.delegation_status.in_(['pending', 'accepted', 'in_progress']),
                         Task.created_at >= today_start_d
                     ).count()
             except Exception as e:

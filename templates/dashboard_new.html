@@ -10396,7 +10396,12 @@ except Exception as e:
                     const agentHeader = document.createElement('div');
                     agentHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                     const _acFiltered = agentActivities.filter(a => {
-                        if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress'].includes(a.status)) return false;
+                        // Mirror renderTimeline filters so the count matches what is actually shown
+                        const _HIDDEN = new Set(['agent_task', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated']);
+                        if (_HIDDEN.has(a.activity_type)) return false;
+                        if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered', 'empty_result', 'no_action'].includes(a.status)) return false;
+                        if (a.activity_type === 'coordinator_summary' && ['empty_cycle', 'no_new_results'].includes(a.result)) return false;
+                        if (a.activity_type === 'run_agent_action' && a.status !== 'completed') return false;
                         return true;
                     });
                     const _ac = _acFiltered.length;
