@@ -179,22 +179,7 @@
         .message-text a { color: #068487; text-decoration: underline; }
         .message-text img { width: 550px; height: 550px; object-fit: cover; border-radius: 8px; display: block; margin: 8px 0; max-width: 100%; }
 
-        /* ASI -> агент: визуально выделяем как поручение, а не обычный ответ */
-        .message.agent-delegation .message-text {
-            background: #EEF9F9;
-            border: 1px solid #B9E2E3;
-            border-radius: 8px;
-            padding: 8px 10px;
-        }
-        .message.agent-delegation .delegation-label {
-            display: inline-block;
-            margin-bottom: 4px;
-            color: #0B6D70;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-            text-transform: uppercase;
-        }
+        .message.agent-delegation .delegation-label { display: none; }
 
         /* Hide 'сегодня/today' label on mobile/tablet in activity stats */
         @media (max-width: 1024px) {
