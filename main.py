@@ -10667,6 +10667,8 @@ async def telegram_unlink_handler(request):
                 return web.json_response({'error': 'Нельзя отвязать единственный аккаунт'}, status=400)
             user.telegram_id = -user.discord_id  # Переводим на pseudo telegram_id
             user.username = None
+            if hasattr(user, 'telegram_channel'):
+                user.telegram_channel = None
             session_db.commit()
             session['user_id'] = user.telegram_id
             return web.json_response({'ok': True})
@@ -10693,6 +10695,14 @@ async def discord_unlink_handler(request):
                 return web.json_response({'error': 'Discord not linked'}, status=400)
             user.discord_id = None
             user.discord_username = None
+            if hasattr(user, 'discord_webhook'):
+                user.discord_webhook = None
+            if hasattr(user, 'discord_server_name'):
+                user.discord_server_name = None
+            if hasattr(user, 'discord_guild_id'):
+                user.discord_guild_id = None
+            if hasattr(user, 'discord_channel_id'):
+                user.discord_channel_id = None
             session_db.commit()
             return web.json_response({'ok': True})
         finally:
