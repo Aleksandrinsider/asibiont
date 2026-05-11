@@ -4526,6 +4526,59 @@ try:
 except Exception as e:
     print('Ошибка Bybit P2P: ' + str(e))`
             },
+            p2p_arbitrage: {
+                name: 'P2P Арбитраж (Bybit P2P vs EXMO)',
+                fields: [
+                    {k:'ARB_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
+                    {k:'ARB_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
+                    {k:'ARB_MIN_PROFIT', label:'Мин. профит для сигнала (руб. на 1 монету)', ph:'1.5', t:'text', opt:true}
+                ],
+                hint: 'Сравнивает цены Bybit P2P (покупка) и EXMO Spot (продажа). Показывает, есть ли арбитраж: купить дёшево на P2P, продать дороже на бирже. Оба API бесплатны и работают без ключей.',
+                code: `import urllib.request, json, os
+COIN = os.environ.get('ARB_COIN', 'USDT')
+FIAT = os.environ.get('ARB_FIAT', 'RUB')
+MIN_PROFIT = float(os.environ.get('ARB_MIN_PROFIT', '1.0') or '1.0')
+try:
+    # --- Bybit P2P: лучшая цена покупки (min ask у продавцов) ---
+    body_bb = json.dumps({"tokenId": COIN, "currencyId": FIAT, "payment": [], "side": "0", "size": "10", "page": "1", "amount": ""}).encode()
+    req_bb = urllib.request.Request('https://api2.bybit.com/fiat/otc/item/online', data=body_bb, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req_bb, timeout=15) as r:
+        bb_data = json.loads(r.read().decode())
+    bb_asks = [float(i.get('price', 0)) for i in bb_data.get('result', {}).get('items', []) if float(i.get('price', 0)) > 0]
+    bybit_best_buy = min(bb_asks) if bb_asks else 0
+except Exception as e:
+    bybit_best_buy = 0; print('Ошибка Bybit P2P: ' + str(e))
+try:
+    # --- EXMO Spot: лучшая цена продажи (max bid покупателей на бирже) ---
+    pair = COIN + '_' + FIAT
+    url_ex = 'https://api.exmo.com/v1.1/order_book/?pair=' + pair
+    req_ex = urllib.request.Request(url_ex, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req_ex, timeout=10) as r:
+        ex_data = json.loads(r.read().decode())
+    exmo_best_sell = float(ex_data.get(pair, {}).get('bid_top', 0))
+    exmo_best_ask  = float(ex_data.get(pair, {}).get('ask_top', 0))
+except Exception as e:
+    exmo_best_sell = 0; exmo_best_ask = 0; print('Ошибка EXMO: ' + str(e))
+print('=== P2P Арбитраж: Bybit P2P → EXMO Spot ===')
+print('Купить ' + COIN + ' на Bybit P2P: ' + (str(round(bybit_best_buy, 2)) + ' ' + FIAT if bybit_best_buy else 'нет данных'))
+print('Продать ' + COIN + ' на EXMO Spot: ' + (str(round(exmo_best_sell, 2)) + ' ' + FIAT + ' (bid)' if exmo_best_sell else 'нет данных'))
+if bybit_best_buy and exmo_best_sell:
+    profit = round(exmo_best_sell - bybit_best_buy, 2)
+    pct    = round(profit / bybit_best_buy * 100, 2)
+    sign   = '+' if profit >= 0 else ''
+    print('Профит на 1 ' + COIN + ': ' + sign + str(profit) + ' ' + FIAT + ' (' + sign + str(pct) + '%)')
+    if profit >= MIN_PROFIT:
+        print('\n✅ АРБИТРАЖ: купи на Bybit P2P по ' + str(bybit_best_buy) + ', продай на EXMO по ' + str(exmo_best_sell) + ' → +' + str(profit) + ' ' + FIAT + '/USDT')
+    else:
+        print('📊 Арбитраж невыгоден (профит ' + str(profit) + ' < порог ' + str(MIN_PROFIT) + ' ' + FIAT + ')')
+if exmo_best_ask and bybit_best_buy:
+    print('\n--- Обратная ветка: EXMO Spot → Bybit P2P ---')
+    profit2 = round(bybit_best_buy - exmo_best_ask, 2)
+    if profit2 > 0:
+        print('Купи на EXMO по ' + str(exmo_best_ask) + ', продай на Bybit P2P по ~' + str(bybit_best_buy) + ' → +' + str(profit2) + ' ' + FIAT + '/USDT')
+    else:
+        print('Обратный арбитраж невыгоден (' + str(profit2) + ' ' + FIAT + ')')`
+            },
             binance_spot: {
                 name: 'Binance Spot (торговля / баланс)',
                 fields: [
@@ -7716,6 +7769,7 @@ except Exception as e:
             coingecko:       ['get_coin_price', 'get_market_cap'],
             binance_p2p:     ['check_p2p_spread', 'monitor_p2p'],
             bybit_p2p:       ['check_p2p_spread', 'monitor_p2p'],
+            p2p_arbitrage:   ['check_arbitrage', 'check_all'],
             binance_spot:    ['get_price', 'get_balance', 'place_order', 'get_open_orders'],
             jira:            ['jira_issues', 'create_jira_issue'],
             calendly:        ['get_events', 'check_calendly'],
@@ -8379,6 +8433,7 @@ except Exception as e:
                             <option value="coingecko">CoinGecko (крипто, без ключа)</option>
                             <option value="binance_p2p">Binance P2P</option>
                             <option value="bybit_p2p">Bybit P2P</option>
+                            <option value="p2p_arbitrage">P2P Арбитраж (Bybit vs EXMO)</option>
                             <option value="binance_spot">Binance Spot (торговля / баланс)</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
