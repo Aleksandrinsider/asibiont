@@ -10281,13 +10281,47 @@ class AnchorEngine:
                     await asyncio.sleep(2)
                     # Инжектируем конкретное поручение координатора в начало task_text —
                     # агент должен следовать ЭТОЙ инструкции, а не абстрактному обзору целей.
+
+                    # ── Незакрытые задачи ЭТОГО агента (от предыдущих циклов) ──
+                    # Агент видит что он сам ставил и не закрыл → должен либо complete_task, либо поменять подход
+                    _agent_pending_inject = ''
+                    try:
+                        from models import Task as _T_pend
+                        _pend_cutoff = datetime.now(timezone.utc) - timedelta(hours=72)
+                        _agent_pending = session.query(_T_pend).filter(
+                            _T_pend.user_id == user.id,
+                            _T_pend.source == 'agent',
+                            _T_pend.created_by_agent_id == agent_data.get('id'),
+                            _T_pend.status.in_(['pending', 'in_progress']),
+                            _T_pend.created_at >= _pend_cutoff,
+                        ).order_by(_T_pend.created_at.asc()).limit(5).all()
+                        if _agent_pending:
+                            _pend_lines = []
+                            for _pt in _agent_pending:
+                                _age_h = int((datetime.now(timezone.utc) - (_pt.created_at.replace(tzinfo=timezone.utc) if _pt.created_at.tzinfo is None else _pt.created_at)).total_seconds() / 3600)
+                                _pend_lines.append(f'  - [id={_pt.id}] «{_pt.title[:80]}» (висит {_age_h}ч)')
+                            _agent_pending_inject = (
+                                "⚠️ ТВОИ НЕЗАКРЫТЫЕ ЗАДАЧИ (ты создавал — не закрыты):\n"
+                                + "\n".join(_pend_lines)
+                                + "\n\nДля КАЖДОЙ задачи из списка ПРЯМО СЕЙЧАС:"
+                                "\n• Если сделал или сделал частично — вызови complete_task(task_id=...) и отчитайся что именно сделал."
+                                "\n• Если задача заблокирована или нет данных — вызови complete_task(task_id=...) с пометкой почему, и создай ДРУГУЮ задачу с иным подходом."
+                                "\n• Если задача ещё актуальна и ты можешь сделать прямо сейчас — сделай и закрой."
+                                "\nНЕ оставляй задачи висеть. Каждый цикл = прогресс + закрытие.\n\n"
+                            )
+                    except Exception as _pend_inj_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] pending inject failed: %s", _pend_inj_err)
+
                     if _coord_text and not _skip_coord and len(_coord_text.strip()) > 15:
                         _coord_inject = (
                             f"🎯 ПОРУЧЕНИЕ КООРДИНАТОРА (выполни это ПЕРВЫМ ДЕЛОМ):\n"
                             f"{_coord_text.strip()[:1200]}\n\n"
                             "Сначала выполни это поручение своими инструментами — потом контекст целей.\n\n"
                         )
-                        task_text = _coord_inject + task_text
+                        task_text = _agent_pending_inject + _coord_inject + task_text
+                    else:
+                        if _agent_pending_inject:
+                            task_text = _agent_pending_inject + task_text
                     # Ограничиваем task_text — оставляем достаточно для контекста
                     # 8000 вместо 4000: coord inject ~850 симв. + нужен полный autopilot prompt
                     _task_trimmed = task_text[:8000] if len(task_text) > 8000 else task_text
@@ -10405,10 +10439,14 @@ class AnchorEngine:
                     logger.info("[ANCHOR-AUTOPILOT] billed user %d: %d tokens (%d DeepSeek-tok)", user.id, _dynamic_cost, _cycle_tokens)
 
                 # ── Обновляем задачу в «Поручения агентам» результатом ──
-                if _ap_task_id and (result or '').strip():
+                # Закрываем ВСЕГДА — задача не должна висеть in_progress после выполнения цикла
+                if _ap_task_id:
                     try:
                         from ai_integration.autonomous_agent import _update_agent_delegation_task as _uadt
-                        _uadt(_ap_task_id, (result or '')[:1000])
+                        _ap_result_summary = (result or '').strip()
+                        if not _ap_result_summary:
+                            _ap_result_summary = 'Цикл завершён — активных действий не потребовалось'
+                        _uadt(_ap_task_id, _ap_result_summary[:1000])
                     except Exception as _uadt_err:
                         logger.debug("[ANCHOR-AUTOPILOT] delegation task update skipped: %s", _uadt_err)
 
