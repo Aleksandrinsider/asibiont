@@ -4540,13 +4540,26 @@ TO_CURR   = os.environ.get('BC_TO', 'SBER').strip().upper()
 TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
 # BestChange публичный архив (пробуем два известных URL)
 def _bc_download():
-    for url in ['https://www.bestchange.ru/check/bm.zip', 'https://www.bestchange.ru/export/bm.zip']:
+    _hdrs = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/zip,application/octet-stream,*/*',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+        'Referer': 'https://www.bestchange.ru/',
+        'Connection': 'keep-alive',
+    }
+    for url in ['https://www.bestchange.ru/check/bm.zip', 'https://www.bestchange.ru/bm.zip']:
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': '*/*', 'Referer': 'https://www.bestchange.ru/'})
-            with urllib.request.urlopen(req, timeout=20) as r:
-                return r.read()
-        except Exception: continue
-    raise Exception('Не удалось загрузить bm.zip — bestchange.ru недоступен или URL изменился')
+            req = urllib.request.Request(url, headers=_hdrs)
+            with urllib.request.urlopen(req, timeout=25) as r:
+                data = r.read()
+            if data[:2] == b'PK':  # ZIP magic bytes
+                return data
+            preview = data[:120].decode('utf-8', errors='replace').replace('\n', ' ')
+            raise Exception('Сервер вернул не ZIP (URL: ' + url + '): ' + preview)
+        except Exception as _e:
+            _last = _e
+            continue
+    raise Exception('Все URL недоступны. Последняя ошибка: ' + str(_last) + '. bestchange.ru может блокировать облачные IP — проверь вручную: bestchange.ru/check/bm.zip')
 try:
     raw = _bc_download()
     zf = zipfile.ZipFile(io.BytesIO(raw))
