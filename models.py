@@ -200,6 +200,7 @@ class UserProfile(Base):
     auto_marketing_enabled = Column(Boolean, default=True)  # Enable/disable autonomous marketing (Premium)
     auto_delegation_enabled = Column(Boolean, default=True)  # Enable/disable autonomous delegation (Premium)
     goal_autopilot_enabled = Column(Boolean, default=False)  # Enable/disable autonomous goal advancement
+    setup_advisor_enabled = Column(Boolean, default=False)   # Enable/disable Setup Advisor mode
     auto_post_time = Column(String(5), default='12:00')  # Preferred time for auto-posting in HH:MM format (Premium)
     status_text = Column(String(100))  # User status: 'Инвестор', 'Ищу работу', 'Ищу партнёра', etc.
     website = Column(String(500))  # Сайт/лендинг пользователя

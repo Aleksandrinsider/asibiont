@@ -733,9 +733,9 @@
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; gap: 4px; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
                 <span>{{ token_balance or 0 }}</span>
             </button>
-            <button id="mobile-setup-btn" onclick="triggerSetupAdvisor()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Режим настройки">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                    <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/>
+            <button id="mobile-setup-btn" onclick="toggleSetupAdvisor()" style="background: {{ '#068487' if setup_advisor_enabled else 'none' }}; border: 1px solid {{ '#068487' if setup_advisor_enabled else '#D1D9E0' }}; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Режим настройки" data-active="{{ 'true' if setup_advisor_enabled else '' }}">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="{{ '#FFFFFF' if setup_advisor_enabled else '#374151' }}">
+                    <path d="M8 0a.5.5 0 0 1 .5.5v1.026a6.002 6.002 0 0 1 4.473 4.473H14.5a.5.5 0 0 1 0 1h-1.527a6.002 6.002 0 0 1-4.473 4.473V12.5a.5.5 0 0 1-1 0v-1.527a6.002 6.002 0 0 1-4.473-4.473H1.5a.5.5 0 0 1 0-1h1.527A6.002 6.002 0 0 1 7.5 1.526V.5A.5.5 0 0 1 8 0Zm0 3a5 5 0 1 0 0 10A5 5 0 0 0 8 3Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>
                 </svg>
             </button>
             <button id="mobile-autopilot-btn" onclick="toggleGoalAutopilot()" style="background: {{ '#068487' if goal_autopilot_enabled else 'none' }}; border: 1px solid {{ '#068487' if goal_autopilot_enabled else '#D1D9E0' }}; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Автопилот целей" data-i18n-title="goal-autopilot" data-active="{{ 'true' if goal_autopilot_enabled else '' }}">
@@ -782,9 +782,9 @@
                 </button>
 
                 <!-- Режим настройки -->
-                <button id="header-setup-btn" onclick="triggerSetupAdvisor()" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Режим настройки">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                        <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/>
+                <button id="header-setup-btn" onclick="toggleSetupAdvisor()" style="padding: 8px; width: 32px; height: 32px; background: {{ '#068487' if setup_advisor_enabled else '#FFFFFF' }}; border: 1px solid {{ '#068487' if setup_advisor_enabled else '#D1D9E0' }}; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" onmouseover="if(!this.dataset.active) { this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'; }" onmouseout="if(!this.dataset.active) { this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'; }" title="Режим настройки" data-active="{{ 'true' if setup_advisor_enabled else '' }}">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="{{ '#FFFFFF' if setup_advisor_enabled else '#374151' }}">
+                        <path d="M8 0a.5.5 0 0 1 .5.5v1.026a6.002 6.002 0 0 1 4.473 4.473H14.5a.5.5 0 0 1 0 1h-1.527a6.002 6.002 0 0 1-4.473 4.473V12.5a.5.5 0 0 1-1 0v-1.527a6.002 6.002 0 0 1-4.473-4.473H1.5a.5.5 0 0 1 0-1h1.527A6.002 6.002 0 0 1 7.5 1.526V.5A.5.5 0 0 1 8 0Zm0 3a5 5 0 1 0 0 10A5 5 0 0 0 8 3Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>
                     </svg>
                 </button>
 
@@ -17697,19 +17697,26 @@ except Exception as e:
             window.location.href = '/logout';
         }
 
-        function triggerSetupAdvisor() {
-            // Бэкенд сам подтянет интеграции при виде маркера [РЕЖИМ НАСТРОЙКИ]
-            window._chatDisplayOverride = '⚙ Режим настройки';
-
-            var chatTab = document.getElementById('chat-tab') || document.querySelector('[onclick*="switchToChat"]');
-            if (chatTab) chatTab.click();
-
-            var inp = document.getElementById('message-input');
-            if (inp) {
-                inp.value = '[РЕЖИМ НАСТРОЙКИ]';
-                inp.dispatchEvent(new Event('input'));
-                setTimeout(function(){ sendChatMessage(); }, 150);
-            }
+        function toggleSetupAdvisor() {
+            var btns = [document.getElementById('header-setup-btn'), document.getElementById('mobile-setup-btn')];
+            var isActive = btns[0] && btns[0].dataset.active === 'true';
+            var newVal = !isActive;
+            fetch('/api/update_profile', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
+                body: JSON.stringify({setup_advisor_enabled: newVal})
+            }).then(function(r){ return r.json(); }).then(function(d){
+                if (d.success) {
+                    btns.forEach(function(b){
+                        if (!b) return;
+                        b.dataset.active = newVal ? 'true' : '';
+                        b.style.background = newVal ? '#068487' : (b.id === 'header-setup-btn' ? '#FFFFFF' : 'none');
+                        b.style.borderColor = newVal ? '#068487' : '#D1D9E0';
+                        b.querySelector('svg').setAttribute('fill', newVal ? '#FFFFFF' : '#374151');
+                    });
+                }
+            });
         }
 
         function toggleGoalAutopilot() {

@@ -4172,8 +4172,7 @@ class HybridAutonomousAgent:
 
             # Сохраняем сообщение пользователя в историю
             from .conversation_history import save_message_to_history
-            _msg_to_save = '⚙ Режим настройки' if user_message.strip() == '[РЕЖИМ НАСТРОЙКИ]' else user_message
-            save_message_to_history(user_id, "user", _msg_to_save)
+            save_message_to_history(user_id, "user", user_message)
 
             # Язык пользователя (нужен рано, до ctx)
             from i18n import get_user_lang
@@ -4205,16 +4204,31 @@ class HybridAutonomousAgent:
                         "Отвечай ТОЛЬКО на русском."
                     )
 
-            # ═══ РЕЖИМ НАСТРОЙКИ — Setup Advisor ═══
-            if '[РЕЖИМ НАСТРОЙКИ]' in (user_message or ''):
-                # Заменяем маркер на понятный текст для LLM
-                if user_message.strip() == '[РЕЖИМ НАСТРОЙКИ]':
-                    user_message = 'Проанализируй мои интеграции и порекомендуй что ещё стоит подключить для повышения эффективности.'
+            # ═══ РЕЖИМ НАСТРОЙКИ — Setup Advisor (персистентный режим) ═══
+            # Активен если setup_advisor_enabled=True в профиле ИЛИ сообщение содержит маркер
+            _sa_active = bool(getattr(ctx.get('profile'), 'setup_advisor_enabled', False)) \
+                if ctx.get('profile') else False
+            if not _sa_active:
+                # fallback: проверяем напрямую из БД
+                try:
+                    from models import UserProfile as _UP_sa
+                    _sa_db = Session()
+                    try:
+                        _sa_u = _sa_db.query(User).filter_by(telegram_id=user_id).first()
+                        if _sa_u:
+                            _sa_p = _sa_db.query(_UP_sa).filter_by(user_id=_sa_u.id).first()
+                            _sa_active = bool(getattr(_sa_p, 'setup_advisor_enabled', False))
+                    finally:
+                        _sa_db.close()
+                except Exception:
+                    pass
+            if _sa_active:
                 try:
                     _sa_s = Session()
                     try:
                         from models import UserAgent as _UA_sa
-                        _sa_agents = _sa_s.query(_UA_sa).filter_by(author_id=_sa_s.query(User).filter_by(telegram_id=user_id).first().id).all()
+                        _sa_u2 = _sa_s.query(User).filter_by(telegram_id=user_id).first()
+                        _sa_agents = _sa_s.query(_UA_sa).filter_by(author_id=_sa_u2.id).all() if _sa_u2 else []
                         _sa_connected: list[str] = []
                         for _ag in _sa_agents:
                             _sa_connected.extend(_parse_agent_integrations(
@@ -4224,15 +4238,14 @@ class HybridAutonomousAgent:
                         _sa_connected = sorted(set(_sa_connected))
                         _sa_all = sorted(set(_INTEGRATION_LABELS.values()))
                         _sa_not = sorted(set(_sa_all) - set(_sa_connected))
-                        _sa_block = (
-                            "\n\n[РЕЖИМ НАСТРОЙКИ — ИНТЕГРАЦИИ]\n"
-                            f"Подключено ({len(_sa_connected)}): {', '.join(_sa_connected) or 'ничего'}.\n"
-                            f"Можно добавить (примеры): {', '.join(_sa_not[:30])}{'...' if len(_sa_not) > 30 else ''}.\n"
-                            "Задача: проанализируй что подключено, укажи пользователю что уже работает, "
-                            "порекомендуй 3-5 наиболее полезных интеграций которые стоит добавить — "
-                            "исходя из его целей и контекста диалога. Объясни как их подключить (раздел 'Агенты' → API-ключи)."
+                        dynamic_context += (
+                            "\n\n[РЕЖИМ НАСТРОЙКИ АКТИВЕН]\n"
+                            f"Подключено интеграций ({len(_sa_connected)}): {', '.join(_sa_connected) or 'ничего'}.\n"
+                            f"Доступно для подключения (топ): {', '.join(_sa_not[:25])}{'...' if len(_sa_not) > 25 else ''}.\n"
+                            "Попутно с ответом на вопрос пользователя: если уместно — коротко упомяни "
+                            "что из доступных интеграций усилит его цели. Не превращай каждый ответ в лекцию — "
+                            "только когда это реально полезно в контексте сообщения."
                         )
-                        dynamic_context += _sa_block
                     finally:
                         _sa_s.close()
                 except Exception as _sa_err:

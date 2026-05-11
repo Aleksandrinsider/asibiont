@@ -2349,6 +2349,7 @@ async def dashboard_handler(request):
             'google_oauth_available': bool(os.getenv('GOOGLE_CLIENT_ID', '')),
             'gmail_email': (lambda t: (json.loads(decrypt_token(t)).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or '') if user else '',
             'goal_autopilot_enabled': bool(getattr(profile, 'goal_autopilot_enabled', False)) if profile else False,
+            'setup_advisor_enabled': bool(getattr(profile, 'setup_advisor_enabled', False)) if profile else False,
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -6256,6 +6257,22 @@ async def api_update_profile_handler(request):
             return web.json_response({'error': 'Not logged in'}, status=401)
 
         data = await request.json()
+
+        # ── Setup Advisor toggle (standalone) ──
+        if 'setup_advisor_enabled' in data and len(data) == 1:
+            session_db = Session()
+            try:
+                user = session_db.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    return web.json_response({'error': 'User not found'}, status=404)
+                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                if not profile:
+                    return web.json_response({'error': 'Profile not found'}, status=404)
+                profile.setup_advisor_enabled = bool(data['setup_advisor_enabled'])
+                session_db.commit()
+                return web.json_response({'success': True, 'setup_advisor_enabled': profile.setup_advisor_enabled})
+            finally:
+                session_db.close()
 
         # ── Goal autopilot toggle (standalone) ──
         if 'goal_autopilot_enabled' in data and len(data) == 1:
