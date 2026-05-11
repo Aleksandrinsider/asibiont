@@ -3540,6 +3540,8 @@ async def session_error_middleware(request, handler):
         if any(_t in _exc_cls for _t in _transient):
             logger.debug(f"Session middleware transient [{_exc_cls}] on {request.method} {request.path}: {e}")
             raise
+        if request.get('__error_logged_by_logging_middleware'):
+            raise
         # Unknown exception — log ONE line without full stacktrace so Railway shows the type
         logger.error(f"Session error [{_exc_cls}] on {request.method} {request.path}: {e}")
         raise
@@ -3633,6 +3635,8 @@ async def logging_middleware(request, handler):
             logger.debug(f"HTTP {e.status} on {request.method} {path}")
         raise
     except Exception as e:
+        # Mark as already logged to avoid duplicate error logs in outer middleware.
+        request['__error_logged_by_logging_middleware'] = True
         logger.error(f"Error handling {request.method} {path}: {e}")
         asyncio.create_task(_notify_admin_error(f"{type(e).__name__}: {e}", str(request.url)))
         raise
@@ -10732,7 +10736,7 @@ async def gmail_oauth_redirect(request):
         'client_id': _GCI,
         'redirect_uri': f"{_WAU}/oauth/gmail/callback",
         'response_type': 'code',
-        'scope': 'https://www.googleapis.com/auth/gmail.send email profile',
+        'scope': 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly email profile',
         'access_type': 'offline',
         'prompt': 'consent',
         'state': str(user_id),

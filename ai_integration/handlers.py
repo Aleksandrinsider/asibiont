@@ -17612,6 +17612,11 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             ) as _resp:
                 if _resp.status == 401:
                     return None  # need refresh
+                if _resp.status == 403:
+                    return (
+                        "Gmail не может читать входящие: у подключённого аккаунта нет права на чтение. "
+                        "Переподключи Gmail — нажми 'Отвязать' в профиле и подключи снова."
+                    )
                 _data = await _resp.json()
             msgs = _data.get('messages', [])
             if not msgs:
@@ -21168,3 +21173,306 @@ Severity: 🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM, 🟢 LOW
     except Exception as _ae:
         logger.error(f"[GITHUB_CODE] Analysis error: {_ae}")
         return f"Код получен из {source_label}, но анализ не удался: {_ae}"
+
+
+# ─── GITHUB NATIVE TOOLS: HELPERS ────────────────────────────────────────────
+
+async def _get_github_token(user_id: int, session) -> str:
+    """Извлекает GITHUB_TOKEN из api_keys любого агента пользователя."""
+    if not user_id or not session:
+        return None
+    try:
+        from models import UserAgent as _UA
+        _agents = session.query(_UA).filter_by(user_id=user_id).all()
+        for _ag in _agents:
+            _keys_raw = getattr(_ag, 'api_keys', '') or ''
+            if not _keys_raw:
+                continue
+            try:
+                from ai_integration.autonomous_agent import _decrypt_keys
+                _keys_raw = _decrypt_keys(_keys_raw)
+            except Exception:
+                pass
+            for _line in _keys_raw.splitlines():
+                if _line.strip().upper().startswith('GITHUB_TOKEN'):
+                    _parts = _line.split('=', 1)
+                    if len(_parts) == 2:
+                        return _parts[1].strip()
+    except Exception as _e:
+        logger.debug(f"[GITHUB_TOKEN] lookup error: {_e}")
+    return None
+
+
+def _parse_github_repo(repo_url: str):
+    """Парсит owner/repo из URL вида github.com/owner/repo."""
+    import re
+    _m = re.search(r'github\.com/([A-Za-z0-9_.\-]+)/([A-Za-z0-9_.\-]+)', repo_url or '', re.IGNORECASE)
+    if not _m:
+        return None, None
+    owner = _m.group(1)
+    repo = _m.group(2).rstrip('/')
+    if repo.lower().endswith('.git'):
+        repo = repo[:-4]
+    return owner, repo
+
+
+# CREATE_GITHUB_ISSUE ─────────────────────────────────────────────────────────
+
+async def create_github_issue(
+    repo_url: str,
+    title: str,
+    body: str = '',
+    labels: list = None,
+    user_id: int = None,
+    session=None,
+) -> str:
+    """Создаёт issue в GitHub репозитории через API."""
+    import aiohttp
+    if not repo_url or not title:
+        return "Ошибка: укажи repo_url и title"
+    owner, repo = _parse_github_repo(repo_url)
+    if not owner:
+        return "Ошибка: не удалось распознать репозиторий. Формат: github.com/owner/repo"
+    token = await _get_github_token(user_id, session)
+    if not token:
+        return "Ошибка: GITHUB_TOKEN не настроен. Добавь в настройки агента: GITHUB_TOKEN=ghp_xxx"
+    _headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f'Bearer {token}',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ASI-Biont/1.0',
+    }
+    _payload: dict = {'title': title, 'body': body or ''}
+    if labels:
+        _payload['labels'] = labels if isinstance(labels, list) else [labels]
+    _url = f'https://api.github.com/repos/{owner}/{repo}/issues'
+    _timeout = aiohttp.ClientTimeout(total=15, connect=5)
+    try:
+        async with aiohttp.ClientSession(headers=_headers, timeout=_timeout) as _sess:
+            async with _sess.post(_url, json=_payload) as _r:
+                if _r.status == 401:
+                    return "Ошибка 401: GITHUB_TOKEN невалиден или не имеет права repo."
+                if _r.status == 403:
+                    return "Ошибка 403: нет прав на создание issue. Проверь права токена (scope: repo)."
+                if _r.status == 404:
+                    return f"Ошибка 404: репозиторий {owner}/{repo} не найден."
+                if _r.status == 410:
+                    return f"Ошибка: issues отключены в репозитории {owner}/{repo}."
+                if _r.status not in (200, 201):
+                    _err = await _r.text()
+                    return f"Ошибка GitHub API: статус {_r.status}: {_err[:200]}"
+                _data = await _r.json()
+        issue_number = _data.get('number')
+        issue_url = _data.get('html_url', '')
+        return f"✅ Issue #{issue_number} создан в {owner}/{repo}: «{title}»\n🔗 {issue_url}"
+    except aiohttp.ClientConnectorError:
+        return "Ошибка сети: не удалось подключиться к GitHub API"
+    except aiohttp.ClientTimeout:
+        return "Timeout: GitHub API не ответил за 15 секунд"
+    except Exception as _e:
+        logger.error(f"[CREATE_ISSUE] error: {_e}")
+        return f"Ошибка при создании issue: {_e}"
+
+
+# CLOSE_GITHUB_ISSUE ──────────────────────────────────────────────────────────
+
+async def close_github_issue(
+    repo_url: str,
+    issue_number: int,
+    comment: str = '',
+    user_id: int = None,
+    session=None,
+) -> str:
+    """Закрывает issue в GitHub репозитории, опционально добавляет комментарий."""
+    import aiohttp
+    if not repo_url or not issue_number:
+        return "Ошибка: укажи repo_url и issue_number"
+    owner, repo = _parse_github_repo(repo_url)
+    if not owner:
+        return "Ошибка: не удалось распознать репозиторий"
+    token = await _get_github_token(user_id, session)
+    if not token:
+        return "Ошибка: GITHUB_TOKEN не настроен. Добавь в настройки агента: GITHUB_TOKEN=ghp_xxx"
+    _headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f'Bearer {token}',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ASI-Biont/1.0',
+    }
+    _timeout = aiohttp.ClientTimeout(total=15, connect=5)
+    try:
+        async with aiohttp.ClientSession(headers=_headers, timeout=_timeout) as _sess:
+            if comment:
+                _cmt_url = f'https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments'
+                async with _sess.post(_cmt_url, json={'body': comment}) as _cr:
+                    if _cr.status not in (200, 201):
+                        logger.warning(f"[CLOSE_ISSUE] comment failed: {_cr.status}")
+            _patch_url = f'https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}'
+            async with _sess.patch(_patch_url, json={'state': 'closed'}) as _r:
+                if _r.status == 401:
+                    return "Ошибка 401: GITHUB_TOKEN невалиден."
+                if _r.status == 403:
+                    return "Ошибка 403: нет прав на закрытие issue."
+                if _r.status == 404:
+                    return f"Ошибка 404: issue #{issue_number} не найден в {owner}/{repo}."
+                if _r.status not in (200, 201):
+                    _err = await _r.text()
+                    return f"Ошибка GitHub API: статус {_r.status}: {_err[:200]}"
+                _data = await _r.json()
+        issue_url = _data.get('html_url', '')
+        _cmt_note = " Комментарий добавлен." if comment else ""
+        return f"✅ Issue #{issue_number} закрыт в {owner}/{repo}.{_cmt_note}\n🔗 {issue_url}"
+    except aiohttp.ClientConnectorError:
+        return "Ошибка сети: не удалось подключиться к GitHub API"
+    except aiohttp.ClientTimeout:
+        return "Timeout: GitHub API не ответил за 15 секунд"
+    except Exception as _e:
+        logger.error(f"[CLOSE_ISSUE] error: {_e}")
+        return f"Ошибка при закрытии issue: {_e}"
+
+
+# TRIGGER_GITHUB_WORKFLOW ─────────────────────────────────────────────────────
+
+async def trigger_github_workflow(
+    repo_url: str,
+    workflow_id: str,
+    ref: str = 'main',
+    inputs: dict = None,
+    user_id: int = None,
+    session=None,
+) -> str:
+    """Запускает GitHub Actions workflow через workflow_dispatch event."""
+    import aiohttp
+    if not repo_url or not workflow_id:
+        return "Ошибка: укажи repo_url и workflow_id (например 'ci.yml' или числовой ID)"
+    owner, repo = _parse_github_repo(repo_url)
+    if not owner:
+        return "Ошибка: не удалось распознать репозиторий"
+    token = await _get_github_token(user_id, session)
+    if not token:
+        return "Ошибка: GITHUB_TOKEN не настроен. Добавь в настройки агента: GITHUB_TOKEN=ghp_xxx"
+    _headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f'Bearer {token}',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ASI-Biont/1.0',
+    }
+    _payload: dict = {'ref': ref}
+    if inputs:
+        _payload['inputs'] = inputs
+    _url = f'https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches'
+    _timeout = aiohttp.ClientTimeout(total=15, connect=5)
+    try:
+        async with aiohttp.ClientSession(headers=_headers, timeout=_timeout) as _sess:
+            async with _sess.post(_url, json=_payload) as _r:
+                if _r.status == 401:
+                    return "Ошибка 401: GITHUB_TOKEN невалиден."
+                if _r.status == 403:
+                    return "Ошибка 403: нет прав. Токен требует scope: repo (actions: write)."
+                if _r.status == 404:
+                    return (
+                        f"Ошибка 404: workflow '{workflow_id}' не найден в {owner}/{repo}. "
+                        "Проверь имя файла .yml и что workflow_dispatch триггер включён."
+                    )
+                if _r.status == 422:
+                    _err = await _r.text()
+                    return f"Ошибка 422: неверные параметры (ref='{ref}'?): {_err[:200]}"
+                if _r.status not in (200, 201, 204):
+                    _err = await _r.text()
+                    return f"Ошибка GitHub API: статус {_r.status}: {_err[:200]}"
+        _wf_url = f'https://github.com/{owner}/{repo}/actions'
+        _inputs_note = f" Inputs: {inputs}" if inputs else ""
+        return (
+            f"✅ Workflow '{workflow_id}' запущен в {owner}/{repo} (ветка: {ref}).{_inputs_note}\n"
+            f"🔗 {_wf_url}"
+        )
+    except aiohttp.ClientConnectorError:
+        return "Ошибка сети: не удалось подключиться к GitHub API"
+    except aiohttp.ClientTimeout:
+        return "Timeout: GitHub API не ответил за 15 секунд"
+    except Exception as _e:
+        logger.error(f"[TRIGGER_WORKFLOW] error: {_e}")
+        return f"Ошибка при запуске workflow: {_e}"
+
+
+# PUSH_FILE_TO_GITHUB ─────────────────────────────────────────────────────────
+
+async def push_file_to_github(
+    repo_url: str,
+    file_path: str,
+    content: str,
+    commit_message: str,
+    branch: str = 'main',
+    user_id: int = None,
+    session=None,
+) -> str:
+    """Создаёт или обновляет файл в GitHub репозитории (коммит через Contents API)."""
+    import aiohttp
+    import base64 as _b64
+    if not repo_url or not file_path or content is None or not commit_message:
+        return "Ошибка: укажи repo_url, file_path, content и commit_message"
+    owner, repo = _parse_github_repo(repo_url)
+    if not owner:
+        return "Ошибка: не удалось распознать репозиторий"
+    token = await _get_github_token(user_id, session)
+    if not token:
+        return "Ошибка: GITHUB_TOKEN не настроен. Добавь в настройки агента: GITHUB_TOKEN=ghp_xxx"
+    _headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f'Bearer {token}',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ASI-Biont/1.0',
+    }
+    _file_path = file_path.lstrip('/')
+    _content_b64 = _b64.b64encode(content.encode('utf-8')).decode('ascii')
+    _url = f'https://api.github.com/repos/{owner}/{repo}/contents/{_file_path}'
+    _timeout = aiohttp.ClientTimeout(total=15, connect=5)
+    try:
+        async with aiohttp.ClientSession(headers=_headers, timeout=_timeout) as _sess:
+            _existing_sha = None
+            async with _sess.get(_url, params={'ref': branch}) as _gr:
+                if _gr.status == 200:
+                    _gd = await _gr.json()
+                    _existing_sha = _gd.get('sha')
+            _payload: dict = {
+                'message': commit_message,
+                'content': _content_b64,
+                'branch': branch,
+            }
+            if _existing_sha:
+                _payload['sha'] = _existing_sha
+            async with _sess.put(_url, json=_payload) as _r:
+                if _r.status == 401:
+                    return "Ошибка 401: GITHUB_TOKEN невалиден."
+                if _r.status == 403:
+                    return "Ошибка 403: нет прав на запись. Токен требует scope: repo (contents: write)."
+                if _r.status == 404:
+                    return f"Ошибка 404: репозиторий {owner}/{repo} или ветка '{branch}' не найдены."
+                if _r.status == 409:
+                    return "Ошибка 409: конфликт — файл изменился. Попробуй снова."
+                if _r.status not in (200, 201):
+                    _err = await _r.text()
+                    return f"Ошибка GitHub API: статус {_r.status}: {_err[:200]}"
+                _data = await _r.json()
+        _commit_sha = (_data.get('commit', {}).get('sha', '') or '')[:7]
+        _file_url = (
+            _data.get('content', {}).get('html_url')
+            or f'https://github.com/{owner}/{repo}/blob/{branch}/{_file_path}'
+        )
+        _action = "обновлён" if _existing_sha else "создан"
+        return (
+            f"✅ Файл '{_file_path}' {_action} в {owner}/{repo} (ветка: {branch})\n"
+            f"Коммит: {_commit_sha} — «{commit_message}»\n"
+            f"🔗 {_file_url}"
+        )
+    except aiohttp.ClientConnectorError:
+        return "Ошибка сети: не удалось подключиться к GitHub API"
+    except aiohttp.ClientTimeout:
+        return "Timeout: GitHub API не ответил за 15 секунд"
+    except Exception as _e:
+        logger.error(f"[PUSH_FILE_GITHUB] error: {_e}")
+        return f"Ошибка при записи файла в GitHub: {_e}"
