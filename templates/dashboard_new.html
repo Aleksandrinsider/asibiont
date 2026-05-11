@@ -4421,6 +4421,56 @@ try:
 except Exception as e:
     print('Ошибка CoinGecko: ' + str(e))`
             },
+            binance_p2p: {
+                name: 'Binance P2P',
+                fields: [
+                    {k:'BINANCE_P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
+                    {k:'BINANCE_P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
+                    {k:'BINANCE_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
+                    {k:'BINANCE_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
+                ],
+                hint: 'Бесплатно, без ключа! Получает TOP-3 BUY/SELL объявления Binance P2P: цена, лимиты, методы оплаты, спред. Пороги — опциональны.',
+                code: `import urllib.request, json, os
+COIN = os.environ.get('BINANCE_P2P_COIN', 'USDT')
+FIAT = os.environ.get('BINANCE_P2P_FIAT', 'RUB')
+BUY_THRESH = float(os.environ.get('BINANCE_BUY_THRESHOLD', '0') or '0')
+SELL_THRESH = float(os.environ.get('BINANCE_SELL_THRESHOLD', '0') or '0')
+def get_p2p(trade_type, rows=3):
+    body = json.dumps({"asset": COIN, "fiat": FIAT, "merchantCheck": False, "page": 1, "payTypes": [], "publisherType": None, "rows": rows, "tradeType": trade_type, "filterType": "all", "proMerchantAds": False, "shieldMerchantAds": False}).encode()
+    hdrs = {'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9', 'Origin': 'https://p2p.binance.com', 'Referer': 'https://p2p.binance.com/'}
+    req = urllib.request.Request('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search', data=body, headers=hdrs)
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+try:
+    buy_data = get_p2p('BUY', 3)
+    sell_data = get_p2p('SELL', 3)
+    buy_prices = [float(a['adv']['price']) for a in buy_data.get('data', [])]
+    sell_prices = [float(a['adv']['price']) for a in sell_data.get('data', [])]
+    best_buy = min(buy_prices) if buy_prices else 0
+    best_sell = max(sell_prices) if sell_prices else 0
+    spread = best_sell - best_buy
+    spread_pct = round(spread / best_buy * 100, 2) if best_buy else 0
+    print('Binance P2P ' + COIN + '/' + FIAT)
+    print('Лучшая покупка: ' + str(round(best_buy, 2)) + ' ' + FIAT)
+    print('Лучшая продажа: ' + str(round(best_sell, 2)) + ' ' + FIAT)
+    print('Спред: ' + str(round(spread, 2)) + ' ' + FIAT + ' (' + str(spread_pct) + '%)')
+    print('\\nТОП BUY объявления (покупаю ' + COIN + '):')
+    for a in buy_data.get('data', [])[:3]:
+        adv = a.get('adv', {}); seller = a.get('advertiser', {})
+        methods = ', '.join([m.get('identifier', '') for m in adv.get('tradeMethods', [])[:2]])
+        print(str(adv.get('price')) + ' | ' + str(adv.get('minSingleTransAmount')) + '-' + str(adv.get('dynamicMaxSingleTransAmount')) + ' ' + FIAT + ' | ' + str(seller.get('nickName', '')) + ' | ' + methods)
+    print('\\nТОП SELL объявления (продаю ' + COIN + '):')
+    for a in sell_data.get('data', [])[:3]:
+        adv = a.get('adv', {}); seller = a.get('advertiser', {})
+        methods = ', '.join([m.get('identifier', '') for m in adv.get('tradeMethods', [])[:2]])
+        print(str(adv.get('price')) + ' | ' + str(adv.get('minSingleTransAmount')) + '-' + str(adv.get('dynamicMaxSingleTransAmount')) + ' ' + FIAT + ' | ' + str(seller.get('nickName', '')) + ' | ' + methods)
+    if BUY_THRESH > 0 and best_buy > 0 and best_buy <= BUY_THRESH:
+        print('\\n⚠️ СИГНАЛ ПОКУПКИ: цена ' + str(best_buy) + ' ≤ порогу ' + str(BUY_THRESH))
+    if SELL_THRESH > 0 and best_sell >= SELL_THRESH:
+        print('\\n⚠️ СИГНАЛ ПРОДАЖИ: цена ' + str(best_sell) + ' ≥ порогу ' + str(SELL_THRESH))
+except Exception as e:
+    print('Ошибка Binance P2P: ' + str(e))`
+            },
             bybit_p2p: {
                 name: 'Bybit P2P',
                 fields: [
@@ -7594,6 +7644,7 @@ except Exception as e:
             shopify:         ['get_products', 'get_orders'],
             youtube:         ['get_videos', 'youtube_stats'],
             coingecko:       ['get_coin_price', 'get_market_cap'],
+            binance_p2p:     ['check_p2p_spread', 'monitor_p2p'],
             bybit_p2p:       ['check_p2p_spread', 'monitor_p2p'],
             jira:            ['jira_issues', 'create_jira_issue'],
             calendly:        ['get_events', 'check_calendly'],
@@ -8255,6 +8306,7 @@ except Exception as e:
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>
                             <option value="coingecko">CoinGecko (крипто, без ключа)</option>
+                            <option value="binance_p2p">Binance P2P</option>
                             <option value="bybit_p2p">Bybit P2P</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
