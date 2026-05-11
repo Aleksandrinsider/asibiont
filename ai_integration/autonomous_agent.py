@@ -2959,6 +2959,9 @@ class HybridAutonomousAgent:
                         'trello': ('trello',),
                         'stripe': ('stripe',),
                         'crypto': ('binance', 'bybit', 'coinbase', 'crypto'),
+                        'binance_p2p': ('binance p2p', 'p2p binance', 'binance_p2p'),
+                        'bybit_p2p': ('bybit p2p', 'p2p bybit', 'bybit_p2p'),
+                        'binance_spot': ('binance spot', 'binance_spot'),
                         'hh': ('hh.ru', 'headhunter', 'superjob', 'hh_'),
                         'yandex_mail': ('yandex mail', 'яндекс почт', 'yandexmail'),
                         'mailru': ('mail.ru', 'mailru', 'майл'),
@@ -8321,6 +8324,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'notion': 'база знаний, документация, заметки',
             'sheets': 'данные, отчёты, дашборды, аналитика',
             'binance': 'торговля, портфель, аналитика рынка',
+            'binance_p2p': 'мониторинг P2P спреда USDT/RUB без ключа',
+            'bybit_p2p': 'мониторинг P2P спреда USDT/RUB без ключа',
+            'binance_spot': 'баланс, цены, ордера, торговля',
             'bybit': 'торговля, портфель, аналитика рынка',
             'stripe': 'платежи, подписки, аналитика выручки',
             'hh': 'вакансии, кандидаты, рекрутинг',
@@ -8386,6 +8392,20 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'binance': (
                 "run_agent_action(action='get_balance', params={})\n"
                 "    run_agent_action(action='get_price', params={'symbol': 'BTCUSDT'})"
+            ),
+            'binance_p2p': (
+                "run_agent_action(action='check_p2p_spread', params={})\n"
+                "    run_agent_action(action='monitor_p2p', params={'coin':'USDT','fiat':'RUB'})"
+            ),
+            'bybit_p2p': (
+                "run_agent_action(action='check_p2p_spread', params={})\n"
+                "    run_agent_action(action='monitor_p2p', params={'coin':'USDT','fiat':'RUB'})"
+            ),
+            'binance_spot': (
+                "run_agent_action(action='get_price', params={'symbol':'BTCUSDT'}) — текущая цена\n"
+                "    run_agent_action(action='get_balance', params={}) — баланс кошелька\n"
+                "    run_agent_action(action='place_order', params={'side':'BUY','quantity':'0.001','symbol':'BTCUSDT','price':'60000'}) — лимитный ордер\n"
+                "    run_agent_action(action='get_open_orders', params={'symbol':'BTCUSDT'}) — открытые ордера"
             ),
             'hh': (
                 "run_agent_action(action='search_vacancies', params={'text': '...'})\n"
