@@ -4529,92 +4529,90 @@ except Exception as e:
             bestchange: {
                 name: 'BestChange (агрегатор обменников)',
                 fields: [
+                    {k:'BC_API_ID', label:'API ID (bestchange.ru/api/)', ph:'12345', t:'text'},
                     {k:'BC_FROM', label:'Отдаю (код валюты)', ph:'USDT', t:'text', opt:true},
                     {k:'BC_TO', label:'Получаю (код валюты)', ph:'SBER', t:'text', opt:true},
                     {k:'BC_TOP', label:'Сколько обменников показать', ph:'7', t:'text', opt:true}
                 ],
-                hint: 'Бесплатно, без ключей. Показывает лучшие курсы обменников для пары (например USDT→SBER, BTC→RUB, USDT→TBANK). Коды: USDT, BTC, ETH, XMR, SBER, TBANK, QIWI, CASH_RUB, VISA_RUB и др.',
-                code: `import urllib.request, json, os, zipfile, io, csv
+                hint: 'Требует бесплатной регистрации на bestchange.ru/api/ — без ID сервер блокирует облачные запросы. После регистрации вставьте числовой ID в поле BC_API_ID. Коды валют: USDT, BTC, ETH, XMR, SBER, TBANK, QIWI, CASH_RUB, VISA_RUB и др.',
+                code: `import urllib.request, json, os, zipfile, io
+BC_API_ID = os.environ.get('BC_API_ID', '').strip()
 FROM_CURR = os.environ.get('BC_FROM', 'USDT').strip().upper()
 TO_CURR   = os.environ.get('BC_TO', 'SBER').strip().upper()
 TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
-# BestChange публичный архив (пробуем два известных URL)
-def _bc_download():
+if not BC_API_ID:
+    print('⚠️ BC_API_ID не задан.')
+    print('BestChange блокирует запросы без ID с облачных серверов.')
+    print('Зарегистрируйтесь бесплатно: https://www.bestchange.ru/api/')
+    print('Получите числовой ID и добавьте его в переменную BC_API_ID.')
+else:
     _hdrs = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/zip,application/octet-stream,*/*',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-        'Referer': 'https://www.bestchange.ru/',
-        'Connection': 'keep-alive',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*', 'Referer': 'https://www.bestchange.ru/',
     }
-    for url in ['https://www.bestchange.ru/check/bm.zip', 'https://www.bestchange.ru/bm.zip']:
-        try:
-            req = urllib.request.Request(url, headers=_hdrs)
-            with urllib.request.urlopen(req, timeout=25) as r:
-                data = r.read()
-            if data[:2] == b'PK':  # ZIP magic bytes
-                return data
-            preview = data[:120].decode('utf-8', errors='replace').replace('\n', ' ')
-            raise Exception('Сервер вернул не ZIP (URL: ' + url + '): ' + preview)
-        except Exception as _e:
-            _last = _e
-            continue
-    raise Exception('Все URL недоступны. Последняя ошибка: ' + str(_last) + '. bestchange.ru может блокировать облачные IP — проверь вручную: bestchange.ru/check/bm.zip')
-try:
-    raw = _bc_download()
-    zf = zipfile.ZipFile(io.BytesIO(raw))
-    # bm.zip содержит: currencies.dat, exchangers.dat, rates.dat
-    def read_dat(name, delim=';'):
-        with zf.open(name) as f:
-            rows = []
-            for line in f.read().decode('utf-8', errors='replace').splitlines():
-                if line.strip(): rows.append(line.split(delim))
-        return rows
-    curr_rows = read_dat('currencies.dat')
-    exch_rows = read_dat('exchangers.dat')
-    rate_rows = read_dat('rates.dat')
-    # Строим маппинги: id -> name
-    curr_map = {r[0]: r[1].strip() for r in curr_rows if len(r) >= 2}
-    exch_map = {r[0]: r[1].strip() for r in exch_rows if len(r) >= 2}
-    # Ищем ID нужных валют по подстроке
-    def find_id(code):
-        code = code.upper()
-        exact = [k for k, v in curr_map.items() if v.upper() == code]
-        if exact: return exact[0]
-        partial = [k for k, v in curr_map.items() if code in v.upper()]
-        return partial[0] if partial else None
-    from_id = find_id(FROM_CURR)
-    to_id   = find_id(TO_CURR)
-    if not from_id or not to_id:
-        print('Валюта не найдена. FROM_ID=' + str(from_id) + ' TO_ID=' + str(to_id))
-        print('Доступные валюты (первые 30): ' + ', '.join([v for v in list(curr_map.values())[:30]]))
-    else:
-        from_name = curr_map[from_id]; to_name = curr_map[to_id]
-        # Фильтруем курсы: поле 0=from_id, 1=to_id, 2=exch_id, 3=курс_give, 4=курс_get, 5=резерв, 6=мин, 7=макс
-        matches = [r for r in rate_rows if len(r) >= 6 and r[0] == from_id and r[1] == to_id]
-        if not matches:
-            print('Курсов для ' + FROM_CURR + ' → ' + TO_CURR + ' не найдено.')
-            print('Проверь коды валют. FROM найден как: ' + from_name + ', TO: ' + to_name)
+    def _bc_download(api_id):
+        urls = [
+            'https://www.bestchange.ru/check/bm.zip?id=' + api_id,
+            'http://www.bestchange.ru/check/bm.zip?id=' + api_id,
+        ]
+        _last = None
+        for url in urls:
+            try:
+                req = urllib.request.Request(url, headers=_hdrs)
+                with urllib.request.urlopen(req, timeout=25) as r:
+                    data = r.read()
+                if data[:2] == b'PK':
+                    return data
+                preview = data[:200].decode('utf-8', errors='replace').replace('\n', ' ')
+                _last = Exception('Не ZIP: ' + preview[:120])
+            except Exception as _e:
+                _last = _e
+        raise Exception('Ошибка загрузки bm.zip: ' + str(_last))
+    try:
+        raw = _bc_download(BC_API_ID)
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+        def read_dat(name):
+            with zf.open(name) as f:
+                rows = []
+                for line in f.read().decode('utf-8', errors='replace').splitlines():
+                    if line.strip(): rows.append(line.split(';'))
+            return rows
+        curr_map = {r[0]: r[1].strip() for r in read_dat('currencies.dat') if len(r) >= 2}
+        exch_map = {r[0]: r[1].strip() for r in read_dat('exchangers.dat') if len(r) >= 2}
+        rate_rows = read_dat('rates.dat')
+        def find_id(code):
+            code = code.upper()
+            exact = [k for k, v in curr_map.items() if v.upper() == code]
+            if exact: return exact[0]
+            partial = [k for k, v in curr_map.items() if code in v.upper()]
+            return partial[0] if partial else None
+        from_id = find_id(FROM_CURR)
+        to_id   = find_id(TO_CURR)
+        if not from_id or not to_id:
+            print('Валюта не найдена. FROM=' + FROM_CURR + ' (' + str(from_id) + ') TO=' + TO_CURR + ' (' + str(to_id) + ')')
+            print('Доступные (первые 40): ' + ', '.join(list(curr_map.values())[:40]))
         else:
-            # Сортируем по курсу (сколько TO получаем за 1 FROM) — чем больше тем лучше
-            try: matches.sort(key=lambda r: -float(r[4]))
-            except: pass
-            print('BestChange: ' + from_name + ' → ' + to_name)
-            print('Найдено обменников: ' + str(len(matches)) + ', показываю топ-' + str(TOP_N))
-            print('')
-            for i, r in enumerate(matches[:TOP_N], 1):
-                exch_name = exch_map.get(r[2], 'ID:' + r[2])
-                try:
-                    rate_give = float(r[3]); rate_get = float(r[4])
-                    rate_str = str(round(rate_get / rate_give, 4)) + ' ' + TO_CURR + '/' + FROM_CURR
-                except: rate_str = r[3] + '/' + r[4]
-                reserve = r[5].strip() if len(r) > 5 else '?'
-                mn = r[6].strip() if len(r) > 6 else ''
-                mx = r[7].strip() if len(r) > 7 else ''
-                limits = (' | мин: ' + mn if mn else '') + (' макс: ' + mx if mx else '')
-                print(str(i) + '. ' + exch_name + ' — ' + rate_str + ' | резерв: ' + reserve + limits)
-except Exception as e:
-    print('Ошибка BestChange: ' + str(e))`
+            matches = [r for r in rate_rows if len(r) >= 6 and r[0] == from_id and r[1] == to_id]
+            if not matches:
+                print('Курсов для ' + FROM_CURR + ' → ' + TO_CURR + ' не найдено.')
+                print('FROM найден как: ' + curr_map[from_id] + ', TO: ' + curr_map[to_id])
+            else:
+                try: matches.sort(key=lambda r: -float(r[4]))
+                except: pass
+                print('BestChange: ' + curr_map[from_id] + ' → ' + curr_map[to_id])
+                print('Обменников: ' + str(len(matches)) + ', топ-' + str(TOP_N))
+                print('')
+                for i, r in enumerate(matches[:TOP_N], 1):
+                    exch_name = exch_map.get(r[2], 'ID:' + r[2])
+                    try:
+                        rate_str = str(round(float(r[4]) / float(r[3]), 4)) + ' ' + TO_CURR + '/' + FROM_CURR
+                    except: rate_str = r[3] + '/' + r[4]
+                    reserve = r[5].strip() if len(r) > 5 else '?'
+                    mn = ((' | мин: ' + r[6].strip()) if len(r) > 6 and r[6].strip() else '')
+                    mx = ((' макс: ' + r[7].strip()) if len(r) > 7 and r[7].strip() else '')
+                    print(str(i) + '. ' + exch_name + ' — ' + rate_str + ' | резерв: ' + reserve + mn + mx)
+    except Exception as e:
+        print('Ошибка BestChange: ' + str(e))`
             },
             binance_spot: {
                 name: 'Binance Spot (торговля / баланс)',
