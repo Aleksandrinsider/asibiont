@@ -179,6 +179,23 @@
         .message-text a { color: #068487; text-decoration: underline; }
         .message-text img { width: 550px; height: 550px; object-fit: cover; border-radius: 8px; display: block; margin: 8px 0; max-width: 100%; }
 
+        /* ASI -> агент: визуально выделяем как поручение, а не обычный ответ */
+        .message.agent-delegation .message-text {
+            background: #EEF9F9;
+            border: 1px solid #B9E2E3;
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+        .message.agent-delegation .delegation-label {
+            display: inline-block;
+            margin-bottom: 4px;
+            color: #0B6D70;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
         /* Hide 'сегодня/today' label on mobile/tablet in activity stats */
         @media (max-width: 1024px) {
             .stat-today-label { display: none !important; }
@@ -2135,6 +2152,9 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
+            if (_toAgentName && normalizedSender === 'ai') {
+                messageDiv.classList.add('agent-delegation');
+            }
             if (interactionId != null) {
                 messageDiv.dataset.interactionId = String(interactionId);
             }
@@ -2174,7 +2194,7 @@
                     ${avatarHtml}
                     <div style="flex: 1; min-width: 0;">
                         ${normalizedSender === 'ai' ? `<div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:3px;">${escapeHtml(_senderName)}${_toAgentName && _toAgentName !== _senderName ? ' <span style="font-weight:400;color:#6C727F;">> ' + escapeHtml(_toAgentName) + '</span>' : ''}</div>` : ''}
-                        <div class="message-text">${processedText}</div>
+                        <div class="message-text">${_toAgentName ? '<div class="delegation-label">Поручение агенту</div>' : ''}${processedText}</div>
                         <div class="message-time">${dateString} ${timeString} ${saveBtn}</div>
                     </div>
                 </div>
@@ -3274,7 +3294,7 @@
 
         const _MPA_SVC = {
             gmail: {
-                name: 'Gmail (inbox reading)',
+                name: 'Gmail (чтение входящих)',
                 fields: [
                     {k:'GMAIL_USER', label:'Email Gmail', ph:'you@gmail.com', t:'email'},
                     {k:'GMAIL_PASS', label:'Пароль приложения', ph:'xxxx xxxx xxxx xxxx', t:'password'}
@@ -3399,12 +3419,12 @@ if True:  # всегда проверяем IMAP
         print('Ошибка IMAP: ' + str(e))`
             },
             yandex: {
-                name: 'Yandex Mail (inbox reading)',
+                name: 'Яндекс Почта (чтение входящих)',
                 fields: [
                     {k:'YANDEX_USER', label:'Email Яндекса', ph:'you@yandex.ru', t:'email'},
                     {k:'YANDEX_PASS', label:'Пароль приложения', ph:'пароль', t:'password'}
                 ],
-                hint: 'Inbox reading only (IMAP). Yandex Mail > Settings > Mail clients > Enable IMAP and create an app password.',
+                hint: 'Только чтение входящих (IMAP). Яндекс Почта → Настройки → Клиенты → Включить IMAP и создать пароль приложения.',
                 code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -3536,12 +3556,12 @@ else:
         print('Ошибка IMAP: ' + str(e))`
             },
             mailru: {
-                name: 'Mail.ru (inbox reading)',
+                name: 'Mail.ru (чтение входящих)',
                 fields: [
                     {k:'MAILRU_USER', label:'Email Mail.ru', ph:'you@mail.ru', t:'email'},
                     {k:'MAILRU_PASS', label:'Пароль для внешних приложений', ph:'пароль', t:'password'}
                 ],
-                hint: 'Inbox reading only (IMAP). Mail.ru > Settings > Password for external apps + enable IMAP.',
+                hint: 'Только чтение входящих (IMAP). Mail.ru → Настройки → Пароль для внешних приложений + включить IMAP.',
                 code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -8110,9 +8130,9 @@ except Exception as e:
                         <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-svc-desc')}</div>
                         <select id="mpa-svc-select" onchange="mpApplyTemplate(this.value)" style="width:100%;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
                             <option value="" style="font-weight:600;">${t('mpa-svc-ph')}</option>
-                            <option value="gmail">Gmail (inbox reading)</option>
-                            <option value="yandex">Yandex Mail (inbox reading)</option>
-                            <option value="mailru">Mail.ru (inbox reading)</option>
+                            <option value="gmail">Gmail (чтение входящих)</option>
+                            <option value="yandex">Яндекс Почта (чтение входящих)</option>
+                            <option value="mailru">Mail.ru (чтение входящих)</option>
                             <option value="openweather">Погода</option>
                             <option value="rss">RSS-лента новостей</option>
                             <option value="telegram_bot">Telegram Bot</option>
@@ -17391,8 +17411,29 @@ except Exception as e:
                             chatHistoryNextBeforeId = data.next_before_id || null;
                         } else {
                             // Incremental: add only new messages
+                            const _chatEl = document.getElementById('chat-messages');
                             sorted.forEach(i => {
                                 if (!displayedMessageIds.has(i.id)) {
+                                    // Для сообщений пользователя: если оптимистичный пузырь уже в DOM
+                                    // (добавлен без ID во время ожидания ответа) — проставляем ID и не дублируем.
+                                    if (i.message_type === 'user' && _chatEl) {
+                                        const _txt = (i.content || '').trim().slice(0, 40);
+                                        const _orphan = _chatEl
+                                            ? [..._chatEl.querySelectorAll('.message.user:not([data-interaction-id])')].find(
+                                                el => (el.textContent || '').includes(_txt.slice(0, 20))
+                                            ) : null;
+                                        if (_orphan) {
+                                            _orphan.dataset.interactionId = String(i.id);
+                                            const _sep = _orphan.previousElementSibling;
+                                            if (_sep && _sep.classList.contains('chat-checkpoint') && _sep.dataset.interactionId === 'pending') {
+                                                _sep.dataset.interactionId = String(i.id);
+                                                delete _sep.dataset.pendingText;
+                                            }
+                                            displayedMessageIds.add(i.id);
+                                            if (i.id > _chatMaxSeenId) _chatMaxSeenId = i.id;
+                                            return;
+                                        }
+                                    }
                                     addMessage(i.content, i.message_type, i.created_at, i.id);
                                     displayedMessageIds.add(i.id);
                                 }
