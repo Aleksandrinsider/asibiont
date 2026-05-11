@@ -4590,7 +4590,7 @@ if exmo_best_ask and bybit_best_buy:
                 code: `import urllib.request, urllib.parse, json, os, hmac, hashlib, time
 API_KEY = os.environ.get('EXMO_API_KEY', '')
 API_SECRET = os.environ.get('EXMO_API_SECRET', '')
-PAIR = os.environ.get('EXMO_PAIR', 'USDTTRC20_RUB')
+PAIR = os.environ.get('EXMO_PAIR', 'USDT_RUB')
 ACTION = os.environ.get('AGENT_ACTION', 'get_ticker')
 BASE = 'https://api.exmo.com/v1.1'
 def pub_get(path):
@@ -4666,13 +4666,18 @@ try:
                     print(o.get('type', '') + ' ' + str(o.get('quantity')) + ' @ ' + str(o.get('price')) + ' (ID: ' + str(o.get('order_id')) + ')')
     else:
         # По умолчанию: стакан (надёжнее тикера, поддерживает прямой запрос по паре)
-        ob = pub_get('/order_book/?pair=' + PAIR).get(PAIR, {})
+        ob_resp = pub_get('/order_book/?pair=' + PAIR)
+        ob = ob_resp.get(PAIR, {})
         if not ob:
-            # Пара не найдена — ищем похожие пары в тикере
-            all_pairs = list(pub_get('/ticker').keys())
-            q = PAIR.split('_')
-            similar = [k for k in all_pairs if q[0].upper() in k.upper() and (len(q) < 2 or q[1].upper() in k.upper())]
-            print('Пара ' + PAIR + ' не найдена. Похожие пары EXMO: ' + ', '.join(similar[:8]))
+            # Пара не найдена — показываем все RUB-пары из тикера
+            fiat = PAIR.split('_')[-1].upper()
+            all_pairs = sorted(pub_get('/ticker').keys())
+            rub_pairs = [k for k in all_pairs if k.endswith('_' + fiat)]
+            print('Пара ' + PAIR + ' не найдена.')
+            if ob_resp.get('error'):
+                print('Ошибка EXMO API: ' + str(ob_resp['error']))
+            print('Доступные ' + fiat + '-пары (' + str(len(rub_pairs)) + '):')
+            print(', '.join(rub_pairs))
         else:
             print('EXMO ' + PAIR)
             print('Лучшая покупка (bid): ' + str(ob.get('bid_top')))
