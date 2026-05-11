@@ -4534,71 +4534,73 @@ except Exception as e:
                     {k:'BC_TOP', label:'Сколько обменников показать', ph:'7', t:'text', opt:true},
                     {k:'BC_PROXY', label:'HTTP-прокси (если сервер блокирует)', ph:'http://user:pass@host:port', t:'text', opt:true}
                 ],
-                hint: 'Парсит bestchange.biz. Пары: USDTTRC20→CARDRUB, BTC→SBER, ETH→TBANK и т.д. Если получаете ошибку 403/cloudflare — укажите HTTP-прокси в поле BC_PROXY (нужен российский/residential IP).',
-                code: `import urllib.request, urllib.parse, os, re, ssl
+                hint: 'Парсит bestchange.biz. Пары: USDTTRC20->CARDRUB, BTC->SBER, ETH->TBANK и т.д. Если ошибка 403/cloudflare — укажите HTTP-прокси в поле BC_PROXY.',
+                code: `import urllib.request, urllib.parse, os, ssl
 FROM_CURR = os.environ.get('BC_FROM', 'USDTTRC20').strip()
 TO_CURR   = os.environ.get('BC_TO', 'CARDRUB').strip()
 TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
 BC_PROXY  = os.environ.get('BC_PROXY', '').strip()
 url = 'https://bestchange.biz/ru/exchange/' + urllib.parse.quote(FROM_CURR) + '/' + urllib.parse.quote(TO_CURR)
 _hdrs = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'text/html,application/xhtml+xml',
     'Accept-Language': 'ru-RU,ru;q=0.9',
     'Referer': 'https://bestchange.biz/',
 }
+def strip_tags(s):
+    out = ''; depth = 0
+    for ch in s:
+        if ch == '<': depth += 1
+        elif ch == '>': depth -= 1
+        elif depth == 0: out += ch
+    return out
+def is_num(s):
+    try: return float(s.replace(',', '.')) > 0.0001
+    except: return False
 try:
     if BC_PROXY:
-        proxy_handler = urllib.request.ProxyHandler({'http': BC_PROXY, 'https': BC_PROXY})
-        opener = urllib.request.build_opener(proxy_handler)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({'http': BC_PROXY, 'https': BC_PROXY}))
     else:
         ctx = ssl.create_default_context()
         opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
     req = urllib.request.Request(url, headers=_hdrs)
     with opener.open(req, timeout=25) as r:
         html = r.read().decode('utf-8', errors='replace')
-    # Проверяем на Cloudflare-блокировку
-    if 'cloudflare' in html.lower() or 'just a moment' in html.lower() or len(html) < 500:
-        print('❌ Cloudflare заблокировал запрос.')
-        print('Решение: добавьте российский/residential HTTP-прокси в переменную BC_PROXY.')
-        print('Формат: http://user:pass@host:port')
+    if len(html) < 500 or 'cloudflare' in html.lower() or 'just a moment' in html.lower():
+        print('BestChange: cloudflare zablokiral zapros s oblachnogo IP.')
+        print('Reshenie: ukazhite proksi v pole BC_PROXY (format: http://user:pass@host:port)')
         print('URL: ' + url)
     else:
-        # Парсим таблицу обменников — ищем строки с курсом
-        # Типичный формат: название, курс give/get, резерв, минимум
-        rows_found = []
-        # Ищем паттерны вида: обменник, числа курсов
-        for m in re.finditer(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL):
-            row = m.group(1)
-            texts = re.findall(r'>([^<]{1,80})<', row)
-            texts = [t.strip() for t in texts if t.strip() and not t.strip().startswith('<')]
-            # Ищем строки с числовыми курсами
-            nums = [t for t in texts if re.match(r'^[\d.,\s]+$', t) and '.' in t]
-            names = [t for t in texts if len(t) > 2 and not re.match(r'^[\d.,\s%]+$', t)]
+        rows = []
+        pos = 0
+        while len(rows) < TOP_N * 4 and pos < len(html):
+            i0 = html.find('<tr', pos)
+            if i0 == -1: break
+            i1 = html.find('</tr>', i0)
+            if i1 == -1: break
+            pos = i1 + 5
+            cell_text = strip_tags(html[i0:i1])
+            parts = [p.strip() for p in cell_text.split() if p.strip()]
+            nums = [p for p in parts if is_num(p)]
+            names = [p for p in parts if not is_num(p) and len(p) > 1 and p != '-']
             if nums and names:
-                rows_found.append((names[0] if names else '?', nums))
-        if not rows_found:
-            print('Данные не найдены или структура страницы изменилась.')
-            print('URL: ' + url)
-            # Показываем начало HTML для диагностики
-            snippet = re.sub(r'<[^>]+>', ' ', html[:600]).strip()
-            snippet = re.sub(r'\s+', ' ', snippet)
-            print('Начало страницы: ' + snippet[:300])
+                rows.append((' '.join(names[:4]), nums))
+        if not rows:
+            print('Dannye ne naydeny na stranitse. URL: ' + url)
+            snippet = ' '.join(strip_tags(html[:500]).split())
+            print('Nachalo stranicy: ' + snippet[:250])
         else:
-            print('BestChange: ' + FROM_CURR + ' → ' + TO_CURR)
-            print('Топ-' + str(TOP_N) + ' обменников:')
+            print('BestChange: ' + FROM_CURR + ' -> ' + TO_CURR)
+            print('Top-' + str(TOP_N) + ' obmennikov:')
             print('')
-            for i, (name, nums) in enumerate(rows_found[:TOP_N], 1):
-                rate_info = ' | '.join(nums[:3]) if nums else ''
-                print(str(i) + '. ' + name + (' — ' + rate_info if rate_info else ''))
+            for i, (name, nums) in enumerate(rows[:TOP_N], 1):
+                print(str(i) + '. ' + name + '  ' + ' | '.join(nums[:3]))
             print('')
-            print('Подробнее: ' + url)
+            print('URL: ' + url)
 except Exception as e:
-    print('Ошибка BestChange: ' + str(e))
-    print('URL: ' + url)
+    print('Oshibka BestChange: ' + str(e))
     if '403' in str(e) or '503' in str(e) or 'SSL' in str(e):
-        print('bestchange.biz блокирует облачные IP.')
-        print('Добавьте российский HTTP-прокси в переменную BC_PROXY.')`
+        print('Proksi nuzhen. BC_PROXY = http://user:pass@host:port')`
             },
             binance_spot: {
                 name: 'Binance Spot (торговля / баланс)',
