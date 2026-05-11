@@ -7655,13 +7655,7 @@ except Exception as e:
                 return;
             }
             const tmpl = _MPA_SVC[svc];
-            const commonFields = [
-                {k:'AGENT_PARAM_PERIOD', label:'Общий период', ph:'today / week / month', t:'text', opt:true},
-                {k:'AGENT_PARAM_FROM', label:'Дата от', ph:'2026-04-23', t:'text', opt:true},
-                {k:'AGENT_PARAM_TO', label:'Дата до', ph:'2026-04-23', t:'text', opt:true},
-                {k:'AGENT_PARAM_LIMIT', label:'Лимит записей', ph:'10', t:'number', opt:true}
-            ];
-            const renderFields = [...(tmpl.fields || []), ...commonFields];
+            const renderFields = [...(tmpl.fields || [])];
             if (fieldsEl) {
                 let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
                 // Gmail OAuth block — temporarily hidden, manual password only
@@ -7680,7 +7674,7 @@ except Exception as e:
                 fieldsEl.style.display = 'block';
             }
             if (hintEl && tmpl.hint) {
-                hintEl.textContent = tmpl.hint + ' Общие фильтры для любых интеграций: AGENT_PARAM_PERIOD, AGENT_PARAM_FROM, AGENT_PARAM_TO, AGENT_PARAM_LIMIT.';
+                hintEl.textContent = tmpl.hint;
                 hintEl.style.display = 'block';
             }
         }
@@ -7688,13 +7682,7 @@ except Exception as e:
         function mpApplyTemplateConfirm(svc) {
             const tmpl = _MPA_SVC[svc];
             if (!tmpl) return;
-            const commonFields = [
-                {k:'AGENT_PARAM_PERIOD', t:'text'},
-                {k:'AGENT_PARAM_FROM', t:'text'},
-                {k:'AGENT_PARAM_TO', t:'text'},
-                {k:'AGENT_PARAM_LIMIT', t:'number'}
-            ];
-            const collectedFields = [...(tmpl.fields || []), ...commonFields];
+            const collectedFields = [...(tmpl.fields || [])];
             const newKeys = {};
             for (const f of collectedFields) {
                 const el = document.getElementById('mpa-svc-' + f.k);
