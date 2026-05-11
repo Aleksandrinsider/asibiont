@@ -137,15 +137,15 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
      "💡 NewsAPI не настроен. newsapi.org → бесплатно 100 запросов/день → добавь NEWSAPI_KEY в настройки агента"),
     # Email / Gmail / IMAP / Яндекс / Mail.ru
     ("gmail не настроен",
-     "💡 Gmail не настроен. Добавь GMAIL_USER + GMAIL_PASS (пароль приложения: myaccount.google.com → Безопасность → Пароли приложений) в настройки агента"),
+     "💡 Gmail OAuth не подключён. Для исходящих писем агентов подключи Gmail в профиле пользователя (кнопка 'Подключить Gmail')."),
     ("imap не настроен",
      "💡 IMAP не настроен — агент не может читать входящие. Добавь IMAP_HOST + IMAP_USER + IMAP_PASS в настройки агента"),
     ("yandex_user не",
-     "💡 Яндекс.Почта не настроена. Добавь YANDEX_USER=you@yandex.ru + YANDEX_PASS=... в настройки агента"),
+     "💡 Яндекс.Почта не настроена (legacy IMAP/SMTP). Для исходящих писем агентов используется только Gmail OAuth."),
     ("mailru_user не",
-     "💡 Mail.ru не настроен. Добавь MAILRU_USER=you@mail.ru + MAILRU_PASS=... в настройки агента"),
+     "💡 Mail.ru не настроен (legacy IMAP/SMTP). Для исходящих писем агентов используется только Gmail OAuth."),
     ("resend_api_key не",
-     "💡 Resend не настроен. resend.com → получи ключ → добавь RESEND_API_KEY + RESEND_FROM в настройки агента"),
+     "💡 Resend не настроен (legacy). Для исходящих писем агентов подключи Gmail OAuth в профиле пользователя."),
     # OpenWeatherMap
     ("openweathermap_api_key не",
      "💡 OpenWeatherMap не подключён. openweathermap.org/api → бесплатный ключ → добавь OPENWEATHERMAP_API_KEY в настройки агента"),
@@ -949,7 +949,7 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'setup': 'Playwright установлен в docker-окружении',
     },
     {
-        'label': 'Resend',
+        'label': 'Resend (legacy)',
         'keywords': ('resend', 'transactional email', 'resend email'),
         'presence': ('resend', 'resend_api'),
         'setup': 'RESEND_API_KEY',
@@ -2486,7 +2486,7 @@ class HybridAutonomousAgent:
 
         # ── Перехват send_email: перенаправляем на платформенный handler ──
         # Raw SMTP (python_code subprocess) заблокирован на Railway ("Network is unreachable").
-        # Используем платформенный send_email с Resend API fallback.
+        # Для agent-outbound используется send_email через Gmail OAuth.
         if action == 'send_email':
             try:
                 from . import handlers as _h_email

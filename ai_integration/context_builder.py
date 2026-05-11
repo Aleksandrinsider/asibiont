@@ -923,7 +923,7 @@ class ContextBuilder:
                             _email_accounts.append(f'Gmail OAuth ({_go_email})')
                     except Exception:
                         _email_accounts.append('Gmail OAuth (подключён)')
-                # Почта через агентов (SMTP/Resend ключи)
+                # Legacy-ключи в агентах (для чтения/исторической совместимости)
                 from models import UserAgent as _UA_email
                 _email_agents = session.query(_UA_email).filter(
                     _UA_email.author_id == user.id,
@@ -940,24 +940,23 @@ class ContextBuilder:
                             _k, _, _v = _ln.partition('=')
                             _env_ea[_k.strip().upper()] = _v.strip()
                     for _prefix, _label in [
-                        ('GMAIL_USER', 'Gmail (пароль приложения)'),
-                        ('YANDEX_USER', 'Яндекс Почта'),
-                        ('MAILRU_USER', 'Mail.ru'),
+                        ('GMAIL_USER', 'Gmail (legacy app-password)'),
+                        ('YANDEX_USER', 'Яндекс Почта (legacy IMAP/SMTP)'),
+                        ('MAILRU_USER', 'Mail.ru (legacy IMAP/SMTP)'),
                     ]:
                         _addr = _env_ea.get(_prefix, '')
                         _has_pass = bool(_env_ea.get(_prefix.replace('USER', 'PASS'), ''))
                         if _addr and _addr not in _email_seen and (_has_pass or _prefix == 'GMAIL_USER'):
                             _email_seen.add(_addr)
                             _email_accounts.append(f'{_label}: {_addr} [агент: {_ea.name}]')
-                    if _env_ea.get('RESEND_API_KEY') and _env_ea.get('RESEND_API_KEY') not in _email_seen:
-                        _email_seen.add(_env_ea['RESEND_API_KEY'])
-                        _re_from = _env_ea.get('RESEND_FROM', _env_ea.get('SENDER_EMAIL', _env_ea.get('FROM_EMAIL', '')))
-                        _re_suffix = f' через {_re_from}' if _re_from else ''
-                        _email_accounts.append(f'Resend API [агент: {_ea.name}]{_re_suffix}')
                 if _email_accounts:
-                    hints.append('ПОДКЛЮЧЁННАЯ ПОЧТА (используй в send_email/negotiate_by_email):\n' + '\n'.join(f' {a}' for a in _email_accounts))
+                    hints.append(
+                        'ПОДКЛЮЧЁННАЯ ПОЧТА:\n'
+                        'Для исходящих agent email (send_email / negotiate_by_email / outreach) обязателен Gmail OAuth.\n'
+                        + '\n'.join(f' {a}' for a in _email_accounts)
+                    )
                 else:
-                    hints.append('ПОЧТА: ни одного почтового ящика не подключено — send_email будет отправлять через платформенный Resend (no-reply). Чтобы отправлять со своей почты — предложи подключить Gmail/Яндекс/Mail.ru.')
+                    hints.append('ПОЧТА: Gmail OAuth не подключён — исходящие agent email недоступны. Предложи подключить Gmail в профиле пользователя.')
             except Exception as _eae:
                 logger.debug(f'[EMAIL_ACCTS_CTX] {_eae}')
 
@@ -989,7 +988,7 @@ class ContextBuilder:
                         'BINANCE': 'Binance', 'BYBIT': 'Bybit', 'STRIPE': 'Stripe',
                         'OPENAI': 'OpenAI', 'ANTHROPIC': 'Claude',
                         'YANDEX_USER': 'Яндекс Почта', 'MAILRU_USER': 'Mail.ru',
-                        'GMAIL_USER': 'Gmail', 'RESEND_API_KEY': 'Resend',
+                        'GMAIL_USER': 'Gmail',
                         'TWITTER_': 'Twitter/X', 'X_API': 'Twitter/X',
                         'LINKEDIN_': 'LinkedIn',
                         'YOUTUBE_': 'YouTube', 'TWILIO_': 'Twilio',

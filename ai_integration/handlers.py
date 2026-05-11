@@ -13992,7 +13992,7 @@ async def send_outreach_email(
     session=None,
     close_session: bool = True,
 ):
-    """Отправить email в рамках кампании через Resend API.
+    """Отправить email в рамках кампании через Gmail OAuth.
 
     Может вызываться вручную или автономно агентом (через якорь email_outreach_send).
     """
@@ -14449,8 +14449,8 @@ async def send_outreach_email(
             import logging as _log_rs2
             _log_rs2.getLogger(__name__).debug(f'[EMAIL_OUTREACH] Personal Resend lookup: {_rs_err}')
 
-        if not RESEND_API_KEY and not _smtp_creds_out and not _gmail_oauth_token_data and not _gmail_reply_to:
-            return " Email не настроен. Добавьте RESEND_API_KEY или SMTP-ключи (YANDEX_USER+YANDEX_PASSWORD, MAILRU_USER+MAILRU_PASSWORD, GMAIL_USER+GMAIL_APP_PASSWORD) в настройки агента."
+        if not _gmail_oauth_token_data:
+            return " Исходящие письма агентов доступны только через Gmail OAuth. Подключите Gmail в профиле пользователя."
 
         # Найти кампанию
         campaign = None
@@ -14834,166 +14834,26 @@ async def send_outreach_email(
         if _tg_link_oe and _tg_link_oe not in _body_signed:
             _body_signed = _body_signed.rstrip() + f'\n{_tg_link_oe}'
 
-        # ── SMTP dispatch (Яндекс / Mail.ru / custom SMTP) — приоритет перед Resend ──
-        _smtp_sent_out = False
-        if _smtp_creds_out:
-            import smtplib as _smtplib_out
-            from email.mime.text import MIMEText as _MimeOut
-            from email.mime.multipart import MIMEMultipart as _MMOut
-            import asyncio as _aio_out
-            import ssl as _ssl_out
-            _body_smtp = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
-            def _do_smtp_outreach():
-                _msg_out = _MMOut('alternative')
-                _msg_out['From'] = f"{campaign.sender_name} <{_smtp_creds_out['user']}>"
-                _msg_out['To'] = recipient_email
-                _msg_out['Subject'] = subject
-                try:
-                    _msg_out['List-Unsubscribe'] = f'<{_unsub_url}>'
-                    _msg_out['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
-                except Exception:
-                    pass
-                _msg_out.attach(_MimeOut(_body_smtp, 'plain', 'utf-8'))
-                try:
-                    _html_smtp_out = _build_email_html(_text_to_email_html(_body_smtp), sender_name=campaign.sender_name)
-                    _msg_out.attach(_MimeOut(_html_smtp_out, 'html', 'utf-8'))
-                except Exception:
-                    pass
-                _ctx_out = _ssl_out.create_default_context()
-                with _smtplib_out.SMTP(_smtp_creds_out['host'], _smtp_creds_out['port'], timeout=30) as _srv:
-                    _srv.ehlo(); _srv.starttls(context=_ctx_out); _srv.ehlo()
-                    _srv.login(_smtp_creds_out['user'], _smtp_creds_out['pass'].replace(' ', ''))
-                    _srv.sendmail(_smtp_creds_out['user'], recipient_email, _msg_out.as_string())
-            _loop_out = _aio_out.get_running_loop()
-            try:
-                await _aio_out.wait_for(
-                    _loop_out.run_in_executor(None, _do_smtp_outreach), timeout=35.0
-                )
-                logger.info(
-                    f"[EMAIL_OUTREACH] Sent via SMTP ({_smtp_creds_out['label']}) to {redact_email(recipient_email)}"
-                )
-                _smtp_sent_out = True
-                # Rate limit: Яндекс/Mail.ru ограничивают ~100 писем/час.
-                # 5с задержка предотвращает burst-блокировку аккаунта.
-                import asyncio as _aio_delay
-                await _aio_delay.sleep(5)
-            except Exception as _smtp_out_err:
-                logger.warning(
-                    f"[EMAIL_OUTREACH] SMTP ({_smtp_creds_out['label']}) failed: {_smtp_out_err} — falling back to Resend"
-                )
+        # ── Gmail OAuth only: исходящие агентские письма отправляем только через Gmail API ──
+        _gmail_sender = (_gmail_oauth_token_data or {}).get('email', '').strip().lower()
+        if _gmail_sender:
+            campaign.sender_email = _gmail_sender
 
-        # ── Gmail OAuth: прямая отправка через Gmail API (приоритет над Resend) ──
-        _gmail_oauth_sent = False
-        if not _smtp_sent_out and _gmail_oauth_token_data:
-            _body_gmail_oa = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
-            _ok_goa, _res_goa = await _send_via_gmail_api(
-                _gmail_oauth_token_data,
-                recipient_email,
-                subject,
-                _body_gmail_oa,
-                campaign.sender_name or 'ASI Biont',
-                user,
-                session,
-            )
-            if _ok_goa:
-                logger.info('[EMAIL_OUTREACH] Sent via Gmail API to %s', redact_email(recipient_email))
-                _gmail_oauth_sent = True
-            else:
-                logger.warning('[EMAIL_OUTREACH] Gmail API failed: %s — falling back to Resend', _res_goa)
+        _body_gmail_oa = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
+        _ok_goa, _res_goa = await _send_via_gmail_api(
+            _gmail_oauth_token_data,
+            recipient_email,
+            subject,
+            _body_gmail_oa,
+            campaign.sender_name or 'ASI Biont',
+            user,
+            session,
+        )
+        if not _ok_goa:
+            logger.warning('[EMAIL_OUTREACH] Gmail API failed: %s', _res_goa)
+            return f" Ошибка отправки через Gmail OAuth: {_res_goa}"
 
-        if not _smtp_sent_out and not _gmail_oauth_sent:
-            # Проверка квоты Resend: если вернул 429 ранее — ждём до полуночи UTC
-            # Делаем ЗДЕСЬ а не раньше: SMTP/Gmail должны работать даже когда Resend заблокирован
-            try:
-                from .service_health import get_status as _svc_status_resend
-                _svc_st_r = _svc_status_resend()
-                _resend_st_r = _svc_st_r.get('resend', {})
-                if _resend_st_r.get('code') == 429:
-                    import time as _t429_r
-                    _bu_r = _resend_st_r.get('blocked_until')
-                    if _bu_r and _t429_r.time() < _bu_r:
-                        _mins_left_r = int((_bu_r - _t429_r.time()) / 60)
-                        return f"[INTERNAL] Resend исчерпал дневную квоту. Отправка заблокирована на {_mins_left_r} мин (до полуночи UTC). Переключись на другую задачу."
-            except Exception as _svc_chk_r:
-                logger.debug("resend quota check skipped: %s", _svc_chk_r)
-
-            if not RESEND_API_KEY:
-                return " SMTP/Gmail отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
-            try:
-                async with _safe_http() as http:
-                    # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
-                    # _personal_resend_from: из user_api_keys агента (RESEND_FROM/SENDER_EMAIL/FROM_EMAIL)
-                    from config import RESEND_FROM as _resend_from_cfg
-                    _effective_resend_from = _personal_resend_from or _resend_from_cfg
-                    _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
-                                     'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
-                    _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
-                    # Free-mail domains (gmail, yandex, mail.ru etc.) cannot be used as Resend
-                    # sender — Resend requires a verified domain. Always use RESEND_FROM / platform
-                    # default for free-mail senders. reply_to is set to the real user address below.
-                    if _sender_domain in _free_domains:
-                        _from_addr = _effective_resend_from or 'outreach@asibiont.com'
-                    else:
-                        _from_addr = campaign.sender_email or _effective_resend_from or 'outreach@asibiont.com'
-                    from_header = f"{campaign.sender_name} <{_from_addr}>"
-                    # reply_to: Gmail (app-password mode) → ответы приходят на Gmail пользователя
-                    _reply_to_addr = (
-                        _gmail_reply_to or
-                        (campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None)
-                    )
-                    # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
-                    _body_with_footer = _body_signed + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
-                    async with http.post(
-                        'https://api.resend.com/emails',
-                        headers={
-                            'Authorization': f'Bearer {RESEND_API_KEY}',
-                            'Content-Type': 'application/json',
-                        },
-                        json={k: v for k, v in {
-                            'from': from_header,
-                            'to': [recipient_email],
-                            'reply_to': [_reply_to_addr] if _reply_to_addr else None,
-                            'subject': subject,
-                            'text': _body_with_footer,
-                            'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
-                        }.items() if v is not None},
-                        timeout=_aiohttp.ClientTimeout(total=15),
-                    ) as resp:
-                        resp_data = await resp.json()
-                    if resp.status in (200, 201):
-                        resend_id = resp_data.get('id')
-                        logger.info(f"[EMAIL_OUTREACH] Sent to {redact_email(recipient_email)}: {resend_id}")
-                        # Сбрасываем запись ошибки при успехе
-                        try:
-                            from .service_health import clear_error as _clr_svc
-                            _clr_svc('resend')
-                        except Exception as _e:
-                            logger.debug("suppressed: %s", _e)
-                    else:
-                        err = resp_data.get('message', str(resp_data))
-                        logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
-                        try:
-                            from .service_health import record_error as _rec_svc
-                            import time as _t_rec
-                            from datetime import datetime as _dt_rec, timezone as _tz_rec
-                            _blocked_until = None
-                            if resp.status == 429:
-                                # Блокируем до полуночи UTC — Resend сбрасывает квоту ежедневно
-                                _now_utc = _dt_rec.now(_tz_rec.utc)
-                                _midnight_utc = _now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-                                import math as _math_rec
-                                from datetime import timedelta as _td_rec
-                                _next_midnight = _midnight_utc + _td_rec(days=1)
-                                _blocked_until = _t_rec.time() + (_next_midnight - _now_utc).total_seconds()
-                            _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300], blocked_until=_blocked_until)
-                        except Exception as _e:
-                            logger.debug("suppressed: %s", _e)
-                        if resp.status == 429:
-                            return f"[INTERNAL] Resend исчерпал дневную квоту (429). Отправка заблокирована до полуночи UTC. Переключись на другую задачу."
-                        return f" Ошибка Resend API: {err}"
-            except Exception as e:
-                logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
-                return f" Ошибка отправки: {str(e)}"
+        logger.info('[EMAIL_OUTREACH] Sent via Gmail API to %s', redact_email(recipient_email))
 
         # Anti-spam задержка между письмами (5 сек — сокращено с 10 для увеличения дневного объёма)
         import asyncio as _asyncio_delay
@@ -15189,7 +15049,7 @@ async def reply_to_outreach_email(
 ):
     """Ответить на входящий reply от получателя (AI автоматически или по запросу).
 
-    Приоритет отправки: SMTP пользователя → Resend пользователя → платформенный Resend.
+    Исходящая отправка разрешена только через Gmail OAuth.
     """
     if not session:
         session = Session()
@@ -15477,6 +15337,9 @@ async def reply_to_outreach_email(
 
         _send_error = None
 
+        if not _matched or _matched.get('type') != 'gmail_oauth':
+            return " Исходящие письма агентов доступны только через Gmail OAuth. Подключите Gmail в профиле пользователя."
+
         if _matched and _matched.get('type') == 'gmail_oauth':
             # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
             _ok_r, _res_r = await _send_via_gmail_api(
@@ -15572,35 +15435,8 @@ async def reply_to_outreach_email(
             except Exception as _re:
                 _send_error = f'Resend: {_re}'
 
-        # Fallback: платформенный Resend (если нет интеграции или предыдущие упали)
-        if _matched is None or _send_error:
-            from config import RESEND_API_KEY
-            if not RESEND_API_KEY:
-                return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
-            try:
-                async with _safe_http() as http:
-                    _fb_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
-                                  'to': [to_clean], 'subject': subject, 'text': reply_body}
-                    try:
-                        _fb_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
-                    if sender_addr and '@' in sender_addr:
-                        _fb_r_json['reply_to'] = [sender_addr]
-                    async with http.post(
-                        'https://api.resend.com/emails',
-                        headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
-                        json=_fb_r_json,
-                        timeout=_aiohttp.ClientTimeout(total=15),
-                    ) as resp:
-                        resp_data = await resp.json()
-                    if resp.status not in (200, 201):
-                        err = resp_data.get('message', str(resp_data))
-                        prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
-                        return f" Ошибка Resend API: {err}{prev_err}"
-                    logger.info(f'[EMAIL_REPLY] Sent via platform Resend (Reply-To: {sender_addr}) to {to_clean}')
-            except Exception as e:
-                return f" Ошибка отправки: {_send_error or str(e)}"
+        if _send_error:
+            return f" Ошибка отправки через Gmail OAuth: {_send_error}"
 
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
@@ -16152,7 +15988,7 @@ async def send_follow_up_email(
     """Отправить follow-up email (агент вызывает автономно при якоре email_follow_up).
 
     Обновляет follow_up_count, next_follow_up_at.
-    Приоритет отправки: SMTP пользователя → Resend пользователя → платформенный Resend.
+    Исходящая отправка разрешена только через Gmail OAuth.
     """
     if not session:
         session = Session()
@@ -16327,6 +16163,9 @@ async def send_follow_up_email(
 
         _send_error = None
 
+        if not _matched or _matched.get('type') != 'gmail_oauth':
+            return " Исходящие письма агентов доступны только через Gmail OAuth. Подключите Gmail в профиле пользователя."
+
         if _matched and _matched.get('type') == 'gmail_oauth':
             # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
             _ok_f, _res_f = await _send_via_gmail_api(
@@ -16412,33 +16251,8 @@ async def send_follow_up_email(
             except Exception as _re2:
                 _send_error = f'Resend: {_re2}'
 
-        # Fallback: платформенный Resend
-        if _matched is None or _send_error:
-            from config import RESEND_API_KEY
-            if not RESEND_API_KEY:
-                return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
-            try:
-                async with _safe_http() as http:
-                    _fbu_json = {'from': f"{sender_name} <outreach@asibiont.com>",
-                                 'to': [to_clean], 'subject': subject, 'text': _body_signed_fu,
-                                 'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}}
-                    try:
-                        _fbu_json['html'] = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
-                    if sender_addr and '@' in sender_addr:
-                        _fbu_json['reply_to'] = [sender_addr]
-                    async with http.post('https://api.resend.com/emails',
-                        headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
-                        json=_fbu_json,
-                        timeout=_aiohttp.ClientTimeout(total=15)) as resp:
-                        resp_data = await resp.json()
-                    if resp.status not in (200, 201):
-                        err = resp_data.get('message', str(resp_data))
-                        prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
-                        return f" Ошибка Resend API: {err}{prev_err}"
-            except Exception as e:
-                return f" Ошибка отправки: {_send_error or str(e)}"
+        if _send_error:
+            return f" Ошибка отправки через Gmail OAuth: {_send_error}"
 
         # Anti-spam задержка (10 сек)
         import asyncio as _asyncio_delay
@@ -16629,12 +16443,12 @@ async def negotiate_by_email(
 
         if not _chosen:
             return (
-                " Не настроена почтовая интеграция. Добавь в ключи агента:\n"
-                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
-                "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
-                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
-                "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
+                " Не настроена почтовая интеграция для исходящей отправки.\n"
+                "Подключи Gmail OAuth в профиле пользователя (кнопка 'Подключить Gmail')."
             )
+
+        if _chosen.get('type') != 'gmail_oauth':
+            return " Исходящие письма агентов доступны только через Gmail OAuth. Подключите Gmail в профиле пользователя."
 
         _sender_addr = _chosen['email_user']
         _sender_name = sender_name or (sent_by_agent or '').strip() or 'Team'
@@ -18416,13 +18230,12 @@ async def send_email(
 
         if not _chosen_integration:
             return (
-                " Не настроена почтовая интеграция. "
-                "Добавь в настройках агента одно из:\n"
-                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
-                "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
-                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
-                "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@твой-домен.com"
+                " Не настроена почтовая интеграция для исходящей отправки. "
+                "Подключи Gmail OAuth в профиле пользователя."
             )
+
+        if _chosen_integration.get('type') != 'gmail_oauth':
+            return " Исходящие письма агентов доступны только через Gmail OAuth. Подключите Gmail в профиле пользователя."
 
         # Fallback sender
         if not sender_name:
