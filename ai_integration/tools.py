@@ -2191,4 +2191,121 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_github_issue",
+            "description": "🐛 Создать issue в GitHub репозитории. Используй когда пользователь просит: 'создай issue', 'открой задачу в GitHub', 'зафиксируй баг в репозитории', 'добавь feature request'. GITHUB_TOKEN подставляется автоматически из настроек агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_url": {
+                        "type": "string",
+                        "description": "URL GitHub репозитория. Пример: https://github.com/owner/repo"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Заголовок issue. Кратко и по делу."
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Описание issue (опционально). Можно включить шаги воспроизведения, ожидаемое/фактическое поведение."
+                    },
+                    "labels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Метки issue (опционально). Пример: ['bug', 'priority:high']"
+                    }
+                },
+                "required": ["repo_url", "title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "close_github_issue",
+            "description": "✅ Закрыть issue в GitHub репозитории. Используй когда пользователь просит: 'закрой issue #42', 'отметь задачу как выполненную в GitHub', 'закрой баг'. Можно добавить финальный комментарий перед закрытием. GITHUB_TOKEN подставляется автоматически.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_url": {
+                        "type": "string",
+                        "description": "URL GitHub репозитория. Пример: https://github.com/owner/repo"
+                    },
+                    "issue_number": {
+                        "type": "integer",
+                        "description": "Номер issue для закрытия. Пример: 42"
+                    },
+                    "comment": {
+                        "type": "string",
+                        "description": "Комментарий перед закрытием (опционально). Например: 'Исправлено в PR #55'."
+                    }
+                },
+                "required": ["repo_url", "issue_number"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "trigger_github_workflow",
+            "description": "🚀 Запустить GitHub Actions CI/CD workflow. Используй когда пользователь просит: 'запусти деплой', 'запусти тесты в CI', 'триггерни pipeline', 'сделай deployment'. Workflow должен иметь триггер workflow_dispatch. GITHUB_TOKEN подставляется автоматически.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_url": {
+                        "type": "string",
+                        "description": "URL GitHub репозитория. Пример: https://github.com/owner/repo"
+                    },
+                    "workflow_id": {
+                        "type": "string",
+                        "description": "Имя файла workflow или его числовой ID. Пример: 'deploy.yml', 'ci.yml', 'test.yml'"
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Ветка или тег для запуска. По умолчанию: 'main'. Пример: 'main', 'develop', 'v1.0.0'"
+                    },
+                    "inputs": {
+                        "type": "object",
+                        "description": "Входные параметры для workflow (опционально). Пример: {\"environment\": \"production\"}"
+                    }
+                },
+                "required": ["repo_url", "workflow_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "push_file_to_github",
+            "description": "📄 Создать или обновить файл в GitHub репозитории (прямой коммит). Используй когда пользователь просит: 'загрузи тест в репозиторий', 'добавь документацию в repo', 'запушь этот файл', 'создай README в GitHub'. GITHUB_TOKEN подставляется автоматически.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_url": {
+                        "type": "string",
+                        "description": "URL GitHub репозитория. Пример: https://github.com/owner/repo"
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "Путь файла в репозитории. Пример: 'tests/test_api.py', 'docs/README.md'"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Содержимое файла (полный текст)."
+                    },
+                    "commit_message": {
+                        "type": "string",
+                        "description": "Сообщение коммита. Пример: 'feat: add API integration tests'"
+                    },
+                    "branch": {
+                        "type": "string",
+                        "description": "Ветка для коммита. По умолчанию: 'main'. Пример: 'main', 'develop'"
+                    }
+                },
+                "required": ["repo_url", "file_path", "content", "commit_message"]
+            }
+        }
+    },
 ]

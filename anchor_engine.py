@@ -26987,25 +26987,27 @@ class AnchorEngine:
             # Сигналы
             signals = anchor_data.get('signals', [])
 
-            # DDG: подтягиваем свежий контекст из интернета по нише/интересам
-            try:
-                from ai_integration.api_client import get_api_client
-                api = get_api_client()
-                niche = ''
-                if profile:
-                    niche = (getattr(profile, 'interests', '') or getattr(profile, 'goals', '') or '')[:60]
-                if niche:
-                    from datetime import datetime as dt
-                    fresh_query = f'{niche} тренды новости {dt.now().strftime("%Y")}'
-                    fresh_results = await api.duckduckgo_search(fresh_query, num=3, cache_ttl=7200)
-                    if fresh_results:
-                        signals.append("СВЕЖИЕ ДАННЫЕ ИЗ СЕТИ:")
-                        for r in fresh_results[:3]:
-                            title = r.get('title', '')
-                            snippet = r.get('snippet', '')[:120]
-                            signals.append(f"  — {title}: {snippet}")
-            except Exception as e:
-                logger.debug(f"[ANCHOR] DDG post enrichment failed (non-critical): {e}")
+            # DDG: подтягиваем свежий контекст из интернета — только для channel/discord постов,
+            # не для feed (feed = итог дня на основе реальных задач, без внешних новостей)
+            if mode in ('channel', 'discord'):
+                try:
+                    from ai_integration.api_client import get_api_client
+                    api = get_api_client()
+                    niche = ''
+                    if profile:
+                        niche = (getattr(profile, 'interests', '') or getattr(profile, 'goals', '') or '')[:60]
+                    if niche:
+                        from datetime import datetime as dt
+                        fresh_query = f'{niche} тренды новости {dt.now().strftime("%Y")}'
+                        fresh_results = await api.duckduckgo_search(fresh_query, num=3, cache_ttl=7200)
+                        if fresh_results:
+                            signals.append("СВЕЖИЕ ДАННЫЕ ИЗ СЕТИ:")
+                            for r in fresh_results[:3]:
+                                title = r.get('title', '')
+                                snippet = r.get('snippet', '')[:120]
+                                signals.append(f"  — {title}: {snippet}")
+                except Exception as e:
+                    logger.debug(f"[ANCHOR] DDG post enrichment failed (non-critical): {e}")
 
             # Общий антигаллюцинационный блок для всех режимов
             _no_hallucinate = (
@@ -27017,18 +27019,18 @@ class AnchorEngine:
 
             if mode == 'feed':
                 system_msg = (
-                    "Ты — автономный агент ASI Biont. Твоя задача — решить, стоит ли сделать пост в ленту "
-                    "от лица пользователя.\n\n"
+                    "Ты — ghostwriter. Пишешь короткий личный итог дня от лица пользователя для его ленты дашборда.\n\n"
                     "ПРАВИЛА:\n"
-                    "1. ВСЕГДА старайся написать пост. Верни SKIP ТОЛЬКО если сигналов буквально 0 или профиль абсолютно пустой\n"
-                    "2. Пиши от ПЕРВОГО лица, как будто сам пользователь делится с миром\n"
-                    "3. Пост может быть О ЧЁМ УГОДНО: достижения, мысли, поиск людей, экспертное мнение, "
-                    "итоги дня, просьба о помощи, инсайты, открытия, планы — выбери самое полезное\n"
-                    "4. Даже 1 сигнал — достаточно для поста. Навыки или интересы из профиля = хороший повод для экспертного поста\n"
-                    "5. SEO-формат: 1700-2200 символов (минимум 1500). Структура: сильный лид + 3-5 смысловых блоков + короткий вывод/CTA. "
-                    "Пиши естественно, живо, без воды. БЕЗ эмодзи и хештегов.\n"
-                    f"6. НЕ ВЫДУМЫВАЙ факты. Основывайся ТОЛЬКО на реальных сигналах ниже. {_no_hallucinate}\n"
-                    "7. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
+                    "1. Верни SKIP только если нет ни одной выполненной задачи И профиль пустой\n"
+                    "2. Пиши от ПЕРВОГО лица, как запись в личном дневнике — коротко и по-человечески\n"
+                    "3. Основа поста — что РЕАЛЬНО сделано сегодня (completed_tasks из сигналов). "
+                    "Если задач нет — напиши о чём-то личном: настроение, наблюдение, мысль дня\n"
+                    "4. Формат: 2-5 предложений, 150-400 символов. Сплошной текст без буллетов, "
+                    "хештегов, эмодзи, заголовков и CTA\n"
+                    "5. Стиль: живой разговорный, как сообщение другу. НЕ пресс-релиз, НЕ экспертная статья\n"
+                    "6. НЕ начинай со слова «Сегодня». Используй правильный род глаголов (он/она) по имени\n"
+                    f"7. НЕ ВЫДУМЫВАЙ факты. {_no_hallucinate}\n"
+                    "8. Верни ТОЛЬКО текст поста или SKIP. Ничего больше."
                 )
             elif mode == 'discord':
                 content_strategy = anchor_data.get('content_strategy', '')
