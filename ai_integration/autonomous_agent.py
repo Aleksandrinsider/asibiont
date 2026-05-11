@@ -2271,6 +2271,7 @@ class HybridAutonomousAgent:
                 'user_lang': user_lang,
                 'email_patterns': {},
                 'contact_preferences': {},
+                'setup_advisor_enabled': bool(getattr(profile, 'setup_advisor_enabled', False)) if profile else False,
             }
 
             # ── Intelligence Layer: Email Success Patterns (Improvements #1 + #2) ──
@@ -4205,23 +4206,7 @@ class HybridAutonomousAgent:
                     )
 
             # ═══ РЕЖИМ НАСТРОЙКИ — Setup Advisor (персистентный режим) ═══
-            # Активен если setup_advisor_enabled=True в профиле ИЛИ сообщение содержит маркер
-            _sa_active = bool(getattr(ctx.get('profile'), 'setup_advisor_enabled', False)) \
-                if ctx.get('profile') else False
-            if not _sa_active:
-                # fallback: проверяем напрямую из БД
-                try:
-                    from models import UserProfile as _UP_sa
-                    _sa_db = Session()
-                    try:
-                        _sa_u = _sa_db.query(User).filter_by(telegram_id=user_id).first()
-                        if _sa_u:
-                            _sa_p = _sa_db.query(_UP_sa).filter_by(user_id=_sa_u.id).first()
-                            _sa_active = bool(getattr(_sa_p, 'setup_advisor_enabled', False))
-                    finally:
-                        _sa_db.close()
-                except Exception:
-                    pass
+            _sa_active = ctx.get('setup_advisor_enabled', False)
             if _sa_active:
                 try:
                     _sa_s = Session()
@@ -4242,9 +4227,9 @@ class HybridAutonomousAgent:
                             "\n\n[РЕЖИМ НАСТРОЙКИ АКТИВЕН]\n"
                             f"Подключено интеграций ({len(_sa_connected)}): {', '.join(_sa_connected) or 'ничего'}.\n"
                             f"Доступно для подключения (топ): {', '.join(_sa_not[:25])}{'...' if len(_sa_not) > 25 else ''}.\n"
-                            "Попутно с ответом на вопрос пользователя: если уместно — коротко упомяни "
-                            "что из доступных интеграций усилит его цели. Не превращай каждый ответ в лекцию — "
-                            "только когда это реально полезно в контексте сообщения."
+                            "ОБЯЗАТЕЛЬНО в конце ответа добавь 1-2 конкретных предложения: "
+                            "какие из доступных интеграций помогут пользователю достичь его цели прямо сейчас, "
+                            "и как их подключить. Будь конкретен — называй сервисы по имени."
                         )
                     finally:
                         _sa_s.close()
