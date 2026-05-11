@@ -4429,7 +4429,8 @@ except Exception as e:
                     {k:'BINANCE_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
                     {k:'BINANCE_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
                 ],
-                hint: 'Бесплатно, без ключа! Получает TOP-3 BUY/SELL объявления Binance P2P: цена, лимиты, методы оплаты, спред. Пороги — опциональны.', `import urllib.request, json, os
+                hint: 'Бесплатно, без ключа! Получает TOP-3 BUY/SELL объявления Binance P2P: цена, лимиты, методы оплаты, спред. Пороги — опциональны.',
+                code: `import urllib.request, json, os
 COIN = os.environ.get('BINANCE_P2P_COIN', 'USDT')
 FIAT = os.environ.get('BINANCE_P2P_FIAT', 'RUB')
 BUY_THRESH = float(os.environ.get('BINANCE_BUY_THRESHOLD', '0') or '0')
