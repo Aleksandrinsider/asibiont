@@ -4526,171 +4526,77 @@ try:
 except Exception as e:
     print('Ошибка Bybit P2P: ' + str(e))`
             },
-            p2p_arbitrage: {
-                name: 'P2P Арбитраж (Bybit P2P vs EXMO)',
+            bestchange: {
+                name: 'BestChange (агрегатор обменников)',
                 fields: [
-                    {k:'ARB_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
-                    {k:'ARB_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
-                    {k:'ARB_MIN_PROFIT', label:'Мин. профит для сигнала (руб. на 1 монету)', ph:'1.5', t:'text', opt:true}
+                    {k:'BC_FROM', label:'Отдаю (код валюты)', ph:'USDT', t:'text', opt:true},
+                    {k:'BC_TO', label:'Получаю (код валюты)', ph:'SBER', t:'text', opt:true},
+                    {k:'BC_TOP', label:'Сколько обменников показать', ph:'7', t:'text', opt:true}
                 ],
-                hint: 'Сравнивает цены Bybit P2P (покупка) и EXMO Spot (продажа). Показывает, есть ли арбитраж: купить дёшево на P2P, продать дороже на бирже. Оба API бесплатны и работают без ключей.',
-                code: `import urllib.request, json, os
-COIN = os.environ.get('ARB_COIN', 'USDT')
-FIAT = os.environ.get('ARB_FIAT', 'RUB')
-MIN_PROFIT = float(os.environ.get('ARB_MIN_PROFIT', '1.0') or '1.0')
+                hint: 'Бесплатно, без ключей. Показывает лучшие курсы обменников для пары (например USDT→SBER, BTC→RUB, USDT→TBANK). Коды: USDT, BTC, ETH, XMR, SBER, TBANK, QIWI, CASH_RUB, VISA_RUB и др.',
+                code: `import urllib.request, json, os, zipfile, io, csv
+FROM_CURR = os.environ.get('BC_FROM', 'USDT').strip().upper()
+TO_CURR   = os.environ.get('BC_TO', 'SBER').strip().upper()
+TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
+# BestChange предоставляет бесплатный публичный архив с курсами
+BC_ZIP = 'https://www.bestchange.ru/export/bm.zip'
 try:
-    # --- Bybit P2P: лучшая цена покупки (min ask у продавцов) ---
-    body_bb = json.dumps({"tokenId": COIN, "currencyId": FIAT, "payment": [], "side": "0", "size": "10", "page": "1", "amount": ""}).encode()
-    req_bb = urllib.request.Request('https://api2.bybit.com/fiat/otc/item/online', data=body_bb, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req_bb, timeout=15) as r:
-        bb_data = json.loads(r.read().decode())
-    bb_asks = [float(i.get('price', 0)) for i in bb_data.get('result', {}).get('items', []) if float(i.get('price', 0)) > 0]
-    bybit_best_buy = min(bb_asks) if bb_asks else 0
-except Exception as e:
-    bybit_best_buy = 0; print('Ошибка Bybit P2P: ' + str(e))
-try:
-    # --- EXMO Spot: лучшая цена продажи (max bid покупателей на бирже) ---
-    pair = COIN + '_' + FIAT
-    url_ex = 'https://api.exmo.com/v1.1/order_book/?pair=' + pair
-    req_ex = urllib.request.Request(url_ex, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req_ex, timeout=10) as r:
-        ex_data = json.loads(r.read().decode())
-    exmo_best_sell = float(ex_data.get(pair, {}).get('bid_top', 0))
-    exmo_best_ask  = float(ex_data.get(pair, {}).get('ask_top', 0))
-except Exception as e:
-    exmo_best_sell = 0; exmo_best_ask = 0; print('Ошибка EXMO: ' + str(e))
-print('=== P2P Арбитраж: Bybit P2P → EXMO Spot ===')
-print('Купить ' + COIN + ' на Bybit P2P: ' + (str(round(bybit_best_buy, 2)) + ' ' + FIAT if bybit_best_buy else 'нет данных'))
-print('Продать ' + COIN + ' на EXMO Spot: ' + (str(round(exmo_best_sell, 2)) + ' ' + FIAT + ' (bid)' if exmo_best_sell else 'нет данных'))
-if bybit_best_buy and exmo_best_sell:
-    profit = round(exmo_best_sell - bybit_best_buy, 2)
-    pct    = round(profit / bybit_best_buy * 100, 2)
-    sign   = '+' if profit >= 0 else ''
-    print('Профит на 1 ' + COIN + ': ' + sign + str(profit) + ' ' + FIAT + ' (' + sign + str(pct) + '%)')
-    if profit >= MIN_PROFIT:
-        print('\n✅ АРБИТРАЖ: купи на Bybit P2P по ' + str(bybit_best_buy) + ', продай на EXMO по ' + str(exmo_best_sell) + ' → +' + str(profit) + ' ' + FIAT + '/USDT')
+    req = urllib.request.Request(BC_ZIP, headers={'User-Agent': 'Mozilla/5.0', 'Accept-Encoding': 'identity'})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        raw = r.read()
+    zf = zipfile.ZipFile(io.BytesIO(raw))
+    # bm.zip содержит: currencies.dat, exchangers.dat, rates.dat
+    def read_dat(name, delim=';'):
+        with zf.open(name) as f:
+            rows = []
+            for line in f.read().decode('utf-8', errors='replace').splitlines():
+                if line.strip(): rows.append(line.split(delim))
+        return rows
+    curr_rows = read_dat('currencies.dat')
+    exch_rows = read_dat('exchangers.dat')
+    rate_rows = read_dat('rates.dat')
+    # Строим маппинги: id -> name
+    curr_map = {r[0]: r[1].strip() for r in curr_rows if len(r) >= 2}
+    exch_map = {r[0]: r[1].strip() for r in exch_rows if len(r) >= 2}
+    # Ищем ID нужных валют по подстроке
+    def find_id(code):
+        code = code.upper()
+        exact = [k for k, v in curr_map.items() if v.upper() == code]
+        if exact: return exact[0]
+        partial = [k for k, v in curr_map.items() if code in v.upper()]
+        return partial[0] if partial else None
+    from_id = find_id(FROM_CURR)
+    to_id   = find_id(TO_CURR)
+    if not from_id or not to_id:
+        print('Валюта не найдена. FROM_ID=' + str(from_id) + ' TO_ID=' + str(to_id))
+        print('Доступные валюты (первые 30): ' + ', '.join([v for v in list(curr_map.values())[:30]]))
     else:
-        print('📊 Арбитраж невыгоден (профит ' + str(profit) + ' < порог ' + str(MIN_PROFIT) + ' ' + FIAT + ')')
-if exmo_best_ask and bybit_best_buy:
-    print('\n--- Обратная ветка: EXMO Spot → Bybit P2P ---')
-    profit2 = round(bybit_best_buy - exmo_best_ask, 2)
-    if profit2 > 0:
-        print('Купи на EXMO по ' + str(exmo_best_ask) + ', продай на Bybit P2P по ~' + str(bybit_best_buy) + ' → +' + str(profit2) + ' ' + FIAT + '/USDT')
-    else:
-        print('Обратный арбитраж невыгоден (' + str(profit2) + ' ' + FIAT + ')')`
-            },
-            exmo: {
-                name: 'EXMO (биржа)',
-                fields: [
-                    {k:'EXMO_API_KEY', label:'API Key (для приватных методов)', ph:'K-xxxxxxxxxxxxxxxxxxxx', t:'text', opt:true},
-                    {k:'EXMO_API_SECRET', label:'API Secret (для приватных методов)', ph:'S-xxxxxxxxxxxxxxxxxxxx', t:'text', opt:true},
-                    {k:'EXMO_PAIR', label:'Торговая пара', ph:'USDTTRC20_RUB', t:'text', opt:true}
-                ],
-                hint: 'Бесплатно для публичных данных (котировки, стакан, сделки) — ключи не нужны. Для баланса и ордеров: exmo.com → API → Создать ключ (права Read + Trade). Важно: EXMO использует полные названия сетей: USDTTRC20_RUB, USDTERC20_RUB, BTC_RUB, ETH_RUB.',
-                code: `import urllib.request, urllib.parse, json, os, hmac, hashlib, time
-API_KEY = os.environ.get('EXMO_API_KEY', '')
-API_SECRET = os.environ.get('EXMO_API_SECRET', '')
-PAIR = os.environ.get('EXMO_PAIR', 'USDT_RUB')
-ACTION = os.environ.get('AGENT_ACTION', 'get_ticker')
-BASE = 'https://api.exmo.com/v1.1'
-def pub_get(path):
-    req = urllib.request.Request(BASE + path, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read().decode())
-def priv_post(method, params=None):
-    if params is None: params = {}
-    params['nonce'] = str(int(time.time() * 1000))
-    body = urllib.parse.urlencode(params).encode()
-    sig = hmac.new(API_SECRET.encode(), body, hashlib.sha512).hexdigest()
-    req = urllib.request.Request(BASE + '/' + method, data=body,
-        headers={'Key': API_KEY, 'Sign': sig, 'Content-Type': 'application/x-www-form-urlencoded'})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read().decode())
-try:
-    if ACTION == 'get_ticker':
-        d = pub_get('/ticker')
-        p = d.get(PAIR, {})
-        if not p:
-            print('Пара ' + PAIR + ' не найдена. Доступные: ' + ', '.join(list(d.keys())[:10]) + '...')
+        from_name = curr_map[from_id]; to_name = curr_map[to_id]
+        # Фильтруем курсы: поле 0=from_id, 1=to_id, 2=exch_id, 3=курс_give, 4=курс_get, 5=резерв, 6=мин, 7=макс
+        matches = [r for r in rate_rows if len(r) >= 6 and r[0] == from_id and r[1] == to_id]
+        if not matches:
+            print('Курсов для ' + FROM_CURR + ' → ' + TO_CURR + ' не найдено.')
+            print('Проверь коды валют. FROM найден как: ' + from_name + ', TO: ' + to_name)
         else:
-            print('EXMO ' + PAIR)
-            print('Последняя сделка: ' + str(p.get('last_trade')))
-            print('Покупка (bid): ' + str(p.get('buy_price')))
-            print('Продажа (ask): ' + str(p.get('sell_price')))
-            print('Мин / Макс (24h): ' + str(p.get('low')) + ' / ' + str(p.get('high')))
-            print('Объём ' + PAIR.split('_')[0] + ' (24h): ' + str(round(float(p.get('vol', 0)), 2)))
-            print('Объём ' + PAIR.split('_')[1] + ' (24h): ' + str(round(float(p.get('vol_curr', 0)), 2)))
-    elif ACTION == 'get_order_book':
-        d = pub_get('/order_book/?pair=' + PAIR)
-        p = d.get(PAIR, {})
-        print('Стакан ' + PAIR)
-        print('Ask (продавцы, снизу вверх):')
-        for row in (p.get('ask', []))[:5]:
-            print('  ' + str(row[0]) + ' × ' + str(row[1]) + ' = ' + str(row[2]))
-        print('Bid (покупатели, сверху вниз):')
-        for row in (p.get('bid', []))[:5]:
-            print('  ' + str(row[0]) + ' × ' + str(row[1]) + ' = ' + str(row[2]))
-        print('Лучший ask: ' + str(p.get('ask_top')) + ' | Лучший bid: ' + str(p.get('bid_top')))
-    elif ACTION == 'get_trades':
-        d = pub_get('/trades/?pair=' + PAIR)
-        trades = d.get(PAIR, [])[:10]
-        print('Последние сделки ' + PAIR + ':')
-        for t in trades:
-            ts = time.strftime('%H:%M:%S', time.localtime(t.get('date', 0)))
-            print(ts + ' ' + t.get('type', '') + ' ' + str(t.get('quantity')) + ' @ ' + str(t.get('price')))
-    elif ACTION == 'get_balance':
-        if not API_KEY:
-            print('Ошибка: API_KEY не задан. Для баланса нужны ключи.')
-        else:
-            d = priv_post('user_info')
-            if d.get('result') == False:
-                print('Ошибка API: ' + str(d.get('error')))
-            else:
-                bals = {k: v for k, v in d.get('balances', {}).items() if float(v) > 0}
-                res = {k: v for k, v in d.get('reserved', {}).items() if float(v) > 0}
-                print('EXMO Баланс (' + str(len(bals)) + ' активов):')
-                for k, v in bals.items():
-                    rsv = res.get(k, '0')
-                    print(k + ': ' + str(v) + (' (резерв: ' + rsv + ')' if float(rsv) > 0 else ''))
-    elif ACTION == 'get_open_orders':
-        if not API_KEY:
-            print('Ошибка: API_KEY не задан.')
-        else:
-            d = priv_post('user_open_orders')
-            orders = d.get(PAIR, [])
-            if not orders:
-                print('Открытых ордеров по ' + PAIR + ' нет.')
-            else:
-                print('Открытые ордера ' + PAIR + ' (' + str(len(orders)) + '):')
-                for o in orders:
-                    print(o.get('type', '') + ' ' + str(o.get('quantity')) + ' @ ' + str(o.get('price')) + ' (ID: ' + str(o.get('order_id')) + ')')
-    else:
-        # По умолчанию: стакан (надёжнее тикера, поддерживает прямой запрос по паре)
-        ob_resp = pub_get('/order_book/?pair=' + PAIR)
-        ob = ob_resp.get(PAIR, {})
-        if not ob:
-            # Пара не найдена — показываем все RUB-пары из тикера
-            fiat = PAIR.split('_')[-1].upper()
-            all_pairs = sorted(pub_get('/ticker').keys())
-            rub_pairs = [k for k in all_pairs if k.endswith('_' + fiat)]
-            print('Пара ' + PAIR + ' не найдена.')
-            if ob_resp.get('error'):
-                print('Ошибка EXMO API: ' + str(ob_resp['error']))
-            print('Доступные ' + fiat + '-пары (' + str(len(rub_pairs)) + '):')
-            print(', '.join(rub_pairs))
-        else:
-            print('EXMO ' + PAIR)
-            print('Лучшая покупка (bid): ' + str(ob.get('bid_top')))
-            print('Лучшая продажа (ask): ' + str(ob.get('ask_top')))
-            print('Объём bid: ' + str(ob.get('bid_quantity')) + ' | Объём ask: ' + str(ob.get('ask_quantity')))
-            print('\\nAsk топ-3 (продавцы):')
-            for row in ob.get('ask', [])[:3]:
-                print('  цена ' + str(row[0]) + ' × ' + str(row[1]) + ' монет = ' + str(row[2]) + ' ' + PAIR.split('_')[1])
-            print('Bid топ-3 (покупатели):')
-            for row in ob.get('bid', [])[:3]:
-                print('  цена ' + str(row[0]) + ' × ' + str(row[1]) + ' монет = ' + str(row[2]) + ' ' + PAIR.split('_')[1])
+            # Сортируем по курсу (сколько TO получаем за 1 FROM) — чем больше тем лучше
+            try: matches.sort(key=lambda r: -float(r[4]))
+            except: pass
+            print('BestChange: ' + from_name + ' → ' + to_name)
+            print('Найдено обменников: ' + str(len(matches)) + ', показываю топ-' + str(TOP_N))
+            print('')
+            for i, r in enumerate(matches[:TOP_N], 1):
+                exch_name = exch_map.get(r[2], 'ID:' + r[2])
+                try:
+                    rate_give = float(r[3]); rate_get = float(r[4])
+                    rate_str = str(round(rate_get / rate_give, 4)) + ' ' + TO_CURR + '/' + FROM_CURR
+                except: rate_str = r[3] + '/' + r[4]
+                reserve = r[5].strip() if len(r) > 5 else '?'
+                mn = r[6].strip() if len(r) > 6 else ''
+                mx = r[7].strip() if len(r) > 7 else ''
+                limits = (' | мин: ' + mn if mn else '') + (' макс: ' + mx if mx else '')
+                print(str(i) + '. ' + exch_name + ' — ' + rate_str + ' | резерв: ' + reserve + limits)
 except Exception as e:
-    print('Ошибка EXMO: ' + str(e))`
+    print('Ошибка BestChange: ' + str(e))`
             },
             binance_spot: {
                 name: 'Binance Spot (торговля / баланс)',
@@ -7882,7 +7788,7 @@ except Exception as e:
             coingecko:       ['get_coin_price', 'get_market_cap'],
             binance_p2p:     ['check_p2p_spread', 'monitor_p2p'],
             bybit_p2p:       ['check_p2p_spread', 'monitor_p2p'],
-            exmo:            ['get_ticker', 'get_order_book', 'get_trades', 'get_balance', 'get_open_orders'],
+            bestchange:      ['get_rates', 'check_all'],
             binance_spot:    ['get_price', 'get_balance', 'place_order', 'get_open_orders'],
             jira:            ['jira_issues', 'create_jira_issue'],
             calendly:        ['get_events', 'check_calendly'],
@@ -8546,7 +8452,7 @@ except Exception as e:
                             <option value="coingecko">CoinGecko (крипто, без ключа)</option>
                             <option value="binance_p2p">Binance P2P</option>
                             <option value="bybit_p2p">Bybit P2P</option>
-                            <option value="exmo">EXMO (биржа)</option>
+                            <option value="bestchange">BestChange (агрегатор обменников)</option>
                             <option value="binance_spot">Binance Spot (торговля / баланс)</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
