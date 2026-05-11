@@ -4665,14 +4665,25 @@ try:
                 for o in orders:
                     print(o.get('type', '') + ' ' + str(o.get('quantity')) + ' @ ' + str(o.get('price')) + ' (ID: ' + str(o.get('order_id')) + ')')
     else:
-        # По умолчанию: тикер + стакан
-        d = pub_get('/ticker')
-        p = d.get(PAIR, {})
+        # По умолчанию: стакан (надёжнее тикера, поддерживает прямой запрос по паре)
         ob = pub_get('/order_book/?pair=' + PAIR).get(PAIR, {})
-        print('EXMO ' + PAIR)
-        print('Цена: ' + str(p.get('last_trade')) + ' | bid: ' + str(p.get('buy_price')) + ' | ask: ' + str(p.get('sell_price')))
-        print('24h: мин ' + str(p.get('low')) + ' / макс ' + str(p.get('high')) + ' / объём ' + str(round(float(p.get('vol_curr', 0)), 0)))
-        print('Лучший ask: ' + str(ob.get('ask_top')) + ' | Лучший bid: ' + str(ob.get('bid_top')))
+        if not ob:
+            # Пара не найдена — ищем похожие пары в тикере
+            all_pairs = list(pub_get('/ticker').keys())
+            q = PAIR.split('_')
+            similar = [k for k in all_pairs if q[0].upper() in k.upper() and (len(q) < 2 or q[1].upper() in k.upper())]
+            print('Пара ' + PAIR + ' не найдена. Похожие пары EXMO: ' + ', '.join(similar[:8]))
+        else:
+            print('EXMO ' + PAIR)
+            print('Лучшая покупка (bid): ' + str(ob.get('bid_top')))
+            print('Лучшая продажа (ask): ' + str(ob.get('ask_top')))
+            print('Объём bid: ' + str(ob.get('bid_quantity')) + ' | Объём ask: ' + str(ob.get('ask_quantity')))
+            print('\\nAsk топ-3 (продавцы):')
+            for row in ob.get('ask', [])[:3]:
+                print('  цена ' + str(row[0]) + ' × ' + str(row[1]) + ' монет = ' + str(row[2]) + ' ' + PAIR.split('_')[1])
+            print('Bid топ-3 (покупатели):')
+            for row in ob.get('bid', [])[:3]:
+                print('  цена ' + str(row[0]) + ' × ' + str(row[1]) + ' монет = ' + str(row[2]) + ' ' + PAIR.split('_')[1])
 except Exception as e:
     print('Ошибка EXMO: ' + str(e))`
             },
