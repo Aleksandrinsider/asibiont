@@ -795,42 +795,41 @@ async def send_email(to: str, subject: str, body: str):
     if MAILERSEND_API_KEY:
         try:
             logger.info(f"Sending email via MailerSend API to {to}")
-            async with _safe_http() as session:
-                async with session.post(
-                    'https://api.mailersend.com/v1/email',
-                    headers={
-                        'Authorization': f'Bearer {MAILERSEND_API_KEY}',
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'User-Agent': 'ASI-Biont/1.0 (+https://asibiont.com)',
-                        'Accept': 'application/json'
-                    },
-                    json={
-                        'from': {
-                            'email': MAILERSEND_FROM_EMAIL,
-                            'name': MAILERSEND_FROM_NAME
-                        },
-                        'to': [{'email': to}],
-                        'subject': subject,
-                        'text': body,
-                        'html': html,
-                    },
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as resp:
-                    # MailerSend may return 202 with text/html content-type; treat any 2xx as success.
-                    if 200 <= resp.status < 300:
-                        response_hint = await resp.text()
-                        logger.info(f"Email sent via MailerSend API to {to}: status={resp.status}, response={response_hint[:120] or 'ok'}")
-                        return
+            # requests-based call is more stable against Cloudflare bot checks than aiohttp here.
+            def _mailersend_send_sync():
+                import requests
 
-                    try:
-                        resp_data = await resp.json()
-                        err = resp_data.get('message', resp_data.get('error', str(resp_data)))
-                    except Exception:
-                        err = (await resp.text())[:500]
+                headers = {
+                    'Authorization': f'Bearer {MAILERSEND_API_KEY}',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'User-Agent': 'ASI-Biont/1.0 (+https://asibiont.com)',
+                    'Accept': 'application/json',
+                }
+                payload = {
+                    'from': {
+                        'email': MAILERSEND_FROM_EMAIL,
+                        'name': MAILERSEND_FROM_NAME,
+                    },
+                    'to': [{'email': to}],
+                    'subject': subject,
+                    'text': body,
+                    'html': html,
+                }
+                resp = requests.post('https://api.mailersend.com/v1/email', headers=headers, json=payload, timeout=20)
+                return resp.status_code, (resp.text or '')
 
-                    errors.append(f"MailerSend {resp.status}: {err}")
-                    logger.warning(f"MailerSend API failed: {resp.status} {err}")
+            loop = asyncio.get_running_loop()
+            status_code, response_text = await loop.run_in_executor(None, _mailersend_send_sync)
+
+            # MailerSend may return 202 with text/html content-type; any 2xx is success.
+            if 200 <= status_code < 300:
+                logger.info(f"Email sent via MailerSend API to {to}: status={status_code}, response={response_text[:120] or 'ok'}")
+                return
+
+            err = response_text[:500] or 'unknown error'
+            errors.append(f"MailerSend {status_code}: {err}")
+            logger.warning(f"MailerSend API failed: {status_code} {err}")
         except Exception as e:
             errors.append(f"MailerSend API: {e}")
             logger.warning(f"MailerSend API error: {e}")
