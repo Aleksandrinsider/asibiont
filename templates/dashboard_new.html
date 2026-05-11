@@ -4538,12 +4538,17 @@ except Exception as e:
 FROM_CURR = os.environ.get('BC_FROM', 'USDT').strip().upper()
 TO_CURR   = os.environ.get('BC_TO', 'SBER').strip().upper()
 TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
-# BestChange предоставляет бесплатный публичный архив с курсами
-BC_ZIP = 'https://www.bestchange.ru/export/bm.zip'
+# BestChange публичный архив (пробуем два известных URL)
+def _bc_download():
+    for url in ['https://www.bestchange.ru/check/bm.zip', 'https://www.bestchange.ru/export/bm.zip']:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': '*/*', 'Referer': 'https://www.bestchange.ru/'})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.read()
+        except Exception: continue
+    raise Exception('Не удалось загрузить bm.zip — bestchange.ru недоступен или URL изменился')
 try:
-    req = urllib.request.Request(BC_ZIP, headers={'User-Agent': 'Mozilla/5.0', 'Accept-Encoding': 'identity'})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        raw = r.read()
+    raw = _bc_download()
     zf = zipfile.ZipFile(io.BytesIO(raw))
     # bm.zip содержит: currencies.dat, exchangers.dat, rates.dat
     def read_dat(name, delim=';'):
