@@ -2788,6 +2788,50 @@ async def delegate_task(
                 return (_cut or _txt[:_limit]).strip(' ,;:.-')
 
             def _live_assignment_text(_agent_name: str, _task_text: str) -> str:
+                def _normalize_assignment_phrase(_txt: str) -> str:
+                    _s = (_txt or '').strip()
+                    if not _s:
+                        return ''
+
+                    _inf_map = {
+                        'найти': 'Найди',
+                        'проверить': 'Проверь',
+                        'сохранить': 'Сохрани',
+                        'собрать': 'Собери',
+                        'сделать': 'Сделай',
+                        'подготовить': 'Подготовь',
+                        'написать': 'Напиши',
+                        'создать': 'Создай',
+                        'опубликовать': 'Опубликуй',
+                        'отправить': 'Отправь',
+                        'проанализировать': 'Проанализируй',
+                        'исследовать': 'Исследуй',
+                        'сравнить': 'Сравни',
+                        'сформировать': 'Сформируй',
+                        'составить': 'Составь',
+                        'заняться': 'Займись',
+                    }
+                    _inf_words = '|'.join(_ren.escape(k) for k in _inf_map.keys())
+
+                    # Если текст начинается с "тематического заголовка", а дальше идёт действие,
+                    # отбрасываем заголовок и оставляем саму команду.
+                    _first_action = _ren.search(rf'\b({_inf_words})\b', _s, flags=_ren.IGNORECASE)
+                    if _first_action and _first_action.start() > 0:
+                        _lead = _s[:_first_action.start()].strip(' ,.;:-')
+                        _is_heading_like = len(_lead) <= 140 and not _ren.search(r'[.!?]', _lead)
+                        if _is_heading_like:
+                            _s = _s[_first_action.start():].lstrip(' ,.;:-')
+
+                    # Переводим инфинитивы в начале предложений в повелительное наклонение.
+                    def _repl(match):
+                        _prefix = match.group(1) or ''
+                        _verb = (match.group(2) or '').lower()
+                        return f"{_prefix}{_inf_map.get(_verb, match.group(2))}"
+
+                    _s = _ren.sub(rf'(^|[.!?]\s+)({_inf_words})\b', _repl, _s, flags=_ren.IGNORECASE)
+                    _s = _ren.sub(r'\s{2,}', ' ', _s).strip(' ,;')
+                    return _s
+
                 # Показываем title задачи как есть — ИИ уже написал его в нужной форме.
                 # Никаких regex-обрезаний и таблиц спряжений: "учи ИИ, не кастрируй текст".
                 _task_lines = [ln.strip() for ln in (_task_text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n') if ln.strip()]
@@ -2813,6 +2857,7 @@ async def delegate_task(
                         break
                 _base = ' '.join(_base_parts).strip()
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip()
+                _base = _normalize_assignment_phrase(_base)
                 _generic = f'{_agent_name}, продолжи работу по текущей задаче.'
                 if not _base:
                     return _generic
@@ -16582,11 +16627,17 @@ async def check_emails(
     close_session: bool = True,
 ):
     """Проверить входящие письма из подключённой почты пользователя (Gmail/Яндекс/Mail.ru)."""
+    import re as _re_ce_filter
     import time as _time_ce
+    # Если запрошен конкретный sender-email (from_account содержит @),
+    # кеш не используем — нужен живой результат, иначе можно пропустить новое письмо.
+    _sender_filter = (from_account or '').strip().lower() if from_account and '@' in (from_account or '') else ''
+    _use_cache = not bool(_sender_filter)
+
     # Кеш: если результат свежий (< 2 мин) — не идём в почту снова
     _cache_key_ce = (user_id, from_account)
     _cached_ce = _CHECK_EMAILS_CACHE.get(_cache_key_ce)
-    if _cached_ce and _time_ce.time() - _cached_ce[0] < _CHECK_EMAILS_CACHE_TTL:
+    if _use_cache and _cached_ce and _time_ce.time() - _cached_ce[0] < _CHECK_EMAILS_CACHE_TTL:
         logger.debug("[CHECK_EMAILS] cache hit for user %s", user_id)
         return _cached_ce[1] + "\n\n_(результат из кеша, проверено менее 2 минут назад)_"
 
@@ -16688,9 +16739,27 @@ async def check_emails(
         else:
             return f"Тип интеграции '{chosen['type']}' не поддерживает чтение входящих."
 
+        # Явная фильтрация по sender-email (когда from_account задан как email отправителя).
+        if _sender_filter and result and ('\n---\n' in result):
+            _hdr_match_sf = _re_ce_filter.match(r'^(.*?)(?:\n\n)', result, _re_ce_filter.DOTALL)
+            _hdr_sf = _hdr_match_sf.group(1).strip() if _hdr_match_sf else ''
+            _body_sf = result[len(_hdr_match_sf.group(0)):] if _hdr_match_sf else result
+            _blocks_sf = [b for b in _re_ce_filter.split(r'\n---\n', _body_sf) if b.strip()]
+            _matched_sf = [b for b in _blocks_sf if _sender_filter in b.lower()]
+            if not _matched_sf:
+                result = f"По фильтру отправителя {_sender_filter} новых писем не найдено."
+            else:
+                result = (
+                    f"Входящие от {_sender_filter} ({len(_matched_sf)}):\n\n"
+                    + "\n---\n".join(_matched_sf)
+                )
+
         # ── Дедупликация: фильтруем письма, о которых агент уже сообщал ──
+        # ВАЖНО: сохраняем сырой результат ДО dedup — обновление БД должно работать
+        # даже если агент уже видел эти письма (иначе EmailOutreach никогда не обновится).
+        _raw_result = result
         _no_new_kw_pre = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
-        if result and not any(kw in result.lower() for kw in _no_new_kw_pre):
+        if (not _sender_filter) and result and not any(kw in result.lower() for kw in _no_new_kw_pre):
             try:
                 import hashlib as _hl_dup
                 import json as _json_dup
@@ -16791,8 +16860,10 @@ async def check_emails(
                 logger.debug('[CHECK_EMAILS] dedup error (skipping): %s', _e_dedup)
 
         # Автоматически сохраняем/обновляем контакты из входящих в EmailContact
+        # Используем _raw_result (до dedup) — иначе dedup заблокирует обновление EmailOutreach
+        # и _scan_email_outreach никогда не создаст якорь email_reply_received.
         _no_new_keywords = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
-        if result and not any(kw in result.lower() for kw in _no_new_keywords):
+        if _raw_result and not any(kw in _raw_result.lower() for kw in _no_new_keywords):
             import re as _re_ce
             import datetime as _dt_ce
             from models import EmailContact as _EC_ce2, EmailOutreach as _EO_ce2
@@ -16809,7 +16880,7 @@ async def check_emails(
                 el = em.lower()
                 return any(p in el for p in _NOREPLY_PATS)
 
-            _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result, _re_ce.IGNORECASE))
+            _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _raw_result, _re_ce.IGNORECASE))
             _found_em -= _my_emails
             _found_em = {em for em in _found_em if not _is_noreply(em)}
             _new_auto = _found_em - _known_emails
@@ -16976,6 +17047,37 @@ async def check_emails(
                             logger.info(f'[CHECK_EMAILS] Saved/updated reply_text for replied: {_rep_em}')
                 except Exception as _e_upd:
                     logger.debug(f'[CHECK_EMAILS] update replied status failed: {_e_upd}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
+            # ── Новые контакты (первый ответ) из outreach: обновляем EmailOutreach ──
+            # _new_auto = контакты, которых не было в EmailContact до этого вызова.
+            # Их EmailContact создан выше со status='replied', но EmailOutreach.status/reply_text
+            # ещё не обновлён — без этого _scan_email_outreach не создаст email_reply_received.
+            # Fingerprint уже сохранён в dedup → последующие check_emails отфильтруют письмо,
+            # поэтому обновить EmailOutreach НУЖНО прямо сейчас, в первом вызове.
+            for _new_em_eo in list(_new_auto)[:10]:
+                try:
+                    if _new_em_eo not in _outreach_map:
+                        continue
+                    _rep_snip_new = _reply_snippets.get(_new_em_eo, '')
+                    _now_new_eo = _dt_ce.datetime.utcnow()
+                    _eo_new_r = session.query(_EO_ce2).filter_by(
+                        user_id=user.id, recipient_email=_new_em_eo,
+                    ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened', 'failed'])).first()
+                    if _eo_new_r:
+                        _eo_new_r.status = 'replied'
+                        _eo_new_r.next_follow_up_at = None
+                        if _rep_snip_new and (not _eo_new_r.reply_text or len(_rep_snip_new) > len(_eo_new_r.reply_text or '')):
+                            _eo_new_r.reply_text = _rep_snip_new
+                        if not _eo_new_r.reply_at:
+                            _eo_new_r.reply_at = _now_new_eo
+                        session.commit()
+                        logger.info('[CHECK_EMAILS] New-contact outreach reply saved: %s', _new_em_eo)
+                except Exception as _e_new_eo:
+                    logger.debug('[CHECK_EMAILS] new-contact outreach update: %s', _e_new_eo)
                     try:
                         session.rollback()
                     except Exception:
@@ -17437,11 +17539,12 @@ async def check_emails(
                 logger.debug('[CHECK_EMAILS] ai_reply_sent_at filter failed: %s', _e_air)
 
         # Кешируем результат (2 мин) — повторный "есть новые письма?" будет мгновенным
-        try:
-            import time as _time_ce2
-            _CHECK_EMAILS_CACHE[_cache_key_ce] = (_time_ce2.time(), result)
-        except Exception:
-            pass
+        if _use_cache:
+            try:
+                import time as _time_ce2
+                _CHECK_EMAILS_CACHE[_cache_key_ce] = (_time_ce2.time(), result)
+            except Exception:
+                pass
         return result
     except Exception as e:
         logger.error(f"[CHECK_EMAILS] Error: {e}", exc_info=True)
