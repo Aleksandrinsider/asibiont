@@ -10907,8 +10907,8 @@ class AnchorEngine:
                                     _stag_body_parts.append("Продолжаю пробовать другие каналы.")
                                 _esc_lines.append(_stag_header + ('\n' + '\n'.join(_stag_body_parts) if _stag_body_parts else ''))
 
-                            # stage >= 2 без реальных фактов — не отправляем, чтобы не шуметь
-                            if _esc_stage >= 2 and not _stag_body_parts:
+                            # stage >= 1 без реальных фактов — не отправляем, чтобы не шуметь
+                            if _esc_stage >= 1 and not _stag_body_parts:
                                 _esc_lines = []
 
                             if _esc_lines:
