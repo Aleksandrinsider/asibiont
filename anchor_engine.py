@@ -1059,6 +1059,49 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     return t.strip()
 
 
+def _normalize_asi_voice(text: str) -> str:
+    """Нормализует голос ASI к мужскому/нейтральному без шаблонов.
+
+    Применяется только к сообщениям, где автор — ASI.
+    Не трогает фразы вида "ИмяАгента проверила", чтобы не ломать цитирование женских агентов.
+    """
+    if not text:
+        return text or ''
+    import re as _re_asi
+
+    t = str(text)
+    _pairs = (
+        ('проверила', 'проверил'),
+        ('нашла', 'нашёл'),
+        ('сделала', 'сделал'),
+        ('подготовила', 'подготовил'),
+        ('написала', 'написал'),
+        ('отправила', 'отправил'),
+        ('обновила', 'обновил'),
+        ('проанализировала', 'проанализировал'),
+        ('собрала', 'собрал'),
+        ('решила', 'решил'),
+        ('смогла', 'смог'),
+        ('готова', 'готов'),
+    )
+
+    for _fem, _masc in _pairs:
+        # "Я проверила" -> "Я проверил"
+        t = _re_asi.sub(
+            rf'(?i)\b(я\s+){_fem}\b',
+            lambda m, _r=_masc: m.group(1) + (_r.capitalize() if m.group(0)[0].isupper() else _r),
+            t,
+        )
+        # "Только что проверила" / "Проверила" в начале предложения (типичный голос ASI)
+        t = _re_asi.sub(
+            rf'(?i)(^|[.!?]\s+)(только\s+что\s+)?{_fem}\b',
+            lambda m, _r=_masc: (m.group(1) or '') + (m.group(2) or '') + (_r.capitalize() if (m.group(2) or '').strip() == '' and (m.group(1) or '') != '' else _r),
+            t,
+        )
+
+    return t.strip()
+
+
 def _is_delegation_message(text: str, agent_names: list) -> bool:
     """Check if message is agent-to-agent delegation (not meant for user)."""
     if not text or not agent_names:
@@ -11239,7 +11282,7 @@ class AnchorEngine:
                         # Фильтруем отказы/галлюцинации директора
                         _dir_refusal_kw = ('не могу', 'не имею доступа', 'обратитесь', 'не способен', 'cannot', 'unable to')
                         if _dir_resp and len(_dir_resp.strip()) > 20 and not any(kw in _dir_resp.lower() for kw in _dir_refusal_kw):
-                            _dir_txt = _dir_resp.strip()
+                            _dir_txt = _normalize_asi_voice(_dir_resp.strip())
                             await _safe_send(self.bot, user.telegram_id, f"ASI:\n{_dir_txt}")
                             session.add(Interaction(
                                 user_id=user.id,
@@ -11911,12 +11954,11 @@ class AnchorEngine:
                                 prev_agent.name, _inbox_count)
                 except Exception as _e_ibox:
                     logger.debug('[ANCHOR-CHAIN] inbox_reply log error: %s', _e_ibox)
-                _inbox_verb = 'проверила' if _detect_agent_is_female(prev_agent.name) else 'проверил'
                 _decision = {
                     'continue': True,
                     'agent_name': 'ASI',
                     'task': (
-                        f"{prev_agent.name} {_inbox_verb} почту и нашёл {_inbox_count} новых письма. "
+                        f"{prev_agent.name}: проверка почты завершена, найдено {_inbox_count} новых письма. "
                         f"Реши что делать: ответить (reply_to_outreach_email), "
                         f"сохранить контакт (save_email_contact) или делегировать (delegate_task).\n"
                         f"📅 ЕСЛИ контакт предлагает СОЗВОН/ВСТРЕЧУ — уточни у пользователя через "
@@ -19300,6 +19342,7 @@ class AnchorEngine:
                         )
                         if _relay_txt and len(_relay_txt.strip()) > 15:
                             try:
+                                _relay_txt = _normalize_asi_voice(_relay_txt.strip())
                                 _rl_sess = Session()
                                 try:
                                     _rl_sess.add(Interaction(
@@ -20239,6 +20282,7 @@ class AnchorEngine:
                             pass
                         return True
                     if _report_text:
+                        _report_text = _normalize_asi_voice(_report_text)
                         try:
                             from models import Session as _Sum_Sess_cls
                             import datetime as _dt_sumchk
@@ -20298,13 +20342,13 @@ class AnchorEngine:
                                     message_type='proactive',
                                     content=json.dumps({
                                         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                        'text': _sanitize_proactive_text(
+                                        'text': _normalize_asi_voice(_sanitize_proactive_text(
                                             _strip_md(_report_text),
                                             fem_names={
                                                 n for n in (_current_run_agent_tools or [])
                                                 if _detect_agent_is_female(n)
                                             } or None,
-                                        ),
+                                        )),
                                         '__anchor_type': 'coordinator_summary',
                                     }, ensure_ascii=False),
                                 ))
@@ -28070,6 +28114,12 @@ class AnchorEngine:
                     message = _sanitize_proactive_text(message, is_fem=_is_fem_agent)
                 except Exception as _gender_agent_err:
                     logger.debug("[ANCHOR] agent gender fix failed: %s", _gender_agent_err)
+            elif message:
+                try:
+                    # Сообщение без конкретного агента считаем сообщением ASI.
+                    message = _normalize_asi_voice(message)
+                except Exception as _asi_voice_err:
+                    logger.debug("[ANCHOR] ASI voice normalize failed: %s", _asi_voice_err)
 
             # Оборачиваем контент в __agent JSON, если есть агент
             interaction_content = message
