@@ -4584,13 +4584,13 @@ if exmo_best_ask and bybit_best_buy:
                 fields: [
                     {k:'EXMO_API_KEY', label:'API Key (для приватных методов)', ph:'K-xxxxxxxxxxxxxxxxxxxx', t:'text', opt:true},
                     {k:'EXMO_API_SECRET', label:'API Secret (для приватных методов)', ph:'S-xxxxxxxxxxxxxxxxxxxx', t:'text', opt:true},
-                    {k:'EXMO_PAIR', label:'Торговая пара', ph:'USDT_RUB', t:'text', opt:true}
+                    {k:'EXMO_PAIR', label:'Торговая пара', ph:'USDTTRC20_RUB', t:'text', opt:true}
                 ],
-                hint: 'Бесплатно для публичных данных (котировки, стакан, сделки) — ключи не нужны. Для баланса и ордеров: exmo.com → API → Создать ключ (права Read + Trade). Пара: BTC_RUB, USDT_RUB, ETH_RUB и т.д.',
+                hint: 'Бесплатно для публичных данных (котировки, стакан, сделки) — ключи не нужны. Для баланса и ордеров: exmo.com → API → Создать ключ (права Read + Trade). Важно: EXMO использует полные названия сетей: USDTTRC20_RUB, USDTERC20_RUB, BTC_RUB, ETH_RUB.,
                 code: `import urllib.request, urllib.parse, json, os, hmac, hashlib, time
 API_KEY = os.environ.get('EXMO_API_KEY', '')
 API_SECRET = os.environ.get('EXMO_API_SECRET', '')
-PAIR = os.environ.get('EXMO_PAIR', 'USDT_RUB')
+PAIR = os.environ.get('EXMO_PAIR', 'USDTTRC20_RUB')
 ACTION = os.environ.get('AGENT_ACTION', 'get_ticker')
 BASE = 'https://api.exmo.com/v1.1'
 def pub_get(path):
