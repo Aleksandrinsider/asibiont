@@ -4532,14 +4532,16 @@ except Exception as e:
                     {k:'BC_FROM', label:'Откуда (напр. USDTTRC20, BTC, SBER)', ph:'USDTTRC20', t:'text', opt:true},
                     {k:'BC_TO', label:'Куда (напр. CARDRUB, SBER, TBANK)', ph:'CARDRUB', t:'text', opt:true},
                     {k:'BC_TOP', label:'Сколько обменников показать', ph:'7', t:'text', opt:true},
-                    {k:'BC_PROXY', label:'HTTP-прокси (если сервер блокирует)', ph:'http://user:pass@host:port', t:'text', opt:true}
+                    {k:'BC_SCRAPER_KEY', label:'ScraperAPI Key (обход Cloudflare, бесплатно)', ph:'', t:'text', opt:true},
+                    {k:'BC_PROXY', label:'HTTP-прокси (альтернатива ScraperAPI)', ph:'http://user:pass@host:port', t:'text', opt:true}
                 ],
-                hint: 'Парсит bestchange.biz. Пары: USDTTRC20->CARDRUB, BTC->SBER, ETH->TBANK и т.д. Если ошибка 403/cloudflare — укажите HTTP-прокси в поле BC_PROXY.',
+                hint: 'Парсит bestchange.biz. Пары: USDTTRC20->CARDRUB, BTC->SBER, ETH->TBANK. Для обхода Cloudflare: получите бесплатный ключ на scraperapi.com и укажите в BC_SCRAPER_KEY.',
                 code: `import urllib.request, urllib.parse, os, ssl
-FROM_CURR = os.environ.get('BC_FROM', 'USDTTRC20').strip()
-TO_CURR   = os.environ.get('BC_TO', 'CARDRUB').strip()
-TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
-BC_PROXY  = os.environ.get('BC_PROXY', '').strip()
+FROM_CURR   = os.environ.get('BC_FROM', 'USDTTRC20').strip()
+TO_CURR     = os.environ.get('BC_TO', 'CARDRUB').strip()
+TOP_N       = int(os.environ.get('BC_TOP', '7') or '7')
+BC_PROXY    = os.environ.get('BC_PROXY', '').strip()
+SCRAPER_KEY = os.environ.get('BC_SCRAPER_KEY', '').strip()
 url = 'https://bestchange.biz/ru/exchange/' + urllib.parse.quote(FROM_CURR) + '/' + urllib.parse.quote(TO_CURR)
 _hdrs = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -4557,18 +4559,27 @@ def strip_tags(s):
 def is_num(s):
     try: return float(s.replace(',', '.')) > 0.0001
     except: return False
-try:
+def fetch(u):
+    if SCRAPER_KEY:
+        api_url = 'http://api.scraperapi.com/?api_key=' + SCRAPER_KEY + '&url=' + urllib.parse.quote(u, safe='')
+        with urllib.request.urlopen(api_url, timeout=60) as r:
+            return r.read().decode('utf-8', errors='replace')
     if BC_PROXY:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({'http': BC_PROXY, 'https': BC_PROXY}))
     else:
         ctx = ssl.create_default_context()
         opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
-    req = urllib.request.Request(url, headers=_hdrs)
+    req = urllib.request.Request(u, headers=_hdrs)
     with opener.open(req, timeout=25) as r:
-        html = r.read().decode('utf-8', errors='replace')
-    if len(html) < 500 or 'cloudflare' in html.lower() or 'just a moment' in html.lower():
-        print('BestChange: cloudflare zablokiral zapros s oblachnogo IP.')
-        print('Reshenie: ukazhite proksi v pole BC_PROXY (format: http://user:pass@host:port)')
+        return r.read().decode('utf-8', errors='replace')
+try:
+    html = fetch(url)
+    cf_blocked = len(html) < 500 or ('cloudflare' in html.lower() and 'just a moment' in html.lower())
+    if cf_blocked:
+        print('BestChange: cloudflare blokiruet zapros s oblachnogo IP.')
+        print('Varianti:')
+        print('1. BC_SCRAPER_KEY - poluchite besplatno na scraperapi.com (1000 req/mes)')
+        print('2. BC_PROXY - http://user:pass@host:port (residential proxy)')
         print('URL: ' + url)
     else:
         rows = []
@@ -4586,12 +4597,12 @@ try:
             if nums and names:
                 rows.append((' '.join(names[:4]), nums))
         if not rows:
-            print('Dannye ne naydeny na stranitse. URL: ' + url)
+            print('Dannye ne naydeny. URL: ' + url)
             snippet = ' '.join(strip_tags(html[:500]).split())
-            print('Nachalo stranicy: ' + snippet[:250])
+            print('Nachalo: ' + snippet[:250])
         else:
             print('BestChange: ' + FROM_CURR + ' -> ' + TO_CURR)
-            print('Top-' + str(TOP_N) + ' obmennikov:')
+            print('Top-' + str(TOP_N) + ':')
             print('')
             for i, (name, nums) in enumerate(rows[:TOP_N], 1):
                 print(str(i) + '. ' + name + '  ' + ' | '.join(nums[:3]))
@@ -4599,8 +4610,8 @@ try:
             print('URL: ' + url)
 except Exception as e:
     print('Oshibka BestChange: ' + str(e))
-    if '403' in str(e) or '503' in str(e) or 'SSL' in str(e):
-        print('Proksi nuzhen. BC_PROXY = http://user:pass@host:port')`
+    if '403' in str(e) or '503' in str(e):
+        print('Ukazhite BC_SCRAPER_KEY (scraperapi.com) ili BC_PROXY')`
             },
             binance_spot: {
                 name: 'Binance Spot (торговля / баланс)',
