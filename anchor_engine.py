@@ -6873,7 +6873,8 @@ class AnchorEngine:
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
-                        _s.execute(_del_text("SET LOCAL statement_timeout = 0"))
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 3000"))
+                        _s.execute(_del_text("SET LOCAL lock_timeout = 2000"))
                         _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
                         _s.commit()
                         return True
@@ -11576,6 +11577,12 @@ class AnchorEngine:
                         # Обновляем лог: выполнено
                         _s2 = _Db()
                         try:
+                            try:
+                                from sqlalchemy import text as _s2_text
+                                _s2.execute(_s2_text("SET SESSION statement_timeout = 3000"))
+                                _s2.execute(_s2_text("SET SESSION lock_timeout = 2000"))
+                            except Exception:
+                                pass
                             _log = (
                                 _s2.query(_AAL)
                                 .filter_by(
@@ -28279,14 +28286,19 @@ class AnchorEngine:
                                 _cutoff = _now_sup - _stale_threshold
                                 try:
                                     from sqlalchemy import text as _sup_text
-                                    _sup_sess.execute(_sup_text("SET SESSION statement_timeout = 0"))
+                                    _sup_sess.execute(_sup_text("SET SESSION statement_timeout = 3000"))
+                                    _sup_sess.execute(_sup_text("SET SESSION lock_timeout = 2000"))
                                 except Exception:
                                     pass
-                                _updated = _sup_sess.query(Anchor).filter(
-                                    Anchor.id.in_(_candidate_ids),
-                                    Anchor.delivered_at.is_(None),
-                                    Anchor.created_at <= _cutoff,
-                                ).update({'delivered_at': _now_sup}, synchronize_session=False)
+                                _updated = _sup_sess.execute(
+                                    _sup_text(
+                                        "UPDATE anchors SET delivered_at = :now "
+                                        "WHERE id = ANY(:ids) "
+                                        "AND delivered_at IS NULL "
+                                        "AND created_at <= :cutoff"
+                                    ),
+                                    {"now": _now_sup, "ids": _candidate_ids, "cutoff": _cutoff},
+                                ).rowcount
                                 _sup_sess.commit()
                             finally:
                                 _sup_sess.close()
