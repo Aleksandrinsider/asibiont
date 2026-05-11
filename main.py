@@ -775,11 +775,15 @@ def verify_password(password, stored_hash):
         return False
 
 
-# ═══ Email sending (Resend HTTP API primary, SMTP fallback) ═══
+# ═══ Email sending (MailerSend primary, Resend backup, SMTP local fallback) ═══
 
 async def send_email(to: str, subject: str, body: str):
-    """Send system email via MailerSend (primary) or SMTP (local/dev fallback)."""
-    from config import MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL, MAILERSEND_FROM_NAME, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+    """Send system email via MailerSend (primary), Resend (backup), or SMTP (local/dev fallback)."""
+    from config import (
+        MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL, MAILERSEND_FROM_NAME,
+        RESEND_API_KEY, RESEND_FROM,
+        SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM,
+    )
     
     # Build HTML body
     html_body = body.replace('\n', '<br>')
@@ -834,7 +838,40 @@ async def send_email(to: str, subject: str, body: str):
             errors.append(f"MailerSend API: {e}")
             logger.warning(f"MailerSend API error: {e}")
     
-    # Method 2: SMTP fallback (works locally or anywhere SMTP ports are available)
+    # Method 2: Resend HTTP API (backup if MailerSend failed)
+    if RESEND_API_KEY and RESEND_FROM:
+        try:
+            logger.info(f"Sending email via Resend backup to {to}")
+
+            async with _safe_http() as http:
+                async with http.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {RESEND_API_KEY}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'from': f"{MAILERSEND_FROM_NAME} <{RESEND_FROM}>",
+                        'to': [to],
+                        'subject': subject,
+                        'text': body,
+                        'html': html,
+                    },
+                ) as resp:
+                    resp_text = await resp.text()
+
+            if 200 <= resp.status < 300:
+                logger.info(f"Email sent via Resend backup to {to}: status={resp.status}")
+                return
+
+            err = (resp_text or 'unknown error')[:500]
+            errors.append(f"Resend {resp.status}: {err}")
+            logger.warning(f"Resend backup failed: {resp.status} {err}")
+        except Exception as e:
+            errors.append(f"Resend backup: {e}")
+            logger.warning(f"Resend backup error: {e}")
+
+    # Method 3: SMTP fallback (works locally or anywhere SMTP ports are available)
     if SMTP_PASSWORD:
         import smtplib, ssl, socket
         from email.mime.text import MIMEText
@@ -890,8 +927,8 @@ async def send_email(to: str, subject: str, body: str):
         except Exception as e:
             errors.append(f"SMTP: {e}")
     
-    if not MAILERSEND_API_KEY and not SMTP_PASSWORD:
-        raise RuntimeError("Email not configured: set MAILERSEND_API_KEY or SMTP_PASSWORD")
+    if not MAILERSEND_API_KEY and not (RESEND_API_KEY and RESEND_FROM) and not SMTP_PASSWORD:
+        raise RuntimeError("Email not configured: set MAILERSEND_API_KEY, or RESEND_API_KEY+RESEND_FROM, or SMTP_PASSWORD")
     
     raise RuntimeError(f"All email methods failed: {'; '.join(errors)}")
 
@@ -906,15 +943,17 @@ async def smtp_check_handler(request):
     expected_secret = os.getenv('ADMIN_SECRET')
     if not expected_secret or not admin_secret or not hmac.compare_digest(admin_secret, expected_secret):
         return web.json_response({'error': 'Forbidden'}, status=403)
-    from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL
+    from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL, RESEND_API_KEY, RESEND_FROM
     return web.json_response({
         'mailersend_configured': bool(MAILERSEND_API_KEY),
         'mailersend_from_email': MAILERSEND_FROM_EMAIL,
+        'resend_backup_configured': bool(RESEND_API_KEY and RESEND_FROM),
+        'resend_from': RESEND_FROM,
         'smtp_host': SMTP_HOST,
         'smtp_user': SMTP_USER,
         'smtp_from': SMTP_FROM,
         'smtp_password_set': bool(SMTP_PASSWORD),
-        'note': 'Production delivery uses MailerSend. SMTP is only a local/dev fallback because Railway blocks SMTP ports.'
+        'note': 'Production delivery uses MailerSend. Resend is backup if MailerSend fails. SMTP is local/dev fallback because Railway blocks SMTP ports.'
     })
 
 
