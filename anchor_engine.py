@@ -25536,11 +25536,12 @@ class AnchorEngine:
             )
 
         try:
-            # Отключаем statement_timeout для ВСЕГО жизненного цикла email-операции.
-            # SET LOCAL сбрасывается после commit(), а внутри этой функции есть несколько commit().
+            # Настраиваем конечные DB-таймауты для email-операции.
+            # Бесконечный statement_timeout=0 может зависать на lock wait и блокировать event loop.
             try:
                 from sqlalchemy import text as _esa_text
-                session.execute(_esa_text("SET SESSION statement_timeout = 0"))
+                session.execute(_esa_text("SET SESSION statement_timeout = 45000"))
+                session.execute(_esa_text("SET SESSION lock_timeout = 5000"))
                 _email_timeout_disabled = True
             except Exception:
                 pass
@@ -26897,21 +26898,27 @@ class AnchorEngine:
                     try:
                         try:
                             from sqlalchemy import text as _to_text
-                            _s_to.execute(_to_text("SET SESSION statement_timeout = 0"))
+                            _s_to.execute(_to_text("SET SESSION statement_timeout = 3000"))
+                            _s_to.execute(_to_text("SET SESSION lock_timeout = 2000"))
                         except Exception:
                             pass
-                        _a_to = _s_to.query(Anchor).filter_by(id=anchor.id).first()
-                        if _a_to and not _a_to.delivered_at:
-                            _a_to.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=15)
-                            _to_log = AnchorDeliveryLog(
-                                user_id=_a_to.user_id,
-                                anchor_ids=json.dumps([_a_to.id]),
-                                message_text=f'[EMAIL_SILENT_TIMEOUT] {_a_to.anchor_type}: statement_timeout; snoozed 15m',
-                                anchor_types=json.dumps([_a_to.anchor_type]),
-                            )
-                            _s_to.add(_to_log)
+                        _snooze_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+                        _res = _s_to.execute(
+                            _to_text(
+                                "UPDATE anchors "
+                                "SET suppress_until = :suppress_until "
+                                "WHERE id = :anchor_id AND delivered_at IS NULL"
+                            ),
+                            {
+                                "suppress_until": _snooze_until,
+                                "anchor_id": anchor.id,
+                            },
+                        )
+                        if (_res.rowcount or 0) > 0:
                             _s_to.commit()
                             logger.warning(f"[ANCHOR] email_silent_anchor #{anchor.id}: statement_timeout -> snoozed 15m")
+                        else:
+                            _s_to.rollback()
                     finally:
                         _s_to.close()
                 except Exception as _to_err:
@@ -26925,22 +26932,26 @@ class AnchorEngine:
                 try:
                     try:
                         from sqlalchemy import text as _fb_text
-                        _s2.execute(_fb_text("SET SESSION statement_timeout = 0"))
+                        _s2.execute(_fb_text("SET SESSION statement_timeout = 3000"))
+                        _s2.execute(_fb_text("SET SESSION lock_timeout = 2000"))
                     except Exception:
                         pass
-                    _a2 = _s2.query(Anchor).filter_by(id=anchor.id).first()
-                    if _a2 and not _a2.delivered_at:
-                        _a2.delivered_at = datetime.now(timezone.utc)
-                        # Записываем ошибку в delivery_log чтобы видеть её в диагностике
-                        _err_log = AnchorDeliveryLog(
-                            user_id=_a2.user_id,
-                            anchor_ids=json.dumps([_a2.id]),
-                            message_text=f'[EMAIL_SILENT_ERROR] {_a2.anchor_type}: {str(e)[:300]}',
-                            anchor_types=json.dumps([_a2.anchor_type]),
-                        )
-                        _s2.add(_err_log)
+                    _res2 = _s2.execute(
+                        _fb_text(
+                            "UPDATE anchors "
+                            "SET delivered_at = :delivered_at "
+                            "WHERE id = :anchor_id AND delivered_at IS NULL"
+                        ),
+                        {
+                            "delivered_at": datetime.now(timezone.utc),
+                            "anchor_id": anchor.id,
+                        },
+                    )
+                    if (_res2.rowcount or 0) > 0:
                         _s2.commit()
                         logger.info(f"[ANCHOR] email_silent_anchor #{anchor.id}: marked delivered via fallback session after exception")
+                    else:
+                        _s2.rollback()
                 finally:
                     _s2.close()
             except Exception as _fb_err:
@@ -26953,6 +26964,10 @@ class AnchorEngine:
                     pass
                 try:
                     session.execute(_esa_text("RESET statement_timeout"))
+                except Exception:
+                    pass
+                try:
+                    session.execute(_esa_text("RESET lock_timeout"))
                 except Exception:
                     pass
 
