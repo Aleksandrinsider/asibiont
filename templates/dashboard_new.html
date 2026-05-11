@@ -4424,17 +4424,17 @@ except Exception as e:
             binance_p2p: {
                 name: 'Binance P2P (мониторинг спреда)',
                 fields: [
-                    {k:'P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
-                    {k:'P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
-                    {k:'P2P_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
-                    {k:'P2P_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
+                    {k:'BINANCE_P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
+                    {k:'BINANCE_P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
+                    {k:'BINANCE_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
+                    {k:'BINANCE_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
                 ],
                 hint: 'Бесплатно, без ключа! Мониторинг P2P объявлений Binance. Агент проверяет спред и посылает сигнал при достижении порога.',
                 code: `import urllib.request, json, os
-COIN = os.environ.get('P2P_COIN', 'USDT')
-FIAT = os.environ.get('P2P_FIAT', 'RUB')
-BUY_THRESH = float(os.environ.get('P2P_BUY_THRESHOLD', '0') or '0')
-SELL_THRESH = float(os.environ.get('P2P_SELL_THRESHOLD', '0') or '0')
+COIN = os.environ.get('BINANCE_P2P_COIN', 'USDT')
+FIAT = os.environ.get('BINANCE_P2P_FIAT', 'RUB')
+BUY_THRESH = float(os.environ.get('BINANCE_BUY_THRESHOLD', '0') or '0')
+SELL_THRESH = float(os.environ.get('BINANCE_SELL_THRESHOLD', '0') or '0')
 def get_p2p(trade_type, rows=3):
     body = json.dumps({"asset": COIN, "fiat": FIAT, "merchantCheck": False, "page": 1, "publisherType": None, "rows": rows, "tradeType": trade_type}).encode()
     req = urllib.request.Request('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search', data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
@@ -4473,17 +4473,17 @@ except Exception as e:
             bybit_p2p: {
                 name: 'Bybit P2P (мониторинг спреда)',
                 fields: [
-                    {k:'P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
-                    {k:'P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
-                    {k:'P2P_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
-                    {k:'P2P_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
+                    {k:'BYBIT_P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
+                    {k:'BYBIT_P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
+                    {k:'BYBIT_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
+                    {k:'BYBIT_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
                 ],
                 hint: 'Бесплатно, без ключа! Мониторинг P2P объявлений Bybit. Агент проверяет спред и посылает сигнал при достижении порога.',
                 code: `import urllib.request, json, os
-COIN = os.environ.get('P2P_COIN', 'USDT')
-FIAT = os.environ.get('P2P_FIAT', 'RUB')
-BUY_THRESH = float(os.environ.get('P2P_BUY_THRESHOLD', '0') or '0')
-SELL_THRESH = float(os.environ.get('P2P_SELL_THRESHOLD', '0') or '0')
+COIN = os.environ.get('BYBIT_P2P_COIN', 'USDT')
+FIAT = os.environ.get('BYBIT_P2P_FIAT', 'RUB')
+BUY_THRESH = float(os.environ.get('BYBIT_BUY_THRESHOLD', '0') or '0')
+SELL_THRESH = float(os.environ.get('BYBIT_SELL_THRESHOLD', '0') or '0')
 def get_bybit_p2p(side, rows=3):
     body = json.dumps({"tokenId": COIN, "currencyId": FIAT, "payment": [], "side": side, "size": str(rows), "page": "1", "amount": ""}).encode()
     req = urllib.request.Request('https://api2.bybit.com/fiat/otc/item/online', data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
