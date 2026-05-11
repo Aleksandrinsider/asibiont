@@ -4491,26 +4491,32 @@ def get_bybit_p2p(side, rows=3):
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read().decode())
 try:
-    buy_data = get_bybit_p2p('1', 3)
-    sell_data = get_bybit_p2p('0', 3)
-    buy_items = buy_data.get('result', {}).get('items', [])
-    sell_items = sell_data.get('result', {}).get('items', [])
-    buy_prices = [float(i.get('price', 0)) for i in buy_items]
-    sell_prices = [float(i.get('price', 0)) for i in sell_items]
-    best_buy = min(buy_prices) if buy_prices else 0
-    best_sell = max(sell_prices) if sell_prices else 0
+    # side='0' = ПРОДАВЦЫ USDT (ask — высокие цены); side='1' = ПОКУПАТЕЛИ USDT (bid — низкие цены)
+    ask_data = get_bybit_p2p('0', 5)
+    bid_data = get_bybit_p2p('1', 5)
+    ask_items = ask_data.get('result', {}).get('items', [])
+    bid_items = bid_data.get('result', {}).get('items', [])
+    ask_prices = [float(i.get('price', 0)) for i in ask_items if float(i.get('price', 0)) > 0]
+    bid_prices = [float(i.get('price', 0)) for i in bid_items if float(i.get('price', 0)) > 0]
+    best_buy = min(ask_prices) if ask_prices else 0   # дешевле всего купить USDT у продавца
+    best_sell = max(bid_prices) if bid_prices else 0  # дороже всего продать USDT покупателю
     spread = best_sell - best_buy
     spread_pct = round(spread / best_buy * 100, 2) if best_buy else 0
     print('Bybit P2P ' + COIN + '/' + FIAT)
-    print('Лучшая покупка: ' + str(round(best_buy, 2)) + ' ' + FIAT)
-    print('Лучшая продажа: ' + str(round(best_sell, 2)) + ' ' + FIAT)
-    print('Спред: ' + str(round(spread, 2)) + ' ' + FIAT + ' (' + str(spread_pct) + '%)')
-    print('\\nТОП BUY объявления (покупаю ' + COIN + '):')
-    for item in buy_items[:3]:
+    print('Купить USDT (мин. цена продавца): ' + str(round(best_buy, 2)) + ' ' + FIAT)
+    print('Продать USDT (макс. цена покупателя): ' + str(round(best_sell, 2)) + ' ' + FIAT)
+    sp_sign = ('+' if spread >= 0 else '')
+    print('Спред (продажа − покупка): ' + sp_sign + str(round(spread, 2)) + ' ' + FIAT + ' (' + sp_sign + str(spread_pct) + '%)')
+    if spread >= 0:
+        print('✅ Арбитраж возможен: ' + str(round(spread, 2)) + ' ' + FIAT + ' на 1 USDT')
+    else:
+        print('📊 Арбитраж недоступен (нормальный рынок, покупка > продажа)')
+    print('\\nПродавцы USDT (покупаю у них):')
+    for item in ask_items[:3]:
         pmts = item.get('payments', []); methods = ', '.join([(p if isinstance(p, str) else p.get('paymentType', '')) for p in pmts[:2]])
         print(str(item.get('price')) + ' | ' + str(item.get('minAmount')) + '-' + str(item.get('maxAmount')) + ' ' + FIAT + ' | ' + str(item.get('nickName', '')) + ' | ' + methods)
-    print('\\nТОП SELL объявления (продаю ' + COIN + '):')
-    for item in sell_items[:3]:
+    print('\\nПокупатели USDT (продаю им):')
+    for item in bid_items[:3]:
         pmts = item.get('payments', []); methods = ', '.join([(p if isinstance(p, str) else p.get('paymentType', '')) for p in pmts[:2]])
         print(str(item.get('price')) + ' | ' + str(item.get('minAmount')) + '-' + str(item.get('maxAmount')) + ' ' + FIAT + ' | ' + str(item.get('nickName', '')) + ' | ' + methods)
     if BUY_THRESH > 0 and best_buy > 0 and best_buy <= BUY_THRESH:
