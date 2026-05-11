@@ -4422,15 +4422,14 @@ except Exception as e:
     print('Ошибка CoinGecko: ' + str(e))`
             },
             binance_p2p: {
-                name: 'Binance P2P (мониторинг спреда)',
+                name: 'Binance P2P',
                 fields: [
                     {k:'BINANCE_P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
                     {k:'BINANCE_P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
                     {k:'BINANCE_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
                     {k:'BINANCE_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
                 ],
-                hint: 'Бесплатно, без ключа! Мониторинг P2P объявлений Binance. Агент проверяет спред и посылает сигнал при достижении порога.',
-                code: `import urllib.request, json, os
+                hint: 'Бесплатно, без ключа! Получает TOP-3 BUY/SELL объявления Binance P2P: цена, лимиты, методы оплаты, спред. Пороги — опциональны.', `import urllib.request, json, os
 COIN = os.environ.get('BINANCE_P2P_COIN', 'USDT')
 FIAT = os.environ.get('BINANCE_P2P_FIAT', 'RUB')
 BUY_THRESH = float(os.environ.get('BINANCE_BUY_THRESHOLD', '0') or '0')
@@ -4471,14 +4470,14 @@ except Exception as e:
     print('Ошибка Binance P2P: ' + str(e))`
             },
             bybit_p2p: {
-                name: 'Bybit P2P (мониторинг спреда)',
+                name: 'Bybit P2P',
                 fields: [
                     {k:'BYBIT_P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
                     {k:'BYBIT_P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
                     {k:'BYBIT_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
                     {k:'BYBIT_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
                 ],
-                hint: 'Бесплатно, без ключа! Мониторинг P2P объявлений Bybit. Агент проверяет спред и посылает сигнал при достижении порога.',
+                hint: 'Бесплатно, без ключа! Получает TOP-3 BUY/SELL объявления Bybit P2P: цена, лимиты, методы оплаты, спред. Пороги — опциональны.',
                 code: `import urllib.request, json, os
 COIN = os.environ.get('BYBIT_P2P_COIN', 'USDT')
 FIAT = os.environ.get('BYBIT_P2P_FIAT', 'RUB')
@@ -8370,8 +8369,8 @@ except Exception as e:
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>
                             <option value="coingecko">CoinGecko (крипто, без ключа)</option>
-                            <option value="binance_p2p">Binance P2P (мониторинг спреда)</option>
-                            <option value="bybit_p2p">Bybit P2P (мониторинг спреда)</option>
+                            <option value="binance_p2p">Binance P2P</option>
+                            <option value="bybit_p2p">Bybit P2P</option>
                             <option value="binance_spot">Binance Spot (торговля / баланс)</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
