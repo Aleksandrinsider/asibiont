@@ -1840,7 +1840,24 @@
                     </div>
                 </div>
 
-                {# Gmail OAuth временно скрыт — требует переавторизации (scope gmail.send) #}
+                <div id="quick-profile-gmail" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #E5E7EB;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Gmail</label>
+                    {% if google_oauth_available %}
+                        {% if gmail_linked %}
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ gmail_email if gmail_email else 'Gmail подключён' }}</span>
+                            <a href="#" onclick="disconnectGmail(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px; flex-shrink: 0;" data-i18n="unlink">отвязать</a>
+                        </div>
+                        {% else %}
+                        <a href="/oauth/gmail" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-gmail">Подключить Gmail</a>
+                        {% endif %}
+                        <div style="margin-top: 6px; font-size: 12px; color: #6B7280;" data-i18n="gmail-for-send">(для отправки писем AI агентами)</div>
+                    {% else %}
+                    <div style="padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 12px; color: #9CA3AF; background: #FAFAFA;">
+                        Google OAuth не настроен на сервере
+                    </div>
+                    {% endif %}
+                </div>
 
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
