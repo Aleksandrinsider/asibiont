@@ -6088,6 +6088,7 @@ async def create_post_handler(request):
                 user_id=user.id,
                 username=user.username,
                 content=content,
+                post_type='manual',
                 image_url=image_url
             )
             session_db.add(post)
@@ -6404,10 +6405,11 @@ async def get_feed_handler(request):
             
             logger.info(f"Feed: all_user_ids for feed (favorites + self - blocked): {all_user_ids}")
 
-            # Get posts from favorites and self
+            # Get posts from favorites and self (exclude campaign/marketing posts)
             if all_user_ids:
                 posts = session_db.query(Post).filter(
-                    Post.user_id.in_(all_user_ids)
+                    Post.user_id.in_(all_user_ids),
+                    Post.post_type.in_(['progress', 'manual'])
                 ).order_by(Post.created_at.desc()).limit(20).all()
                 logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
                 logger.info(f"Feed: found {len(posts)} posts from user_ids={[p.user_id for p in posts]}")

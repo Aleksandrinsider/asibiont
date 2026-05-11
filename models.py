@@ -347,6 +347,7 @@ class Post(Base):
     image_url = Column(Text, nullable=True)  # Optional image URL (ephemeral Replicate URL)
     image_data = Column(LargeBinary, nullable=True)   # Permanent image bytes (feed cover)
     image_mime = Column(String(20), nullable=True)    # e.g. 'image/webp' or 'image/png'
+    post_type = Column(String(20), nullable=False, default='manual')  # 'progress', 'manual', 'campaign'
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="posts")

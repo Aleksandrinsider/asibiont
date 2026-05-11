@@ -9488,6 +9488,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             user_id=user.id,
             username=user.username or user.first_name or f"user_{user.telegram_id}",
             content=content.strip(),
+            post_type='manual',
             image_url=(image_url.strip() if image_url and image_url.strip() else None),
             image_data=None,
             image_mime=None,

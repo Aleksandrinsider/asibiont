@@ -614,6 +614,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             user_id=user.id,
             username=user.username or user.first_name or f"user_{user.telegram_id}",
             content=content,
+            post_type=post_type if post_type in ('progress', 'manual', 'campaign') else 'progress',
             created_at=datetime.now(pytz.UTC)
         )
         

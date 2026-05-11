@@ -175,6 +175,7 @@ def _migrate_posts(session, inspector):
             'image_url': 'ALTER TABLE posts ADD COLUMN image_url TEXT',
             'image_data': 'ALTER TABLE posts ADD COLUMN image_data BYTEA',
             'image_mime': "ALTER TABLE posts ADD COLUMN image_mime VARCHAR(20)",
+            'post_type': "ALTER TABLE posts ADD COLUMN post_type VARCHAR(20) NOT NULL DEFAULT 'manual'",
         })
         return
     logger.info("Creating posts table")

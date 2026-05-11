@@ -24680,6 +24680,7 @@ class AnchorEngine:
                     user_id=user.id,
                     username=user.username or user.first_name or f'user_{user.telegram_id}',
                     content=post_text,
+                    post_type='campaign',
                     created_at=datetime.now(timezone.utc)
                 )
                 session.add(post)
@@ -24983,6 +24984,7 @@ class AnchorEngine:
                     user_id=user.id,
                     username=user.username or user.first_name or f'user_{user.telegram_id}',
                     content=post_text,
+                    post_type='campaign',
                     created_at=datetime.now(timezone.utc)
                 )
                 session.add(post)
