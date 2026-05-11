@@ -801,7 +801,9 @@ async def send_email(to: str, subject: str, body: str):
                     headers={
                         'Authorization': f'Bearer {MAILERSEND_API_KEY}',
                         'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'User-Agent': 'ASI-Biont/1.0 (+https://asibiont.com)',
+                        'Accept': 'application/json'
                     },
                     json={
                         'from': {
@@ -815,14 +817,20 @@ async def send_email(to: str, subject: str, body: str):
                     },
                     timeout=aiohttp.ClientTimeout(total=15)
                 ) as resp:
-                    resp_data = await resp.json()
-                    if resp.status in (200, 201):
-                        logger.info(f"Email sent via MailerSend API to {to}: {resp_data.get('message_id', 'ok')}")
+                    # MailerSend may return 202 with text/html content-type; treat any 2xx as success.
+                    if 200 <= resp.status < 300:
+                        response_hint = await resp.text()
+                        logger.info(f"Email sent via MailerSend API to {to}: status={resp.status}, response={response_hint[:120] or 'ok'}")
                         return
-                    else:
+
+                    try:
+                        resp_data = await resp.json()
                         err = resp_data.get('message', resp_data.get('error', str(resp_data)))
-                        errors.append(f"MailerSend {resp.status}: {err}")
-                        logger.warning(f"MailerSend API failed: {resp.status} {err}")
+                    except Exception:
+                        err = (await resp.text())[:500]
+
+                    errors.append(f"MailerSend {resp.status}: {err}")
+                    logger.warning(f"MailerSend API failed: {resp.status} {err}")
         except Exception as e:
             errors.append(f"MailerSend API: {e}")
             logger.warning(f"MailerSend API error: {e}")
