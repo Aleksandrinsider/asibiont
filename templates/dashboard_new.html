@@ -4421,56 +4421,6 @@ try:
 except Exception as e:
     print('Ошибка CoinGecko: ' + str(e))`
             },
-            binance_p2p: {
-                name: 'Binance P2P',
-                fields: [
-                    {k:'BINANCE_P2P_COIN', label:'Монета', ph:'USDT', t:'text', opt:true},
-                    {k:'BINANCE_P2P_FIAT', label:'Фиатная валюта', ph:'RUB', t:'text', opt:true},
-                    {k:'BINANCE_BUY_THRESHOLD', label:'Порог сигнала — покупка ≤ (0 = выкл.)', ph:'89.5', t:'text', opt:true},
-                    {k:'BINANCE_SELL_THRESHOLD', label:'Порог сигнала — продажа ≥ (0 = выкл.)', ph:'91.0', t:'text', opt:true}
-                ],
-                hint: 'Бесплатно, без ключа! Получает TOP-3 BUY/SELL объявления Binance P2P: цена, лимиты, методы оплаты, спред. Пороги — опциональны.',
-                code: `import urllib.request, json, os
-COIN = os.environ.get('BINANCE_P2P_COIN', 'USDT')
-FIAT = os.environ.get('BINANCE_P2P_FIAT', 'RUB')
-BUY_THRESH = float(os.environ.get('BINANCE_BUY_THRESHOLD', '0') or '0')
-SELL_THRESH = float(os.environ.get('BINANCE_SELL_THRESHOLD', '0') or '0')
-def get_p2p(trade_type, rows=3):
-    body = json.dumps({"asset": COIN, "fiat": FIAT, "merchantCheck": False, "page": 1, "payTypes": [], "publisherType": None, "rows": rows, "tradeType": trade_type, "filterType": "all", "proMerchantAds": False, "shieldMerchantAds": False}).encode()
-    hdrs = {'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9', 'Origin': 'https://p2p.binance.com', 'Referer': 'https://p2p.binance.com/'}
-    req = urllib.request.Request('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search', data=body, headers=hdrs)
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode())
-try:
-    buy_data = get_p2p('BUY', 3)
-    sell_data = get_p2p('SELL', 3)
-    buy_prices = [float(a['adv']['price']) for a in buy_data.get('data', [])]
-    sell_prices = [float(a['adv']['price']) for a in sell_data.get('data', [])]
-    best_buy = min(buy_prices) if buy_prices else 0
-    best_sell = max(sell_prices) if sell_prices else 0
-    spread = best_sell - best_buy
-    spread_pct = round(spread / best_buy * 100, 2) if best_buy else 0
-    print('Binance P2P ' + COIN + '/' + FIAT)
-    print('Лучшая покупка: ' + str(round(best_buy, 2)) + ' ' + FIAT)
-    print('Лучшая продажа: ' + str(round(best_sell, 2)) + ' ' + FIAT)
-    print('Спред: ' + str(round(spread, 2)) + ' ' + FIAT + ' (' + str(spread_pct) + '%)')
-    print('\\nТОП BUY объявления (покупаю ' + COIN + '):')
-    for a in buy_data.get('data', [])[:3]:
-        adv = a.get('adv', {}); seller = a.get('advertiser', {})
-        methods = ', '.join([m.get('identifier', '') for m in adv.get('tradeMethods', [])[:2]])
-        print(str(adv.get('price')) + ' | ' + str(adv.get('minSingleTransAmount')) + '-' + str(adv.get('dynamicMaxSingleTransAmount')) + ' ' + FIAT + ' | ' + str(seller.get('nickName', '')) + ' | ' + methods)
-    print('\\nТОП SELL объявления (продаю ' + COIN + '):')
-    for a in sell_data.get('data', [])[:3]:
-        adv = a.get('adv', {}); seller = a.get('advertiser', {})
-        methods = ', '.join([m.get('identifier', '') for m in adv.get('tradeMethods', [])[:2]])
-        print(str(adv.get('price')) + ' | ' + str(adv.get('minSingleTransAmount')) + '-' + str(adv.get('dynamicMaxSingleTransAmount')) + ' ' + FIAT + ' | ' + str(seller.get('nickName', '')) + ' | ' + methods)
-    if BUY_THRESH > 0 and best_buy > 0 and best_buy <= BUY_THRESH:
-        print('\\n⚠️ СИГНАЛ ПОКУПКИ: цена ' + str(best_buy) + ' ≤ порогу ' + str(BUY_THRESH))
-    if SELL_THRESH > 0 and best_sell >= SELL_THRESH:
-        print('\\n⚠️ СИГНАЛ ПРОДАЖИ: цена ' + str(best_sell) + ' ≥ порогу ' + str(SELL_THRESH))
-except Exception as e:
-    print('Ошибка Binance P2P: ' + str(e))`
-            },
             bybit_p2p: {
                 name: 'Bybit P2P',
                 fields: [
@@ -4525,76 +4475,6 @@ try:
         print('\\n⚠️ СИГНАЛ ПРОДАЖИ: цена ' + str(best_sell) + ' ≥ порогу ' + str(SELL_THRESH))
 except Exception as e:
     print('Ошибка Bybit P2P: ' + str(e))`
-            },
-            binance_spot: {
-                name: 'Binance Spot (торговля / баланс)',
-                fields: [
-                    {k:'BINANCE_API_KEY', label:'API Key', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'BINANCE_API_SECRET', label:'API Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'BINANCE_SYMBOL', label:'Торговая пара по умолчанию', ph:'BTCUSDT', t:'text', opt:true}
-                ],
-                hint: 'binance.com → API Management → Create API. Нужны права: Read + Spot Trading. Без прав вывода! Пара: например BTCUSDT, ETHUSDT, SOLUSDT.',
-                code: `import urllib.request, urllib.parse, json, os, hmac, hashlib, time
-API_KEY = os.environ.get('BINANCE_API_KEY', '')
-API_SECRET = os.environ.get('BINANCE_API_SECRET', '')
-SYMBOL = os.environ.get('BINANCE_SYMBOL', 'BTCUSDT')
-ACTION = os.environ.get('AGENT_ACTION', '')
-BASE = 'https://api.binance.com'
-def pub(path):
-    req = urllib.request.Request(BASE + path, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read().decode())
-def priv(path, params=None, method='GET'):
-    if params is None: params = {}
-    params['timestamp'] = int(time.time() * 1000)
-    qs = urllib.parse.urlencode(params)
-    sig = hmac.new(API_SECRET.encode(), qs.encode(), hashlib.sha256).hexdigest()
-    qs += '&signature=' + sig
-    url = BASE + path + ('?' + qs if method == 'GET' else '')
-    data = qs.encode() if method == 'POST' else None
-    req = urllib.request.Request(url, data=data, headers={'X-MBX-APIKEY': API_KEY, 'Content-Type': 'application/x-www-form-urlencoded'}, method=method)
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read().decode())
-try:
-    if ACTION == 'get_balance':
-        acc = priv('/api/v3/account')
-        bals = [b for b in acc.get('balances', []) if float(b.get('free', 0)) + float(b.get('locked', 0)) > 0.000001]
-        print('Binance баланс (' + str(len(bals)) + ' монет):')
-        for b in bals:
-            print(b['asset'] + ': ' + str(round(float(b['free']), 6)) + ' свободно, ' + str(round(float(b['locked']), 6)) + ' заморожено')
-    elif ACTION == 'get_open_orders':
-        sym = os.environ.get('AGENT_PARAM_SYMBOL', SYMBOL)
-        orders = priv('/api/v3/openOrders', {'symbol': sym})
-        print('Открытые ордера ' + sym + ': ' + str(len(orders)))
-        for o in orders[:10]:
-            print(o.get('side') + ' ' + o.get('type') + ' ' + str(o.get('origQty')) + ' @ ' + str(o.get('price')) + ' [' + o.get('status') + ']')
-    elif ACTION == 'place_order':
-        side = os.environ.get('AGENT_PARAM_SIDE', 'BUY').upper()
-        qty = os.environ.get('AGENT_PARAM_QUANTITY', '')
-        price = os.environ.get('AGENT_PARAM_PRICE', '')
-        sym = os.environ.get('AGENT_PARAM_SYMBOL', SYMBOL)
-        params = {'symbol': sym, 'side': side, 'type': 'LIMIT' if price else 'MARKET', 'quantity': qty, 'timeInForce': 'GTC'}
-        if price: params['price'] = price
-        result = priv('/api/v3/order', params, 'POST')
-        print('Ордер #' + str(result.get('orderId')) + ' ' + side + ' ' + qty + ' ' + sym + ' → ' + result.get('status', '?'))
-    elif ACTION == 'cancel_order':
-        sym = os.environ.get('AGENT_PARAM_SYMBOL', SYMBOL)
-        oid = os.environ.get('AGENT_PARAM_ORDER_ID', '')
-        result = priv('/api/v3/order', {'symbol': sym, 'orderId': oid}, 'DELETE')
-        print('Ордер #' + str(oid) + ' отменён: ' + result.get('status', '?'))
-    else:
-        sym = os.environ.get('AGENT_PARAM_SYMBOL', SYMBOL)
-        d = pub('/api/v3/ticker/price?symbol=' + sym)
-        d24 = pub('/api/v3/ticker/24hr?symbol=' + sym)
-        price = float(d.get('price', 0))
-        chg = float(d24.get('priceChangePercent', 0))
-        vol = float(d24.get('quoteVolume', 0))
-        hi = float(d24.get('highPrice', 0)); lo = float(d24.get('lowPrice', 0))
-        print(sym + ': $' + str(round(price, 4 if price < 1 else 2)))
-        print(('↑' if chg >= 0 else '↓') + ' ' + ('+' if chg >= 0 else '') + str(round(chg, 2)) + '% за 24ч  |  max $' + str(round(hi, 2)) + '  min $' + str(round(lo, 2)))
-        print('Объём: $' + str(round(vol / 1e6, 1)) + 'M за 24ч')
-except Exception as e:
-    print('Ошибка Binance Spot: ' + str(e))`
             },
             jira: {
                 name: 'Jira',
@@ -7714,9 +7594,7 @@ except Exception as e:
             shopify:         ['get_products', 'get_orders'],
             youtube:         ['get_videos', 'youtube_stats'],
             coingecko:       ['get_coin_price', 'get_market_cap'],
-            binance_p2p:     ['check_p2p_spread', 'monitor_p2p'],
             bybit_p2p:       ['check_p2p_spread', 'monitor_p2p'],
-            binance_spot:    ['get_price', 'get_balance', 'place_order', 'get_open_orders'],
             jira:            ['jira_issues', 'create_jira_issue'],
             calendly:        ['get_events', 'check_calendly'],
             http_api:        ['api_call', 'http_get'],
@@ -8377,9 +8255,7 @@ except Exception as e:
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>
                             <option value="coingecko">CoinGecko (крипто, без ключа)</option>
-                            <option value="binance_p2p">Binance P2P</option>
                             <option value="bybit_p2p">Bybit P2P</option>
-                            <option value="binance_spot">Binance Spot (торговля / баланс)</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
                             <option value="exchangerate">ExchangeRate-API (курсы валют / конвертация)</option>
