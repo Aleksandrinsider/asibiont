@@ -43,37 +43,6 @@
     <style>
 
         /* Основные стили для layout */
-        .main-layout {
-            display: flex;
-            gap: 4px;
-            width: 100%;
-            max-width: none;
-            margin: 0;
-            padding: 10px 0 0 0;
-        }
-        
-        .left-column {
-            flex: 1 1 300px;
-            min-width: 300px;
-            max-width: 400px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            position: sticky;
-            top: 0;
-            align-self: flex-start; /* не растягиваться по высоте соседних колонок */
-            max-height: 100vh;
-            overflow-y: auto;
-        }
-        
-        .center-column {
-            flex: 1 1 400px;
-            min-width: 280px;
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-        }
-        .center-column .chat-section {
             flex: 1 1 auto; /* Чат растягивается */
         }
         
@@ -3305,12 +3274,12 @@
 
         const _MPA_SVC = {
             gmail: {
-                name: 'Gmail',
+                name: 'Gmail (inbox reading)',
                 fields: [
                     {k:'GMAIL_USER', label:'Email Gmail', ph:'you@gmail.com', t:'email'},
                     {k:'GMAIL_PASS', label:'Пароль приложения', ph:'xxxx xxxx xxxx xxxx', t:'password'}
                 ],
-                hint: 'Нужен пароль приложения, не обычный. Сначала включите двухфакторную аутентификацию, затем: Google Аккаунт > Безопасность > Пароли приложений',
+                hint: 'Inbox reading only (IMAP). Use an app password, not your regular password. Enable 2FA first: Google Account > Security > App passwords.',
                 code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -3430,12 +3399,12 @@ if True:  # всегда проверяем IMAP
         print('Ошибка IMAP: ' + str(e))`
             },
             yandex: {
-                name: 'Яндекс.Почта',
+                name: 'Yandex Mail (inbox reading)',
                 fields: [
                     {k:'YANDEX_USER', label:'Email Яндекса', ph:'you@yandex.ru', t:'email'},
                     {k:'YANDEX_PASS', label:'Пароль приложения', ph:'пароль', t:'password'}
                 ],
-                hint: 'Яндекс.Почта > Настройки > Клиенты > Включить IMAP, создать пароль приложения',
+                hint: 'Inbox reading only (IMAP). Yandex Mail > Settings > Mail clients > Enable IMAP and create an app password.',
                 code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -3567,12 +3536,12 @@ else:
         print('Ошибка IMAP: ' + str(e))`
             },
             mailru: {
-                name: 'Mail.ru',
+                name: 'Mail.ru (inbox reading)',
                 fields: [
                     {k:'MAILRU_USER', label:'Email Mail.ru', ph:'you@mail.ru', t:'email'},
                     {k:'MAILRU_PASS', label:'Пароль для внешних приложений', ph:'пароль', t:'password'}
                 ],
-                hint: 'Mail.ru: Почта > Настройки > Пароль для внешних приложений + включить IMAP',
+                hint: 'Inbox reading only (IMAP). Mail.ru > Settings > Password for external apps + enable IMAP.',
                 code: `import imaplib, smtplib, os, datetime
 from email import message_from_bytes
 from email.header import decode_header
@@ -4536,60 +4505,6 @@ try:
         print('• ' + start + ' UTC — ' + name[:50] + (' | ' + str(loc)[:40] if loc else ''))
 except Exception as e:
     print('Ошибка Calendly: ' + str(e))`
-            },
-            resend: {
-                name: 'Resend (Email-рассылка)',
-                fields: [
-                    {k:'RESEND_API_KEY', label:'API Key', ph:'re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'RESEND_FROM', label:'Email отправителя (верифицирован в Resend)', ph:'hello@yourdomain.com', t:'email'}
-                ],
-                hint: 'resend.com > API Keys > Create API Key. Email отправителя должен быть верифицирован: Domains > Add Domain',
-                code: `import urllib.request, json, os
-API_KEY = os.environ.get('RESEND_API_KEY', '')
-FROM_EMAIL = os.environ.get('RESEND_FROM', '')
-ACTION = os.environ.get('AGENT_ACTION', '')
-
-def send_email(to, subject, body_text):
-    html_body = body_text.replace('\\n', '<br>')
-    html = '<html><body style="font-family:-apple-system,Arial,sans-serif;font-size:14px;color:#374151;line-height:1.6;"><div style="max-width:500px;margin:0 auto;padding:24px;">' + html_body + '</div></body></html>'
-    data = json.dumps({
-        'from': FROM_EMAIL,
-        'to': [to],
-        'subject': subject,
-        'text': body_text,
-        'html': html
-    }).encode()
-    req = urllib.request.Request('https://api.resend.com/emails', data=data, method='POST')
-    req.add_header('Authorization', 'Bearer ' + API_KEY)
-    req.add_header('Content-Type', 'application/json')
-    req.add_header('User-Agent', 'python-requests/2.31.0')
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode())
-
-try:
-    if ACTION == 'send_email':
-        to = os.environ.get('AGENT_PARAM_TO', '')
-        subject = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
-        body = os.environ.get('AGENT_PARAM_BODY', '')
-        if not to:
-            print('Ошибка: не указан получатель (AGENT_PARAM_TO)')
-        else:
-            result = send_email(to, subject, body)
-            if result.get('id'):
-                print('OK: письмо отправлено на ' + to)
-                print('ID: ' + result['id'])
-            else:
-                print('Ошибка отправки: ' + json.dumps(result))
-    else:
-        if not API_KEY:
-            print('Ошибка: RESEND_API_KEY не задан')
-        elif not FROM_EMAIL:
-            print('Ошибка: RESEND_FROM не задан')
-        else:
-            print('Resend подключён. Отправитель: ' + FROM_EMAIL)
-            print('Для отправки письма скажите агенту: отправь письмо на email@example.com')
-except Exception as e:
-    print('Ошибка Resend: ' + str(e))`
             },
             bitrix24: {
                 name: 'Битрикс24 (CRM)',
@@ -8195,10 +8110,9 @@ except Exception as e:
                         <div style="font-size:12px;color:#6B7280;margin-bottom:8px;">${t('mpa-svc-desc')}</div>
                         <select id="mpa-svc-select" onchange="mpApplyTemplate(this.value)" style="width:100%;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
                             <option value="" style="font-weight:600;">${t('mpa-svc-ph')}</option>
-                            <option value="gmail">Gmail</option>
-                            <option value="yandex">Яндекс.Почта</option>
-                            <option value="mailru">Mail.ru</option>
-                            <option value="resend">Resend (Email-рассылка)</option>
+                            <option value="gmail">Gmail (inbox reading)</option>
+                            <option value="yandex">Yandex Mail (inbox reading)</option>
+                            <option value="mailru">Mail.ru (inbox reading)</option>
                             <option value="openweather">Погода</option>
                             <option value="rss">RSS-лента новостей</option>
                             <option value="telegram_bot">Telegram Bot</option>
