@@ -4529,90 +4529,76 @@ except Exception as e:
             bestchange: {
                 name: 'BestChange (агрегатор обменников)',
                 fields: [
-                    {k:'BC_API_ID', label:'API ID (bestchange.ru/api/)', ph:'12345', t:'text'},
-                    {k:'BC_FROM', label:'Отдаю (код валюты)', ph:'USDT', t:'text', opt:true},
-                    {k:'BC_TO', label:'Получаю (код валюты)', ph:'SBER', t:'text', opt:true},
-                    {k:'BC_TOP', label:'Сколько обменников показать', ph:'7', t:'text', opt:true}
+                    {k:'BC_FROM', label:'Откуда (напр. USDTTRC20, BTC, SBER)', ph:'USDTTRC20', t:'text', opt:true},
+                    {k:'BC_TO', label:'Куда (напр. CARDRUB, SBER, TBANK)', ph:'CARDRUB', t:'text', opt:true},
+                    {k:'BC_TOP', label:'Сколько обменников показать', ph:'7', t:'text', opt:true},
+                    {k:'BC_PROXY', label:'HTTP-прокси (если сервер блокирует)', ph:'http://user:pass@host:port', t:'text', opt:true}
                 ],
-                hint: 'Требует бесплатной регистрации на bestchange.ru/api/ — без ID сервер блокирует облачные запросы. После регистрации вставьте числовой ID в поле BC_API_ID. Коды валют: USDT, BTC, ETH, XMR, SBER, TBANK, QIWI, CASH_RUB, VISA_RUB и др.',
-                code: `import urllib.request, json, os, zipfile, io
-BC_API_ID = os.environ.get('BC_API_ID', '').strip()
-FROM_CURR = os.environ.get('BC_FROM', 'USDT').strip().upper()
-TO_CURR   = os.environ.get('BC_TO', 'SBER').strip().upper()
+                hint: 'Парсит bestchange.biz. Пары: USDTTRC20→CARDRUB, BTC→SBER, ETH→TBANK и т.д. Если получаете ошибку 403/cloudflare — укажите HTTP-прокси в поле BC_PROXY (нужен российский/residential IP).',
+                code: `import urllib.request, urllib.parse, os, re, ssl
+FROM_CURR = os.environ.get('BC_FROM', 'USDTTRC20').strip()
+TO_CURR   = os.environ.get('BC_TO', 'CARDRUB').strip()
 TOP_N     = int(os.environ.get('BC_TOP', '7') or '7')
-if not BC_API_ID:
-    print('⚠️ BC_API_ID не задан.')
-    print('BestChange блокирует запросы без ID с облачных серверов.')
-    print('Зарегистрируйтесь бесплатно: https://www.bestchange.ru/api/')
-    print('Получите числовой ID и добавьте его в переменную BC_API_ID.')
-else:
-    _hdrs = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': '*/*', 'Referer': 'https://www.bestchange.ru/',
-    }
-    def _bc_download(api_id):
-        urls = [
-            'https://www.bestchange.ru/check/bm.zip?id=' + api_id,
-            'http://www.bestchange.ru/check/bm.zip?id=' + api_id,
-        ]
-        _last = None
-        for url in urls:
-            try:
-                req = urllib.request.Request(url, headers=_hdrs)
-                with urllib.request.urlopen(req, timeout=25) as r:
-                    data = r.read()
-                if data[:2] == b'PK':
-                    return data
-                preview = data[:200].decode('utf-8', errors='replace').replace('\n', ' ')
-                _last = Exception('Не ZIP: ' + preview[:120])
-            except Exception as _e:
-                _last = _e
-        raise Exception('Ошибка загрузки bm.zip: ' + str(_last))
-    try:
-        raw = _bc_download(BC_API_ID)
-        zf = zipfile.ZipFile(io.BytesIO(raw))
-        def read_dat(name):
-            with zf.open(name) as f:
-                rows = []
-                for line in f.read().decode('utf-8', errors='replace').splitlines():
-                    if line.strip(): rows.append(line.split(';'))
-            return rows
-        curr_map = {r[0]: r[1].strip() for r in read_dat('currencies.dat') if len(r) >= 2}
-        exch_map = {r[0]: r[1].strip() for r in read_dat('exchangers.dat') if len(r) >= 2}
-        rate_rows = read_dat('rates.dat')
-        def find_id(code):
-            code = code.upper()
-            exact = [k for k, v in curr_map.items() if v.upper() == code]
-            if exact: return exact[0]
-            partial = [k for k, v in curr_map.items() if code in v.upper()]
-            return partial[0] if partial else None
-        from_id = find_id(FROM_CURR)
-        to_id   = find_id(TO_CURR)
-        if not from_id or not to_id:
-            print('Валюта не найдена. FROM=' + FROM_CURR + ' (' + str(from_id) + ') TO=' + TO_CURR + ' (' + str(to_id) + ')')
-            print('Доступные (первые 40): ' + ', '.join(list(curr_map.values())[:40]))
+BC_PROXY  = os.environ.get('BC_PROXY', '').strip()
+url = 'https://bestchange.biz/ru/exchange/' + urllib.parse.quote(FROM_CURR) + '/' + urllib.parse.quote(TO_CURR)
+_hdrs = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ru-RU,ru;q=0.9',
+    'Referer': 'https://bestchange.biz/',
+}
+try:
+    if BC_PROXY:
+        proxy_handler = urllib.request.ProxyHandler({'http': BC_PROXY, 'https': BC_PROXY})
+        opener = urllib.request.build_opener(proxy_handler)
+    else:
+        ctx = ssl.create_default_context()
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+    req = urllib.request.Request(url, headers=_hdrs)
+    with opener.open(req, timeout=25) as r:
+        html = r.read().decode('utf-8', errors='replace')
+    # Проверяем на Cloudflare-блокировку
+    if 'cloudflare' in html.lower() or 'just a moment' in html.lower() or len(html) < 500:
+        print('❌ Cloudflare заблокировал запрос.')
+        print('Решение: добавьте российский/residential HTTP-прокси в переменную BC_PROXY.')
+        print('Формат: http://user:pass@host:port')
+        print('URL: ' + url)
+    else:
+        # Парсим таблицу обменников — ищем строки с курсом
+        # Типичный формат: название, курс give/get, резерв, минимум
+        rows_found = []
+        # Ищем паттерны вида: обменник, числа курсов
+        for m in re.finditer(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL):
+            row = m.group(1)
+            texts = re.findall(r'>([^<]{1,80})<', row)
+            texts = [t.strip() for t in texts if t.strip() and not t.strip().startswith('<')]
+            # Ищем строки с числовыми курсами
+            nums = [t for t in texts if re.match(r'^[\d.,\s]+$', t) and '.' in t]
+            names = [t for t in texts if len(t) > 2 and not re.match(r'^[\d.,\s%]+$', t)]
+            if nums and names:
+                rows_found.append((names[0] if names else '?', nums))
+        if not rows_found:
+            print('Данные не найдены или структура страницы изменилась.')
+            print('URL: ' + url)
+            # Показываем начало HTML для диагностики
+            snippet = re.sub(r'<[^>]+>', ' ', html[:600]).strip()
+            snippet = re.sub(r'\s+', ' ', snippet)
+            print('Начало страницы: ' + snippet[:300])
         else:
-            matches = [r for r in rate_rows if len(r) >= 6 and r[0] == from_id and r[1] == to_id]
-            if not matches:
-                print('Курсов для ' + FROM_CURR + ' → ' + TO_CURR + ' не найдено.')
-                print('FROM найден как: ' + curr_map[from_id] + ', TO: ' + curr_map[to_id])
-            else:
-                try: matches.sort(key=lambda r: -float(r[4]))
-                except: pass
-                print('BestChange: ' + curr_map[from_id] + ' → ' + curr_map[to_id])
-                print('Обменников: ' + str(len(matches)) + ', топ-' + str(TOP_N))
-                print('')
-                for i, r in enumerate(matches[:TOP_N], 1):
-                    exch_name = exch_map.get(r[2], 'ID:' + r[2])
-                    try:
-                        rate_str = str(round(float(r[4]) / float(r[3]), 4)) + ' ' + TO_CURR + '/' + FROM_CURR
-                    except: rate_str = r[3] + '/' + r[4]
-                    reserve = r[5].strip() if len(r) > 5 else '?'
-                    mn = ((' | мин: ' + r[6].strip()) if len(r) > 6 and r[6].strip() else '')
-                    mx = ((' макс: ' + r[7].strip()) if len(r) > 7 and r[7].strip() else '')
-                    print(str(i) + '. ' + exch_name + ' — ' + rate_str + ' | резерв: ' + reserve + mn + mx)
-    except Exception as e:
-        print('Ошибка BestChange: ' + str(e))`
+            print('BestChange: ' + FROM_CURR + ' → ' + TO_CURR)
+            print('Топ-' + str(TOP_N) + ' обменников:')
+            print('')
+            for i, (name, nums) in enumerate(rows_found[:TOP_N], 1):
+                rate_info = ' | '.join(nums[:3]) if nums else ''
+                print(str(i) + '. ' + name + (' — ' + rate_info if rate_info else ''))
+            print('')
+            print('Подробнее: ' + url)
+except Exception as e:
+    print('Ошибка BestChange: ' + str(e))
+    print('URL: ' + url)
+    if '403' in str(e) or '503' in str(e) or 'SSL' in str(e):
+        print('bestchange.biz блокирует облачные IP.')
+        print('Добавьте российский HTTP-прокси в переменную BC_PROXY.')`
             },
             binance_spot: {
                 name: 'Binance Spot (торговля / баланс)',
