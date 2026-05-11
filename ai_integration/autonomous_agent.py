@@ -4172,7 +4172,8 @@ class HybridAutonomousAgent:
 
             # Сохраняем сообщение пользователя в историю
             from .conversation_history import save_message_to_history
-            save_message_to_history(user_id, "user", user_message)
+            _msg_to_save = '⚙ Режим настройки' if user_message.strip() == '[РЕЖИМ НАСТРОЙКИ]' else user_message
+            save_message_to_history(user_id, "user", _msg_to_save)
 
             # Язык пользователя (нужен рано, до ctx)
             from i18n import get_user_lang
@@ -4206,6 +4207,9 @@ class HybridAutonomousAgent:
 
             # ═══ РЕЖИМ НАСТРОЙКИ — Setup Advisor ═══
             if '[РЕЖИМ НАСТРОЙКИ]' in (user_message or ''):
+                # Заменяем маркер на понятный текст для LLM
+                if user_message.strip() == '[РЕЖИМ НАСТРОЙКИ]':
+                    user_message = 'Проанализируй мои интеграции и порекомендуй что ещё стоит подключить для повышения эффективности.'
                 try:
                     _sa_s = Session()
                     try:

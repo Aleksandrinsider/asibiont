@@ -2347,7 +2347,9 @@
 
             // Сразу показываем сообщение пользователя в чате
             if (message) {
-                addMessage(message, 'user');
+                const _displayText = window._chatDisplayOverride || message;
+                window._chatDisplayOverride = null;
+                addMessage(_displayText, 'user');
                 // Запоминаем текст, чтобы checkForNewMessages не дублировал до синка
                 window._pendingUserMsgText = message.trim();
             }
@@ -17695,41 +17697,18 @@ except Exception as e:
             window.location.href = '/logout';
         }
 
-        async function triggerSetupAdvisor() {
-            var btn = document.getElementById('header-setup-btn');
-            var btnM = document.getElementById('mobile-setup-btn');
-            [btn, btnM].forEach(function(b){ if(b){ b.style.opacity='0.5'; b.style.pointerEvents='none'; } });
+        function triggerSetupAdvisor() {
+            // Бэкенд сам подтянет интеграции при виде маркера [РЕЖИМ НАСТРОЙКИ]
+            window._chatDisplayOverride = '⚙ Режим настройки';
 
-            try {
-                var resp = await fetch('/api/setup-advisor', { credentials: 'include' });
-                var d = await resp.json();
-                if (d.error) { showNotification(d.error, 'error'); return; }
+            var chatTab = document.getElementById('chat-tab') || document.querySelector('[onclick*="switchToChat"]');
+            if (chatTab) chatTab.click();
 
-                // Формируем подсказку в чат
-                var connected = (d.connected && d.connected.length) ? d.connected.join(', ') : 'ничего не подключено';
-                var tgChan = d.telegram_channel ? ('Telegram-канал: ' + d.telegram_channel) : '';
-                var discord = d.discord ? ('Discord: ' + d.discord) : '';
-                var gmail = d.gmail ? 'Gmail OAuth: подключён' : '';
-                var extras = [tgChan, discord, gmail].filter(Boolean).join('; ');
-
-                var prompt = '[РЕЖИМ НАСТРОЙКИ] Проанализируй мои подключённые интеграции и посоветуй что ещё стоит подключить для повышения эффективности.\n\nПодключено у агентов: ' + connected + (extras ? '\nТакже: ' + extras : '') + '\n\nУчти контекст нашего диалога и мои цели. Объясни кратко: что уже работает, что добавит наибольшую пользу и как это подключить.';
-
-                // Переключаемся на чат и отправляем
-                var chatTab = document.getElementById('chat-tab') || document.querySelector('[onclick*="switchToChat"]');
-                if (chatTab) chatTab.click();
-
-                var inp = document.getElementById('message-input');
-                if (inp) {
-                    inp.value = prompt;
-                    inp.dispatchEvent(new Event('input'));
-                    // небольшая пауза чтобы UI успел переключиться
-                    setTimeout(function(){ sendChatMessage(); }, 150);
-                }
-            } catch(e) {
-                showNotification(window._lang === 'en' ? 'Setup advisor error' : 'Ошибка режима настройки', 'error');
-                console.error('[SETUP] error:', e);
-            } finally {
-                [btn, btnM].forEach(function(b){ if(b){ b.style.opacity=''; b.style.pointerEvents=''; } });
+            var inp = document.getElementById('message-input');
+            if (inp) {
+                inp.value = '[РЕЖИМ НАСТРОЙКИ]';
+                inp.dispatchEvent(new Event('input'));
+                setTimeout(function(){ sendChatMessage(); }, 150);
             }
         }
 
