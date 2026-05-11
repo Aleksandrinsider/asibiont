@@ -184,7 +184,7 @@ MAILERSEND_API_KEY = os.getenv("MAILERSEND_API_KEY", "")
 MAILERSEND_FROM_EMAIL = os.getenv("MAILERSEND_FROM_EMAIL", "noreply@trial.mailersend.net")
 MAILERSEND_FROM_NAME = os.getenv("MAILERSEND_FROM_NAME", "ASI Biont")
 
-# Resend.com HTTP Email API (fallback when SMTP ports are blocked)
+# Resend.com HTTP Email API (kept for outreach/inbound flows; not used by system send_email)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 # Верифицированный from-адрес Resend (должен совпадать с доменом Resend Domains)
 RESEND_FROM = os.getenv("RESEND_FROM", "")

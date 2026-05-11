@@ -778,8 +778,8 @@ def verify_password(password, stored_hash):
 # ═══ Email sending (Resend HTTP API primary, SMTP fallback) ═══
 
 async def send_email(to: str, subject: str, body: str):
-    """Send email via MailerSend (primary) → Resend (secondary) → SMTP (fallback)"""
-    from config import MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL, MAILERSEND_FROM_NAME, RESEND_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+    """Send system email via MailerSend (primary) or SMTP (local/dev fallback)."""
+    from config import MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL, MAILERSEND_FROM_NAME, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
     
     # Build HTML body
     html_body = body.replace('\n', '<br>')
@@ -834,39 +834,7 @@ async def send_email(to: str, subject: str, body: str):
             errors.append(f"MailerSend API: {e}")
             logger.warning(f"MailerSend API error: {e}")
     
-    # Method 2: Resend HTTP API (secondary fallback)
-    if RESEND_API_KEY:
-        try:
-            logger.info(f"Sending email via Resend API to {to}")
-            async with _safe_http() as session:
-                async with session.post(
-                    'https://api.resend.com/emails',
-                    headers={
-                        'Authorization': f'Bearer {RESEND_API_KEY}',
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        'from': 'ASI Biont <support@asibiont.com>',
-                        'to': [to],
-                        'subject': subject,
-                        'text': body,
-                        'html': html,
-                    },
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as resp:
-                    resp_data = await resp.json()
-                    if resp.status in (200, 201):
-                        logger.info(f"Email sent via Resend API to {to}: {resp_data.get('id', 'ok')}")
-                        return
-                    else:
-                        err = resp_data.get('message', resp_data.get('error', str(resp_data)))
-                        errors.append(f"Resend API {resp.status}: {err}")
-                        logger.warning(f"Resend API failed: {resp.status} {err}")
-        except Exception as e:
-            errors.append(f"Resend API: {e}")
-            logger.warning(f"Resend API error: {e}")
-    
-    # Method 2: SMTP fallback (works when ports aren't blocked)
+    # Method 2: SMTP fallback (works locally or anywhere SMTP ports are available)
     if SMTP_PASSWORD:
         import smtplib, ssl, socket
         from email.mime.text import MIMEText
@@ -922,8 +890,8 @@ async def send_email(to: str, subject: str, body: str):
         except Exception as e:
             errors.append(f"SMTP: {e}")
     
-    if not RESEND_API_KEY and not SMTP_PASSWORD:
-        raise RuntimeError("Email not configured: set RESEND_API_KEY or SMTP_PASSWORD")
+    if not MAILERSEND_API_KEY and not SMTP_PASSWORD:
+        raise RuntimeError("Email not configured: set MAILERSEND_API_KEY or SMTP_PASSWORD")
     
     raise RuntimeError(f"All email methods failed: {'; '.join(errors)}")
 
@@ -938,14 +906,15 @@ async def smtp_check_handler(request):
     expected_secret = os.getenv('ADMIN_SECRET')
     if not expected_secret or not admin_secret or not hmac.compare_digest(admin_secret, expected_secret):
         return web.json_response({'error': 'Forbidden'}, status=403)
-    from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, RESEND_API_KEY
+    from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL
     return web.json_response({
-        'resend_configured': bool(RESEND_API_KEY),
+        'mailersend_configured': bool(MAILERSEND_API_KEY),
+        'mailersend_from_email': MAILERSEND_FROM_EMAIL,
         'smtp_host': SMTP_HOST,
         'smtp_user': SMTP_USER,
         'smtp_from': SMTP_FROM,
         'smtp_password_set': bool(SMTP_PASSWORD),
-        'note': 'Railway blocks SMTP ports, use RESEND_API_KEY for email delivery'
+        'note': 'Production delivery uses MailerSend. SMTP is only a local/dev fallback because Railway blocks SMTP ports.'
     })
 
 
