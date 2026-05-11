@@ -10898,28 +10898,33 @@ class AnchorEngine:
                                 if _ex_strats:
                                     _bottlenecks.append(f"🔄 Исчерпаны стратегии: {', '.join(_ex_strats[:3])}")
 
-                                # Добавляем только ОДНО узкое место — ключевое
-                                if _bottlenecks and _esc_stage == 0:
-                                    _stag_body_parts.append(_bottlenecks[0])
+                                # Добавляем узкие места на всех стадиях (stage 0 — первое, stage 1 — все)
+                                if _bottlenecks:
+                                    if _esc_stage == 0:
+                                        _stag_body_parts.append(_bottlenecks[0])
+                                    else:
+                                        _stag_body_parts.extend(_bottlenecks[:2])
 
-                                # Для stage 1+: только если есть реальный прогресс или новый факт
-                                if not _bottlenecks and not _failed_t and not _ex_strats and _esc_stage == 0:
+                                # Если узких мест нет — объясняем что делаем дальше
+                                if not _bottlenecks and not _failed_t and not _ex_strats:
                                     _stag_body_parts.append("Продолжаю пробовать другие каналы.")
+                                elif not _bottlenecks and _ex_strats:
+                                    _stag_body_parts.append(f"Переключаюсь на другие стратегии: исчерпаны {', '.join(_ex_strats[:2])}.")
                                 _esc_lines.append(_stag_header + ('\n' + '\n'.join(_stag_body_parts) if _stag_body_parts else ''))
 
-                            # stage >= 1 без реальных фактов — не отправляем, чтобы не шуметь
-                            if _esc_stage >= 1 and not _stag_body_parts:
+                            # stage >= 2 без реальных фактов — не отправляем, чтобы не шуметь
+                            if _esc_stage >= 2 and not _stag_body_parts:
                                 _esc_lines = []
 
                             if _esc_lines:
                                 # Автокоординация: autopilot сам меняет стратегию — коротко
                                 _auto_actions = []
-                                if _stag_warn and _esc_stage == 0:
+                                if _stag_warn:
                                     if _total_sent >= 20 and _total_replied == 0:
                                         _auto_actions.append("Пересматриваю тему и текст писем.")
                                     elif _ex_strats:
                                         _auto_actions.append("Переключаюсь на другие стратегии.")
-                                    else:
+                                    elif _esc_stage == 0:
                                         _auto_actions.append("Корректирую подход.")
                                 if _auto_actions:
                                     _esc_lines.append('\n'.join(_auto_actions))
