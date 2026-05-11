@@ -5131,13 +5131,20 @@ class HybridAutonomousAgent:
                 _ml_lower = (user_message or '').lower()
                 _is_analysis_q = any(kw in _ml_lower for kw in _ANALYSIS_KWORDS)
                 # Блог/статья требует много токенов: весь контент идёт внутри arguments create_post
-                _BLOG_KWORDS = ('блог', 'blog', 'стать', 'article', 'публикац', 'пост', 'post', 'напиши пост', 'write post')
+                _BLOG_KWORDS = (
+                    'блог', 'blog', 'стать', 'article', 'публикац', 'пост', 'post',
+                    'напиши пост', 'write post', 'контент', 'content', 'сео', 'seo',
+                    'create_post', 'опубликуй', 'publish', 'запись', 'текст для',
+                )
                 _is_blog_request = any(kw in _ml_lower for kw in _BLOG_KWORDS)
                 # Сократили лимиты для живого диалога: краткие ответы
                 if _is_blog_request:
                     _max_tok = 4000
                 elif _is_last_iter and all_execution_results:
                     _max_tok = 1200 if _is_analysis_q else 900
+                elif _allow_tools:
+                    # Tool call с arguments требует ~200 токенов overhead → минимум 2000
+                    _max_tok = 2000
                 else:
                     _max_tok = 1200 if _is_analysis_q else 800
                 response = await self.call_ai(
