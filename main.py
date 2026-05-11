@@ -6332,6 +6332,65 @@ async def api_update_profile_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def setup_advisor_handler(request):
+    """GET /api/setup-advisor — возвращает подключённые и доступные интеграции пользователя."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+
+        session_db = Session()
+        try:
+            from models import UserAgent
+            from ai_integration.autonomous_agent import _parse_agent_integrations, _decrypt_keys
+
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Собираем интеграции из всех агентов пользователя
+            agents = session_db.query(UserAgent).filter_by(author_id=user.id).all()
+            connected_set = set()
+            for agent in agents:
+                labels = _parse_agent_integrations(
+                    agent.user_api_keys or '',
+                    agent.python_code or '',
+                    agent.tools_allowed or '',
+                    agent.search_scope or ''
+                )
+                connected_set.update(labels)
+
+            # Стандартные подключения (не в API-ключах агентов)
+            telegram_channel = user.telegram_channel or None
+            discord = user.discord_webhook or None
+            # Gmail — ищем oauth токен в любом агенте
+            gmail_connected = False
+            for agent in agents:
+                raw = _decrypt_keys(agent.user_api_keys or '')
+                if 'GMAIL_OAUTH' in raw or 'gmail_token' in raw.lower():
+                    gmail_connected = True
+                    break
+
+            # Полный список доступных интеграций (из _INTEGRATION_LABELS)
+            from ai_integration.autonomous_agent import _INTEGRATION_LABELS
+            available = sorted(set(_INTEGRATION_LABELS.values()))
+
+            return web.json_response({
+                'connected': sorted(connected_set),
+                'available': available,
+                'telegram_channel': telegram_channel,
+                'discord': discord,
+                'gmail': gmail_connected,
+                'agents_count': len(agents),
+            })
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"[SETUP ADVISOR] Error: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def get_feed_handler(request):
     """API endpoint to get posts from favorite contacts"""
     try:
@@ -14469,6 +14528,7 @@ app.router.add_post('/api/accept_delegated_task', api_accept_delegated_task_hand
 app.router.add_post('/api/reject_delegated_task', api_reject_delegated_task_handler)
 app.router.add_post('/api/cancel_delegation', cancel_delegation_handler)
 app.router.add_post('/api/withdraw', withdraw_handler)
+app.router.add_get('/api/setup-advisor', setup_advisor_handler)
 app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_post('/api/feed/mark-viewed', mark_posts_viewed_handler)
 app.router.add_put('/api/posts/{post_id}', edit_post_handler)

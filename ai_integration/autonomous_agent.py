@@ -4204,6 +4204,36 @@ class HybridAutonomousAgent:
                         "Отвечай ТОЛЬКО на русском."
                     )
 
+            # ═══ РЕЖИМ НАСТРОЙКИ — Setup Advisor ═══
+            if '[РЕЖИМ НАСТРОЙКИ]' in (user_message or ''):
+                try:
+                    _sa_s = Session()
+                    try:
+                        from models import UserAgent as _UA_sa
+                        _sa_agents = _sa_s.query(_UA_sa).filter_by(author_id=_sa_s.query(User).filter_by(telegram_id=user_id).first().id).all()
+                        _sa_connected: list[str] = []
+                        for _ag in _sa_agents:
+                            _sa_connected.extend(_parse_agent_integrations(
+                                _ag.user_api_keys or '', _ag.python_code or '',
+                                _ag.tools_allowed or '', _ag.search_scope or ''
+                            ))
+                        _sa_connected = sorted(set(_sa_connected))
+                        _sa_all = sorted(set(_INTEGRATION_LABELS.values()))
+                        _sa_not = sorted(set(_sa_all) - set(_sa_connected))
+                        _sa_block = (
+                            "\n\n[РЕЖИМ НАСТРОЙКИ — ИНТЕГРАЦИИ]\n"
+                            f"Подключено ({len(_sa_connected)}): {', '.join(_sa_connected) or 'ничего'}.\n"
+                            f"Можно добавить (примеры): {', '.join(_sa_not[:30])}{'...' if len(_sa_not) > 30 else ''}.\n"
+                            "Задача: проанализируй что подключено, укажи пользователю что уже работает, "
+                            "порекомендуй 3-5 наиболее полезных интеграций которые стоит добавить — "
+                            "исходя из его целей и контекста диалога. Объясни как их подключить (раздел 'Агенты' → API-ключи)."
+                        )
+                        dynamic_context += _sa_block
+                    finally:
+                        _sa_s.close()
+                except Exception as _sa_err:
+                    logger.warning(f"[SETUP ADVISOR] ctx build error: {_sa_err}")
+
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
             full_history = get_conversation_history(user_id, session=None, limit=50)

@@ -733,6 +733,11 @@
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; gap: 4px; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
                 <span>{{ token_balance or 0 }}</span>
             </button>
+            <button id="mobile-setup-btn" onclick="triggerSetupAdvisor()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Режим настройки">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                    <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/>
+                </svg>
+            </button>
             <button id="mobile-autopilot-btn" onclick="toggleGoalAutopilot()" style="background: {{ '#068487' if goal_autopilot_enabled else 'none' }}; border: 1px solid {{ '#068487' if goal_autopilot_enabled else '#D1D9E0' }}; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Автопилот целей" data-i18n-title="goal-autopilot" data-active="{{ 'true' if goal_autopilot_enabled else '' }}">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="{{ '#FFFFFF' if goal_autopilot_enabled else '#374151' }}">
                     <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3.5a.75.75 0 0 1 .75.75v2.69l1.78 1.78a.749.749 0 1 1-1.06 1.06l-2-2A.75.75 0 0 1 7.25 8.5v-3.25A.75.75 0 0 1 8 4.5Z"/>
@@ -773,6 +778,13 @@
                 <button onclick="openMessagesSection()" style="padding: 6px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Сообщения" data-i18n-title="header-messages">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25v-8.5C0 1.784.784 1 1.75 1ZM1.5 2.75v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25Z"/>
+                    </svg>
+                </button>
+
+                <!-- Режим настройки -->
+                <button id="header-setup-btn" onclick="triggerSetupAdvisor()" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Режим настройки">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                        <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/>
                     </svg>
                 </button>
 
@@ -17681,6 +17693,44 @@ except Exception as e:
 
         function logout() {
             window.location.href = '/logout';
+        }
+
+        async function triggerSetupAdvisor() {
+            var btn = document.getElementById('header-setup-btn');
+            var btnM = document.getElementById('mobile-setup-btn');
+            [btn, btnM].forEach(function(b){ if(b){ b.style.opacity='0.5'; b.style.pointerEvents='none'; } });
+
+            try {
+                var resp = await fetch('/api/setup-advisor', { credentials: 'include' });
+                var d = await resp.json();
+                if (d.error) { showNotification(d.error, 'error'); return; }
+
+                // Формируем подсказку в чат
+                var connected = (d.connected && d.connected.length) ? d.connected.join(', ') : 'ничего не подключено';
+                var tgChan = d.telegram_channel ? ('Telegram-канал: ' + d.telegram_channel) : '';
+                var discord = d.discord ? ('Discord: ' + d.discord) : '';
+                var gmail = d.gmail ? 'Gmail OAuth: подключён' : '';
+                var extras = [tgChan, discord, gmail].filter(Boolean).join('; ');
+
+                var prompt = '[РЕЖИМ НАСТРОЙКИ] Проанализируй мои подключённые интеграции и посоветуй что ещё стоит подключить для повышения эффективности.\n\nПодключено у агентов: ' + connected + (extras ? '\nТакже: ' + extras : '') + '\n\nУчти контекст нашего диалога и мои цели. Объясни кратко: что уже работает, что добавит наибольшую пользу и как это подключить.';
+
+                // Переключаемся на чат и отправляем
+                var chatTab = document.getElementById('chat-tab') || document.querySelector('[onclick*="switchToChat"]');
+                if (chatTab) chatTab.click();
+
+                var inp = document.getElementById('message-input');
+                if (inp) {
+                    inp.value = prompt;
+                    inp.dispatchEvent(new Event('input'));
+                    // небольшая пауза чтобы UI успел переключиться
+                    setTimeout(function(){ sendChatMessage(); }, 150);
+                }
+            } catch(e) {
+                showNotification(window._lang === 'en' ? 'Setup advisor error' : 'Ошибка режима настройки', 'error');
+                console.error('[SETUP] error:', e);
+            } finally {
+                [btn, btnM].forEach(function(b){ if(b){ b.style.opacity=''; b.style.pointerEvents=''; } });
+            }
         }
 
         function toggleGoalAutopilot() {
