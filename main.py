@@ -778,8 +778,8 @@ def verify_password(password, stored_hash):
 # ═══ Email sending (Resend HTTP API primary, SMTP fallback) ═══
 
 async def send_email(to: str, subject: str, body: str):
-    """Send email via Resend HTTP API (primary) or SMTP (fallback)"""
-    from config import RESEND_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+    """Send email via MailerSend (primary) → Resend (secondary) → SMTP (fallback)"""
+    from config import MAILERSEND_API_KEY, MAILERSEND_FROM_EMAIL, MAILERSEND_FROM_NAME, RESEND_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
     
     # Build HTML body
     html_body = body.replace('\n', '<br>')
@@ -791,7 +791,43 @@ async def send_email(to: str, subject: str, body: str):
     
     errors = []
     
-    # Method 1: Resend HTTP API (works on Railway, no SMTP ports needed)
+    # Method 1: MailerSend HTTP API (primary — 300 emails/day free, works on Railway)
+    if MAILERSEND_API_KEY:
+        try:
+            logger.info(f"Sending email via MailerSend API to {to}")
+            async with _safe_http() as session:
+                async with session.post(
+                    'https://api.mailersend.com/v1/email',
+                    headers={
+                        'Authorization': f'Bearer {MAILERSEND_API_KEY}',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    json={
+                        'from': {
+                            'email': MAILERSEND_FROM_EMAIL,
+                            'name': MAILERSEND_FROM_NAME
+                        },
+                        'to': [{'email': to}],
+                        'subject': subject,
+                        'text': body,
+                        'html': html,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as resp:
+                    resp_data = await resp.json()
+                    if resp.status in (200, 201):
+                        logger.info(f"Email sent via MailerSend API to {to}: {resp_data.get('message_id', 'ok')}")
+                        return
+                    else:
+                        err = resp_data.get('message', resp_data.get('error', str(resp_data)))
+                        errors.append(f"MailerSend {resp.status}: {err}")
+                        logger.warning(f"MailerSend API failed: {resp.status} {err}")
+        except Exception as e:
+            errors.append(f"MailerSend API: {e}")
+            logger.warning(f"MailerSend API error: {e}")
+    
+    # Method 2: Resend HTTP API (secondary fallback)
     if RESEND_API_KEY:
         try:
             logger.info(f"Sending email via Resend API to {to}")

@@ -178,6 +178,12 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", "")
 
+# MailerSend.com HTTP Email API (primary — 300 emails/day free)
+MAILERSEND_API_KEY = os.getenv("MAILERSEND_API_KEY", "")
+# MailerSend trial domain: noreply@trial.mailersend.net
+MAILERSEND_FROM_EMAIL = os.getenv("MAILERSEND_FROM_EMAIL", "noreply@trial.mailersend.net")
+MAILERSEND_FROM_NAME = os.getenv("MAILERSEND_FROM_NAME", "ASI Biont")
+
 # Resend.com HTTP Email API (fallback when SMTP ports are blocked)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 # Верифицированный from-адрес Resend (должен совпадать с доменом Resend Domains)
