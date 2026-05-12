@@ -25989,6 +25989,50 @@ class AnchorEngine:
                         "Use SPECIFIC subject about THIS person's project/company instead.\n\n"
                     )
 
+                    # ── Определяем тип цели для адаптации структуры письма ──
+                    _goal_lower = (campaign_goal or '').lower() + ' ' + (campaign_name or '').lower()
+                    _is_partner = any(w in _goal_lower for w in ('партн', 'partner', 'collabor', 'совмест', 'интеграц', 'integr'))
+                    _is_sales = any(w in _goal_lower for w in ('прода', 'buy', 'купи', 'покуп', 'customer', 'client', 'лид', 'lead', 'конверси'))
+                    _is_invest = any(w in _goal_lower for w in ('инвест', 'invest', 'fund', 'фондир', 'раунд', 'round', 'grant', 'грант'))
+                    _is_content = any(w in _goal_lower for w in ('контент', 'content', 'пост', 'post', 'стат', 'article', 'blog', 'блог'))
+                    _is_recruit = any(w in _goal_lower for w in ('ваканс', 'hire', 'recruit', 'найм', 'job', 'работа', 'work'))
+                    _goal_type_hint = ''
+                    if _is_partner:
+                        _goal_type_hint = (
+                            "\n🎯 GOAL TYPE: Partnership/collaboration.\n"
+                            "  STRUCTURE: Research Hook → Mutual Benefit → Your Offer → Question.\n"
+                            "  CTA: 'Would you be open to exploring this together?' / 'Worth a quick sync?'\n"
+                            "  Tone: collaborative, peer-to-peer. You have something they'd benefit from.\n"
+                        )
+                    elif _is_sales:
+                        _goal_type_hint = (
+                            "\n🎯 GOAL TYPE: Customer acquisition / sales.\n"
+                            "  STRUCTURE: Research Hook → Pain/Need → Your Solution → Proof → CTA.\n"
+                            "  CTA: 'Curious if this could help?' / 'Worth a 10-min call to see if it fits?'\n"
+                            "  Tone: helpful, consultative. Focus on THEIR problem, not your product.\n"
+                        )
+                    elif _is_invest:
+                        _goal_type_hint = (
+                            "\n🎯 GOAL TYPE: Investment / fundraising.\n"
+                            "  STRUCTURE: Research Hook → Traction/Team → Opportunity → CTA.\n"
+                            "  CTA: 'Would you have time to review our deck?' / 'Interested in the space?'\n"
+                            "  Tone: confident but humble. Highlight traction, not potential. Be specific.\n"
+                        )
+                    elif _is_content:
+                        _goal_type_hint = (
+                            "\n🎯 GOAL TYPE: Content promotion / guest post.\n"
+                            "  STRUCTURE: Research Hook → Their Content → Your Idea → CTA.\n"
+                            "  CTA: 'Would this fit your editorial calendar?' / 'Open to a guest post?'\n"
+                            "  Tone: respectful of their audience. Show you read their work first.\n"
+                        )
+                    elif _is_recruit:
+                        _goal_type_hint = (
+                            "\n🎯 GOAL TYPE: Recruitment / hiring.\n"
+                            "  STRUCTURE: Research Hook → Why Them → The Opportunity → CTA.\n"
+                            "  CTA: 'Would you be open to a conversation?' / 'Curious if you're looking?'\n"
+                            "  Tone: personalized to their background. Mention their specific work.\n"
+                        )
+
                     compose_prompt = (
                         f"Write a cold outreach email for this specific person.\n\n"
                         f"⚠️ ANTI-HALLUCINATION: use ONLY facts from the campaign offer/goal below. "
@@ -26002,9 +26046,12 @@ class AnchorEngine:
                         f"Recipient: {email}\nName: {name}\n"
                         f"{'Company/project: ' + company if company else ''}\n"
                         f"Research context about recipient: {context or 'none'}\n"
-                        f"USE THE CONTEXT ABOVE to personalize the email! If context mentions specific "
-                        f"projects, products, articles, or achievements — reference them in your opening.\n\n"
+                        f"YOU MUST USE the research context above to personalize! "
+                        f"If context mentions specific projects, products, articles, GitHub repos, or achievements — "
+                        f"you MUST reference at least ONE by name in your opening sentence. "
+                        f"No context → use company/project/industry hook instead of vague opening.\n\n"
                         f"{_BANNED_SUBJECT_WORDS}"
+                        f"{_goal_type_hint}\n"
                         f"Language: {lang_hint} — write the ENTIRE email (subject AND body) in {lang_hint} only. "
                         f"Language was auto-detected from recipient signals (domain, name, context language). "
                         f"Do NOT mix languages.\n"
@@ -26027,11 +26074,24 @@ class AnchorEngine:
                         f"  2. BRIDGE (1 sent): connect their work to yours — why them specifically.\n"
                         f"  3. VALUE (1-2 sent): what you do/offer concretely, what result.\n"
                         f"  4. PROOF (0-1 sent): one brief fact — users, traction, result. Optional.\n"
-                        f"  5. QUESTION (1 sent): simple closing question — 'is this relevant?', 'worth a chat?'\n"
+                        f"  5. QUESTION (1 sent): closing question adapted to goal type. "
+                        f"Don't always use 'worth a chat?' — vary your CTA.\n"
                         f"- First email = introduction + question, NOT a hard pitch. Don't sell, explore interest.\n"
+                        f"- P.S. line (optional but recommended): add one short P.S. with a relevant "
+                        f"fact, observation, or question. P.S. increases reply rates.\n"
                         f"- NO links, NO URLs, NO website mentions in first email\n"
                         f"- NO corporate buzzwords: 'streamlining workflows', 'leveraging synergies', 'driving innovation'\n"
                         f"- Write like a HUMAN colleague — warm, specific, genuine. Not a marketing bot.\n"
+                        f"- ⛔ BANNED AI OPENERS (will be auto-rejected):\n"
+                        f"  'I hope this email finds you well', 'I hope this message finds you well',\n"
+                        f"  'I'm writing to you because', 'I'm reaching out because', 'I wanted to reach out',\n"
+                        f"  'I came across your profile', 'I came across your work', 'I've been following your work',\n"
+                        f"  'I hope you're doing well', 'I hope you're having a great week'\n"
+                        f"  Start DIRECTLY with the research hook, no warm-up sentence.\n"
+                        f"- ⛔ BANNED AI TRANSITIONS (make email sound robotic):\n"
+                        f"  'furthermore', 'moreover', 'additionally', 'in addition', 'it is worth noting',\n"
+                        f"  'not to mention', 'equally important', 'first and foremost'\n"
+                        f"  Use natural transitions: 'Also,', 'Plus,', or just a new paragraph.\n"
                         f"- No HTML, no markdown, no signatures"
                     )
 
