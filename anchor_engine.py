@@ -26033,9 +26033,58 @@ class AnchorEngine:
                             "  Tone: personalized to their background. Mention their specific work.\n"
                         )
 
+                    # ── Контекст предыдущей переписки с этим получателем из других кампаний ──
+                    _prev_thread_context = ''
+                    _prev_email_lower = (email or '').strip().lower()
+                    if _prev_email_lower:
+                        try:
+                            from models import EmailOutreach as _EO_prev
+                            _prev_outreach = session.query(_EO_prev).filter(
+                                _EO_prev.user_id == user.id,
+                                _EO_prev.recipient_email == _prev_email_lower,
+                                _EO_prev.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                                _EO_prev.campaign_id != campaign_id,
+                            ).order_by(_EO_prev.sent_at.desc()).limit(3).all()
+                            if _prev_outreach:
+                                _parts_prev = []
+                                for _po in reversed(_prev_outreach):
+                                    _po_camp_name = ''
+                                    if _po.campaign_id:
+                                        try:
+                                            _po_camp = session.query(EmailCampaign).filter_by(id=_po.campaign_id).first()
+                                            _po_camp_name = _po_camp.name if _po_camp else ''
+                                        except Exception:
+                                            pass
+                                    _po_replied = _po.status == 'replied'
+                                    _po_subject = _po.subject or '(no subject)'
+                                    _po_body = (_po.body or '')[:200]
+                                    _po_ai_reply = (_po.ai_reply_text or '')[:200] if _po_replied else ''
+                                    _entry = (
+                                        f"--- Campaign: {_po_camp_name or 'unknown'} ---\n"
+                                        f"Subject: {_po_subject}\n"
+                                        f"Our outreach: {_po_body}\n"
+                                    )
+                                    if _po_replied and _po.reply_text:
+                                        _entry += f"Their reply: {_po.reply_text[:300]}\n"
+                                    if _po_ai_reply:
+                                        _entry += f"Our AI reply: {_po_ai_reply}\n"
+                                    _parts_prev.append(_entry)
+                                if _parts_prev:
+                                    _prev_thread_context = (
+                                        f"\n⚠️ PREVIOUS EMAIL HISTORY with this recipient (different campaigns):\n"
+                                        + '\n'.join(_parts_prev)
+                                        + "\n\nThis person has been contacted before. "
+                                        "Do NOT repeat the same hook, offer, or question. "
+                                        "If they replied before — acknowledge that you're following up on their previous response. "
+                                        "Write something NEW — different angle, different value proposition.\n"
+                                    )
+                        except Exception as _prev_err:
+                            logger.debug(f"[ANCHOR] previous thread lookup: {_prev_err}")
+
                     compose_prompt = (
                         f"Write a cold outreach email for this specific person.\n\n"
-                        f"⚠️ ANTI-HALLUCINATION: use ONLY facts from the campaign offer/goal below. "
+                        + _prev_thread_context
+                        + f"⚠️ ANTI-HALLUCINATION: use ONLY facts from the campaign offer/goal below. "
                         f"Do NOT invent numbers, features, pricing or user counts that are not stated there.\n\n"
                         f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n"
                         f"Offer: {offer}\nTone: {tone}\nSender: {sender_name}\n"
