@@ -12172,6 +12172,28 @@ class AnchorEngine:
                     prev_agent.name, len(_found_emails), _email_agent_relay.name,
                 )
             else:
+                # ── META-LOOP GUARD: строим список имён агентов команды ──
+                # Если задача DELEGATE[Lorenzo]: свяжись с Beatrice →
+                # то Beatrice тоже агент → мета-цикл: агенты пишут друг другу
+                _team_names_lower = {
+                    a.name.lower() for a in agents
+                    if getattr(a, 'id', 0) != 0
+                }
+                _prev_name_lower = (getattr(prev_agent, 'name', '') or '').lower()
+
+                def _check_meta_loop(_target_name: str, _task: str) -> list[str]:
+                    """Возвращает список имён агентов, упомянутых в задаче,
+                    исключая prev_agent и target_agent (делегация коллеге
+                    о другом коллеге — мета-цикл)."""
+                    _target_lower = _target_name.lower()
+                    _task_lower = _task.lower()
+                    return [
+                        name for name in _team_names_lower
+                        if name in _task_lower
+                        and name != _prev_name_lower
+                        and name != _target_lower
+                    ]
+
                 # ── Explicit DELEGATE[Name] extraction ──
                 # Если агент явно написал DELEGATE[Марк]: задача — уважаем это решение
                 _delegate_match = _re2.search(
@@ -12183,15 +12205,23 @@ class AnchorEngine:
                     _del_name = _delegate_match.group(1).strip()
                     _del_task = _delegate_match.group(2).strip()
                     if _del_task:
-                        _decision = {
-                            'continue': True,
-                            'agent_name': _del_name,
-                            'task': _del_task,
-                        }
-                        logger.info(
-                            "[ANCHOR-CHAIN] explicit DELEGATE: %s → %s: %s",
-                            prev_agent.name, _del_name, _del_task[:120],
-                        )
+                        _meta_loop = _check_meta_loop(_del_name, _del_task)
+                        if _meta_loop:
+                            logger.warning(
+                                "[CHAIN-META-LOOP] DELEGATE[%s] → %s: задача содержит имя "
+                                "другого агента %s — блокируем мета-цикл",
+                                prev_agent.name, _del_name, ', '.join(_meta_loop),
+                            )
+                        else:
+                            _decision = {
+                                'continue': True,
+                                'agent_name': _del_name,
+                                'task': _del_task,
+                            }
+                            logger.info(
+                                "[ANCHOR-CHAIN] explicit DELEGATE: %s → %s: %s",
+                                prev_agent.name, _del_name, _del_task[:120],
+                            )
 
                 if not _decision:
                     # Pre-check: если предыдущий агент уже опубликовал пост — не продолжаем цепочку
@@ -12264,6 +12294,19 @@ class AnchorEngine:
 
             _next_name = _decision.get('agent_name', '')
             _next_task = _decision.get('task', '')
+
+            # ── META-LOOP GUARD #2: проверяем ASI-решение ──
+            # После того как ASI решила продолжить цепочку, проверяем:
+            # не содержит ли задача имя другого агента (мета-цикл)
+            if _next_task:
+                _meta_loop_asi = _check_meta_loop(_next_name, _next_task)
+                if _meta_loop_asi:
+                    logger.warning(
+                        "[CHAIN-META-LOOP] ASI decision: %s → %s about %s — "
+                        "blocking meta-loop chain",
+                        prev_agent.name, _next_name, ', '.join(_meta_loop_asi),
+                    )
+                    return
             if not _next_name or not _next_task:
                 return
             # Если предыдущий агент уже опубликовал пост — предупреждаем следующего
