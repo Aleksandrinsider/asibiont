@@ -15820,6 +15820,105 @@ class AnchorEngine:
             except Exception as _ca_err:
                 logger.debug('[COORD] cycle_assigns_ctx: %s', _ca_err)
 
+            # ── Сводка недавних диспатчей: факты для размышления координатора ──
+            # Вместо жёстких правил — показываем ЧТО именно делали агенты и с каким результатом.
+            # ИИ сам делает выводы на основе фактов.
+            _recent_dispatch_facts = ''
+            try:
+                from models import AgentActivityLog
+                _rf_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _rf_rows = session.query(AgentActivityLog).filter(
+                    AgentActivityLog.user_id == user.id,
+                    AgentActivityLog.created_at >= _rf_cutoff,
+                    AgentActivityLog.result.isnot(None),
+                ).order_by(AgentActivityLog.created_at.desc()).limit(50).all()
+                if _rf_rows:
+                    _rf_by_agent: dict = {}
+                    for _rf in _rf_rows:
+                        _rf_ag = ((getattr(_rf, 'target', None) or getattr(_rf, 'title', None) or '')[:40])
+                        _rf_res = (_rf.result or '')[:500]
+                        _rf_is_dead = any(kw in _rf_res.lower() for kw in (
+                            'не нашёл', 'не нашла', 'не нашел', 'не смог', 'не смогла',
+                            'не удал', 'тупик', 'нет доступа', 'не числит', 'не публич',
+                            'скрыт', 'не находится', 'not found', 'no public',
+                            'not available', 'dead end', 'no email', 'no contacts',
+                        ))
+                        _rf_is_done = any(kw in _rf_res.lower() for kw in (
+                            'отправлен', 'sent', 'сохранен', 'saved', 'опубликован',
+                            'published', 'найдено', 'found', 'готово', 'done',
+                            'успешно', 'success', 'написал', 'написала', 'ответил', 'replied',
+                        ))
+                        if _rf_ag not in _rf_by_agent:
+                            _rf_by_agent[_rf_ag] = []
+                        _rf_by_agent[_rf_ag].append((_rf_res[:200], _rf_is_dead, _rf_is_done))
+                    _rf_lines = []
+                    for _rf_ag, _rf_items in _rf_by_agent.items():
+                        _rf_dead = sum(1 for x in _rf_items if x[1])
+                        _rf_done = sum(1 for x in _rf_items if x[2])
+                        _rf_tag = '🔒 тупик' if _rf_dead > 0 else (f'✅ {_rf_done} результата(ов)' if _rf_done > 0 else '⏳ в работе')
+                        _rf_snip = _rf_items[-1][0][:120] if _rf_items else ''
+                        _rf_lines.append(f'  • [{_rf_tag}] {_rf_ag}: {_rf_snip}')
+                    _recent_dispatch_facts = (
+                        "\n📋 ФАКТЫ ПОСЛЕДНИХ 3 ЧАСОВ (что агенты уже делали и с каким результатом):\n"
+                        + '\n'.join(_rf_lines[:10])
+                        + "\n\n💭 Вопросы для размышления перед составлением плана:"
+                        "\n  • Что из этого уже готово к ИСПОЛЬЗОВАНИЮ или можно взять как есть?"
+                        "\n  • Где результат помечен 🔒 тупик — стоит ли пробовать снова или нужен принципиально другой подход?"
+                        "\n  • Что можно передать другому агенту для следующего шага в цепочке?"
+                        "\n  • Есть ли агент, который 2+ цикла делает однотипные действия без конкретного результата?\n\n"
+                    )
+            except Exception:
+                pass
+
+            # ── Сводка недавних диспатчей: факты для размышления координатора ──
+            # Вместо жёстких правил — показываем ЧТО именно делали агенты и с каким результатом.
+            # ИИ сам делает выводы на основе фактов.
+            _recent_dispatch_facts = ''
+            try:
+                _rf_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _rf_rows = session.query(AgentActivityLog).filter(
+                    AgentActivityLog.user_id == user.id,
+                    AgentActivityLog.created_at >= _rf_cutoff,
+                    AgentActivityLog.result.isnot(None),
+                ).order_by(AgentActivityLog.created_at.desc()).limit(50).all()
+                if _rf_rows:
+                    _rf_by_agent: dict = {}
+                    for _rf in _rf_rows:
+                        _rf_ag = ((getattr(_rf, 'target', None) or getattr(_rf, 'title', None) or '')[:40])
+                        _rf_res = (_rf.result or '')[:500]
+                        _rf_is_dead = any(kw in _rf_res.lower() for kw in (
+                            'не нашёл', 'не нашла', 'не нашел', 'не смог', 'не смогла',
+                            'не удал', 'тупик', 'нет доступа', 'не числит', 'не публич',
+                            'скрыт', 'не находится', 'not found', 'no public',
+                            'not available', 'dead end', 'no email', 'no contacts',
+                        ))
+                        _rf_is_done = any(kw in _rf_res.lower() for kw in (
+                            'отправлен', 'sent', 'сохранен', 'saved', 'опубликован',
+                            'published', 'найдено', 'found', 'готово', 'done',
+                            'успешно', 'success', 'написал', 'написала', 'ответил', 'replied',
+                        ))
+                        if _rf_ag not in _rf_by_agent:
+                            _rf_by_agent[_rf_ag] = []
+                        _rf_by_agent[_rf_ag].append((_rf_res[:200], _rf_is_dead, _rf_is_done))
+                    _rf_lines = []
+                    for _rf_ag, _rf_items in _rf_by_agent.items():
+                        _rf_dead = sum(1 for x in _rf_items if x[1])
+                        _rf_done = sum(1 for x in _rf_items if x[2])
+                        _rf_tag = '🔒 тупик' if _rf_dead > 0 else (f'✅ {_rf_done} результата(ов)' if _rf_done > 0 else '⏳ в работе')
+                        _rf_snip = _rf_items[-1][0][:120] if _rf_items else ''
+                        _rf_lines.append(f'  • [{_rf_tag}] {_rf_ag}: {_rf_snip}')
+                    _recent_dispatch_facts = (
+                        "\n📋 ФАКТЫ ПОСЛЕДНИХ 3 ЧАСОВ (что агенты уже делали и с каким результатом):\n"
+                        + '\n'.join(_rf_lines[:10])
+                        + "\n\n💭 Вопросы для размышления перед составлением плана:"
+                        "\n  • Что из этого уже готово к ИСПОЛЬЗОВАНИЮ или можно взять как есть?"
+                        "\n  • Где результат помечен 🔒 тупик — стоит ли пробовать снова или нужен принципиально другой подход?"
+                        "\n  • Что можно передать другому агенту для следующего шага в цепочке?"
+                        "\n  • Есть ли агент, который 2+ цикла делает однотипные действия без конкретного результата?\n\n"
+                    )
+            except Exception:
+                pass
+
             # ── Subject → reply_rate: конверсия по темам писем за 30 дней ──
             _subj_reply_str = ''
             if _has_outreach_goals or _email_sent > 0:
@@ -16002,6 +16101,7 @@ class AnchorEngine:
                 + _goal_phase_str
                 + _forced_rotation_str
                 + _cycle_assigns_ctx
+                + _recent_dispatch_facts
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
                 "🌐 УНИВЕРСАЛЬНОСТЬ: ты работаешь с ЛЮБЫМ пользователем и ЛЮБОЙ комбинацией интеграций.\n"
                 "Не предполагай конкретный workflow (email / GitHub / CRM / etc.) — читай профили агентов выше.\n"

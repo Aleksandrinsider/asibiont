@@ -10009,6 +10009,59 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _cycle_err:
             logger.debug('[DIRECTOR] cycle detection: %s', _cycle_err)
 
+    # ── Саморефлексия: покажи агенту его собственные недавние результаты ──
+    # Вместо жёстких правил — даём ИИ контекст о том, что он делал и с каким результатом.
+    # ИИ сам анализирует свои действия и корректирует поведение.
+    if _is_autopilot_task:
+        try:
+            from models import Session as _DbRefl, AgentActivityLog as _ALogRefl
+            from datetime import datetime as _dtRefl, timezone as _tzRefl, timedelta as _tdRefl
+            _db_refl = _DbRefl()
+            try:
+                _refl_since = _dtRefl.now(_tzRefl.utc) - _tdRefl(hours=3)
+                _refl_logs = _db_refl.query(_ALogRefl).filter(
+                    _ALogRefl.user_id == user_id,
+                    _ALogRefl.created_at >= _refl_since,
+                    _ALogRefl.result.isnot(None),
+                ).order_by(_ALogRefl.created_at.desc()).limit(15).all()
+                if _refl_logs:
+                    _refl_lines = []
+                    for _rl in _refl_logs:
+                        _rl_target = ((_rl.target or '') or (_rl.title or ''))[:40]
+                        _rl_res = (_rl.result or '')[:300]
+                        _rl_is_dead = any(kw in _rl_res.lower() for kw in (
+                            'не нашёл', 'тупик',
+                            'не находится',
+                            'нет доступа',
+                            'не публич',
+                            'not found', 'dead end', 'no email',
+                        ))
+                        _rl_is_done = any(kw in _rl_res.lower() for kw in (
+                            'отправлен', 'sent',
+                            'сохранен', 'saved',
+                            'найдено', 'found',
+                            'готово', 'done',
+                            'успешно', 'success',
+                        ))
+                        _rl_tag = '🔒' if _rl_is_dead else ('✅' if _rl_is_done else '⏳')
+                        _rl_snip = _rl_res[:100].replace('\n', ' ').strip()
+                        _refl_lines.append(f'  {_rl_tag} {_rl_target}: {_rl_snip}')
+                    if _refl_lines:
+                        system_prompt += (
+                            "\n\n📋 ТВОИ РЕЗУЛЬТАТЫ ЗА 3 ЧАСА (изучи и сделай выводы):\n"
+                            + '\n'.join(_refl_lines[:8])
+                            + "\n\n💭 ВОПРОСЫ ДЛЯ САМОАНАЛИЗА (ответь себе перед планированием):"
+                            "\n  • Что из этого уже можно считать выполненным, а что требует моего следующего шага?"
+                            "\n  • Если я упёрся в 🔒 тупик — какой ПРИНЦИПИАЛЬНО ДРУГОЙ подход я ещё не пробовал?"
+                            "\n  • Могу ли я передать часть задач другому агенту через DELEGATE[]?"
+                            "\n  • Не повторяю ли я однотипные действия, которые не привели к результату?\n"
+                        )
+
+            finally:
+                _db_refl.close()
+        except Exception as _refl_err:
+            logger.debug('[DIRECTOR] self-reflection: %s', _refl_err)
+
     # ── Аналитика эффективности: какие подходы дают результат у ЭТОГО пользователя ──
     if _is_autopilot_task:
         try:
