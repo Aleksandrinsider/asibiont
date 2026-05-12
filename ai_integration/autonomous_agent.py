@@ -4215,21 +4215,32 @@ class HybridAutonomousAgent:
                         _sa_u2 = _sa_s.query(User).filter_by(telegram_id=user_id).first()
                         _sa_agents = _sa_s.query(_UA_sa).filter_by(author_id=_sa_u2.id).all() if _sa_u2 else []
                         _sa_connected: list[str] = []
+                        _sa_agent_lines: list[str] = []
                         for _ag in _sa_agents:
-                            _sa_connected.extend(_parse_agent_integrations(
+                            _ag_intg = _parse_agent_integrations(
                                 _ag.user_api_keys or '', _ag.python_code or '',
                                 _ag.tools_allowed or '', _ag.search_scope or ''
-                            ))
+                            )
+                            _sa_connected.extend(_ag_intg)
+                            _ag_intg_str = ', '.join(_ag_intg[:4]) if _ag_intg else 'нет интеграций'
+                            _sa_agent_lines.append(f"  • {_ag.name}: {_ag_intg_str}")
                         _sa_connected = sorted(set(_sa_connected))
                         _sa_all = sorted(set(_INTEGRATION_LABELS.values()))
                         _sa_not = sorted(set(_sa_all) - set(_sa_connected))
+                        _sa_agents_block = (
+                            f"Агенты пользователя ({len(_sa_agents)}):\n" + '\n'.join(_sa_agent_lines[:8])
+                        ) if _sa_agent_lines else "Агентов нет."
                         dynamic_context += (
-                            "\n\n[РЕЖИМ НАСТРОЙКИ АКТИВЕН]\n"
+                            "\n\n══ РЕЖИМ НАСТРОЙКИ АКТИВЕН ══\n"
                             f"Подключено интеграций ({len(_sa_connected)}): {', '.join(_sa_connected) or 'ничего'}.\n"
-                            f"Доступно для подключения (топ): {', '.join(_sa_not[:25])}{'...' if len(_sa_not) > 25 else ''}.\n"
-                            "ОБЯЗАТЕЛЬНО в конце ответа добавь 1-2 конкретных предложения: "
-                            "какие из доступных интеграций помогут пользователю достичь его цели прямо сейчас, "
-                            "и как их подключить. Будь конкретен — называй сервисы по имени."
+                            f"Доступно для подключения: {', '.join(_sa_not[:20])}{'...' if len(_sa_not) > 20 else ''}.\n"
+                            f"{_sa_agents_block}\n\n"
+                            "ОБЯЗАТЕЛЬНЫЙ БЛОК — добавь в КОНЦЕ своего ответа, отдельным абзацем:\n"
+                            "«💡 Настройка: [1-2 конкретных рекомендации из списка «Доступно для подключения», "
+                            "релевантных целям и специализации пользователя — назови сервис по имени и объясни "
+                            "зачем именно он нужен для достижения цели. Если у агента нет нужной интеграции — "
+                            "скажи какому агенту и что добавить.]»\n"
+                            "Без этого блока ответ считается неполным. Игнорировать нельзя."
                         )
                     finally:
                         _sa_s.close()
