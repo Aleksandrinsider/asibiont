@@ -883,12 +883,20 @@
                 <svg width="20" height="16" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M60.1 4.6A58.5 58.5 0 0 0 45.4.2a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.3 37.3 0 0 0 25.4.3a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.5 4.6a.2.2 0 0 0-.1.1C1.5 18.3-.9 31.6.3 44.7v.2a58.7 58.7 0 0 0 17.7 9a.2.2 0 0 0 .3-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.6 38.6 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 41.9 41.9 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .4 36.3 36.3 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47.1 47.1 0 0 0 3.6 5.9.2.2 0 0 0 .3.1A58.5 58.5 0 0 0 70.4 45v-.2C71.9 29.7 67.9 16.5 60.2 4.7a.2.2 0 0 0-.1-.1ZM23.7 36.7c-3.5 0-6.3-3.2-6.3-7.1s2.8-7.1 6.3-7.1 6.4 3.2 6.3 7.1c0 3.9-2.8 7.1-6.3 7.1Zm23.2 0c-3.5 0-6.3-3.2-6.3-7.1s2.8-7.1 6.3-7.1 6.4 3.2 6.3 7.1c0 3.9-2.7 7.1-6.3 7.1Z" fill="white"/></svg>
             </a>
             <div id="telegram-login-container">
-                <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="{{ bot_username }}" 
-                    data-size="large" 
-                    data-auth-url="https://asibiont.com/tg_auth" 
-                    data-request-access="write">
-                </script>
+                <!-- Static fallback button — видна сразу, не зависит от telegram.org -->
+                <a id="tg-login-btn" href="https://t.me/{{ bot_username }}" target="_blank" rel="noopener"
+                   style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px;
+                          background: #068487; color: white; border: none; border-radius: 6px;
+                          text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer;
+                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+                          transition: background 0.2s;"
+                   onmouseover="this.style.background='#057477'" onmouseout="this.style.background='#068487'">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.705l-2.01 9.478c-.15.663-.528.822-1.074.512l-2.97-2.189-1.434 1.38c-.165.165-.297.297-.605.297l.213-3.02 5.5-4.967c.24-.213-.054-.33-.375-.118l-6.8 4.28-2.928-.913c-.635-.198-.65-.635.135-.942l11.416-4.403c.532-.196.997.13.822.955z" fill="white"/>
+                    </svg>
+                    <span data-i18n="telegramLogin">Войти через Telegram</span>
+                </a>
+                <div id="tg-widget-mount" style="display:none;"></div>
             </div>
         </div>
     <!-- Email Auth Modal -->
@@ -1483,6 +1491,7 @@
       cta: 'Все функции доступны сразу.',
       btnTop: 'Попробовать бесплатно — 1 500 токенов', btnInstall: 'Установить приложение',
       fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI', fFeatures: 'Вебхуки',
+      telegramLogin: 'Войти через Telegram',
       discordLogin: 'Войти через Discord',
       emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?', openBeta: 'ОТКРЫТАЯ БЕТА'
     },
@@ -1572,6 +1581,7 @@
       cta: 'All features available immediately.',
       btnTop: 'Try for free — 1,500 tokens', btnInstall: 'Install App',
       fHome: 'Home', fBlog: 'Blog', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI', fFeatures: 'Webhooks',
+      telegramLogin: 'Sign in with Telegram',
       discordLogin: 'Sign in with Discord',
       emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?', openBeta: 'OPEN BETA'
     }
@@ -1639,6 +1649,9 @@
       if (fa[7]) fa[7].textContent = t.fArena;
       if (fa[8]) fa[8].textContent = t.fFeatures;
     }
+    // Telegram login button
+    var tgBtn = document.querySelector('[data-i18n="telegramLogin"]');
+    if (tgBtn) tgBtn.textContent = t.telegramLogin;
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');
     if (dcBtn) dcBtn.textContent = t.discordLogin;
@@ -1695,6 +1708,63 @@
   });
 })();
 </script>
+
+<!-- Deferred Telegram widget loader — не блокирует страницу если telegram.org недоступен -->
+<script>
+(function() {
+    var btn = document.getElementById('tg-login-btn');
+    var mount = document.getElementById('tg-widget-mount');
+    if (!btn || !mount) return;
+
+    var _loaded = false;
+    var _tgBot = '{{ bot_username }}';
+    var _tgAuthUrl = 'https://asibiont.com/tg_auth';
+
+    function _loadTgWidget() {
+        if (_loaded) return;
+        _loaded = true;
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://telegram.org/js/telegram-widget.js?22';
+        script.setAttribute('data-telegram-login', _tgBot);
+        script.setAttribute('data-size', 'large');
+        script.setAttribute('data-auth-url', _tgAuthUrl);
+        script.setAttribute('data-request-access', 'write');
+        var _timeout = setTimeout(function() {
+            mount.style.display = 'none';
+            if (btn) btn.style.display = 'inline-flex';
+        }, 4000);
+        script.onload = function() {
+            clearTimeout(_timeout);
+            setTimeout(function() {
+                var iframe = mount.querySelector('iframe');
+                if (iframe) {
+                    if (btn) btn.style.display = 'none';
+                    mount.style.display = '';
+                } else {
+                    mount.style.display = 'none';
+                    if (btn) btn.style.display = 'inline-flex';
+                }
+            }, 3000);
+        };
+        script.onerror = function() {
+            clearTimeout(_timeout);
+            mount.style.display = 'none';
+            if (btn) btn.style.display = 'inline-flex';
+        };
+        mount.style.display = '';
+        if (btn) btn.style.display = 'none';
+        mount.appendChild(script);
+    }
+    if (window.requestIdleCallback) {
+        requestIdleCallback(function() { setTimeout(_loadTgWidget, 500); }, { timeout: 3000 });
+    } else {
+        window.addEventListener('load', function() { setTimeout(_loadTgWidget, 1000); });
+        if (document.readyState === 'complete') setTimeout(_loadTgWidget, 500);
+    }
+})();
+</script>
+
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){
