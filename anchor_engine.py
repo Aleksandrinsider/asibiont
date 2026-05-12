@@ -6900,9 +6900,10 @@ class AnchorEngine:
                         logger.debug("[DISPATCH] delivered_at retry %d/3 after %s (sleeping %ds)", _del_attempt + 1, str(_del_err)[:100], _sleep_s)
                         await asyncio.sleep(_sleep_s)
                     else:
-                        logger.warning("[DISPATCH] delivered_at failed after 3 attempts: %s — skipping", str(_del_err)[:150])
+                        logger.warning("[DISPATCH] delivered_at failed after 3 attempts: %s — continuing anyway", str(_del_err)[:150])
             if not _early_del_ok:
-                return  # anchor stays pending, next scan will retry
+                # Lock contention: proceed anyway — coordinator will set delivered_at via session.commit()
+                logger.info("[DISPATCH] delivered_at lock failed — proceeding without early mark")
 
             # Используем только агентов с AgentSubscription — те что пользователь активировал в чате
             from models import AgentSubscription as _AS_ap
@@ -12785,7 +12786,7 @@ class AnchorEngine:
                     'script_actions': _script_actions[:8],
                 })
 
-            _goals = data.get('goals', [])
+            _goals = [g for g in (data.get('goals', []) or []) if isinstance(g, dict)]
             # Нормализуем progress из метрики (progress_percentage в снапшоте может быть устаревшим)
             for _g_norm in _goals:
                 _mt_n = _g_norm.get('metric_target')
