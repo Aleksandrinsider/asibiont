@@ -10027,7 +10027,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if _refl_logs:
                     _refl_lines = []
                     for _rl in _refl_logs:
-                        _rl_target = ((_rl.target or '') or (_rl.title or ''))[:40]
+                        _rl_target_raw = ((_rl.target or '') or (_rl.title or ''))[:40]
+                        _rl_gender_hint = ' (жен.)' if _detect_agent_is_female(_rl_target_raw) else ' (муж.)'
+                        _rl_target = f'{_rl_target_raw}{_rl_gender_hint}'
                         _rl_res = (_rl.result or '')[:300]
                         _rl_is_dead = any(kw in _rl_res.lower() for kw in (
                             'не нашёл', 'тупик',
