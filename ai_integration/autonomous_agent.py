@@ -9905,6 +9905,110 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _hist_err:
             logger.debug('[DIRECTOR] agent history load: %s', _hist_err)
 
+    # ── Кросс-диспатч детекция циклов: проверяем что агент делал в ПРЕДЫДУЩИХ вызовах ──
+    # Если один и тот же паттерн (те же инструменты, тот же тип результата) повторяется
+    # 3+ раза подряд — система принудительно ломает цикл.
+    if _is_autopilot_task and agent.get('id'):
+        try:
+            from models import Session as _DBcycle, AgentActivityLog as _ALog_cycle
+            from datetime import datetime as _dt_cycle, timezone as _tz_cycle, timedelta as _td_cycle
+            import re as _re_cycle
+            _db_cycle = _DBcycle()
+            try:
+                _cycle_since = _dt_cycle.now(_tz_cycle.utc) - _td_cycle(hours=6)
+                _cycle_logs = _db_cycle.query(_ALog_cycle).filter(
+                    _ALog_cycle.user_id == user_id,
+                    _ALog_cycle.ref_id == agent['id'],
+                    _ALog_cycle.created_at >= _cycle_since,
+                ).order_by(_ALog_cycle.created_at.desc()).limit(20).all()
+                if len(_cycle_logs) >= 3:
+                    # Извлекаем инструменты из каждого лога
+                    _cycle_patterns = []
+                    for _cl in _cycle_logs:
+                        _cl_content = ((_cl.content or '') + ' ' + (_cl.title or '')).lower()
+                        _cl_tools = sorted(set(
+                            _re_cycle.findall(
+                                r'(?:^|[\[\],\s])(web_search|research_topic|quick_topic_search|'
+                                r'send_outreach_email|send_follow_up_email|reply_to_outreach_email|'
+                                r'send_email|negotiate_by_email|save_email_contact|add_email_leads|'
+                                r'find_relevant_contacts_for_task|find_and_message_relevant_users|'
+                                r'create_post|publish_to_telegram|publish_to_discord|generate_image|'
+                                r'save_note|search_notes|add_task|edit_task|complete_task|'
+                                r'delegate_task|run_agent_action|update_goal_progress|check_emails'
+                                r')',
+                                _cl_content,
+                            )
+                        ))
+                        _cl_has_outcome = any(
+                            w in _cl_content
+                            for w in ('отправлен', 'sent', 'сохранен', 'saved', 'опубликован',
+                                      'published', 'найдено', 'found', 'готово', 'done',
+                                      'успешно', 'success', 'result', 'результат')
+                        )
+                        _cl_has_error = any(
+                            w in _cl_content
+                            for w in ('ошибк', 'error', 'тайм-аут', 'timeout', 'не смог',
+                                      'не удал', 'не отправ', '⛔', 'fail', 'block')
+                        )
+                        _cycle_patterns.append({
+                            'tools': _cl_tools,
+                            'has_outcome': _cl_has_outcome,
+                            'has_error': _cl_has_error,
+                        })
+                    # Проверяем: все 3+ последних диспатча используют одни и те же инструменты
+                    # и не имеют реальных outcomes
+                    if len(_cycle_patterns) >= 3:
+                        _recent3 = _cycle_patterns[:3]
+                        _tool_sets = [set(p['tools']) for p in _recent3]
+                        # Все три набора инструментов пересекаются ≥50%
+                        _all_similar = (
+                            len(_tool_sets) >= 3
+                            and all(len(s) > 0 for s in _tool_sets)
+                        )
+                        if _all_similar:
+                            _ref_set = _tool_sets[0]
+                            _similar_count = sum(
+                                1 for s in _tool_sets
+                                if len(s & _ref_set) / max(len(s | _ref_set), 1) >= 0.5
+                            )
+                            _all_no_outcome = all(not p['has_outcome'] for p in _recent3)
+                            _all_error = all(p['has_error'] for p in _recent3)
+                            if _similar_count >= 3 and (_all_no_outcome or _all_error):
+                                _repeating_tools = ', '.join(sorted(_ref_set)[:5])
+                                logger.warning(
+                                    "[CYCLE_DETECT] Agent %s: %d consecutive dispatches with same tools [%s] and no outcome",
+                                    agent.get('name'), _similar_count, _repeating_tools,
+                                )
+                                system_prompt += (
+                                    f"\n\n⚠️⚠️⚠️ ПОВТОРЯЮЩИЙСЯ ЦИКЛ: ты уже {_similar_count} раза подряд "
+                                    f"используешь инструменты [{_repeating_tools}], НО НИ РАЗУ не получил результата. "
+                                    "Это тупик. ЗАПРЕЩЕНО повторять тот же подход.\n"
+                                    "ПРАВИЛА ПЕРЕЗАГРУЗКИ:\n"
+                                    "1. НЕ ИСПОЛЬЗУЙ: " + _repeating_tools + " — они не сработали.\n"
+                                    "2. Если искал контакты — смени ПЛАТФОРМУ поиска (web_search вместо GitHub, "
+                                    "или наоборот).\n"
+                                    "3. Если писал письма — смени ТЕМУ письма или аудиторию.\n"
+                                    "4. Если исследовал тему — сохрани выводы (save_note) и перейди к действию.\n"
+                                    "5. Если ничего не помогает — delegate_task другому агенту или сообщи пользователю "
+                                    "что именно блокирует прогресс.\n"
+                                    "⚡ Твой первый вызов инструмента должен быть ПРИНЦИПИАЛЬНО ДРУГИМ, "
+                                    "не из списка запрещённых.\n"
+                                )
+                                # Дополнительно: если все 3+ диспатча закончились ошибкой —
+                                # добавляем жёсткий запрет
+                                if _all_error:
+                                    system_prompt += (
+                                        "\n🚫 ДОПОЛНИТЕЛЬНО: все предыдущие попытки закончились ОШИБКАМИ. "
+                                        "Инструменты могут быть временно недоступны. "
+                                        "Попробуй другой канал: если send_outreach_email падает → web_search + save_note. "
+                                        "Если run_agent_action падает → delegate_task другому агенту с теми же данными. "
+                                        "НЕ ПОВТОРЯЙ вызов инструмента который уже падал — выбери альтернативу.\n"
+                                    )
+            finally:
+                _db_cycle.close()
+        except Exception as _cycle_err:
+            logger.debug('[DIRECTOR] cycle detection: %s', _cycle_err)
+
     # ── Аналитика эффективности: какие подходы дают результат у ЭТОГО пользователя ──
     if _is_autopilot_task:
         try:

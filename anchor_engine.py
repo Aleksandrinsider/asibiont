@@ -10378,8 +10378,91 @@ class AnchorEngine:
                     # 8000 вместо 4000: coord inject ~850 симв. + нужен полный autopilot prompt
                     _task_trimmed = task_text[:8000] if len(task_text) > 8000 else task_text
 
-                    _raw = None
-                    _ai_err = None
+                    # ── LOOP BREAKER GATE: пропускаем dispatch если ≥3 однотипных попыток ──
+                    # Без результата — не тратим токены на заведомо тупиковый цикл.
+                    _loop_breaker_result = None
+                    try:
+                        from models import Session as _LBDB, AgentActivityLog as _LBLog
+                        from datetime import datetime as _lb_dt, timezone as _lb_tz, timedelta as _lb_td
+                        import re as _lb_re
+                        _lb_s = _LBDB()
+                        try:
+                            _lb_cutoff = _lb_dt.now(_lb_tz.utc) - _lb_td(hours=2)
+                            _lb_recent = _lb_s.query(_LBLog).filter(
+                                _LBLog.user_id == user.id,
+                                _LBLog.activity_type.in_(
+                                    ['goal_autopilot_dispatch', 'email_outreach_dispatch', 'delegation']
+                                ),
+                                _LBLog.created_at >= _lb_cutoff,
+                            ).order_by(_LBLog.created_at.desc()).limit(15).all()
+                            if len(_lb_recent) >= 3:
+                                _lb_patterns = []
+                                for _lb_entry in _lb_recent:
+                                    _lb_content = ((_lb_entry.content or '') + ' ' + (_lb_entry.title or '')).lower()
+                                    _lb_tools_found = sorted(set(
+                                        _lb_re.findall(
+                                            r'(?:^|[\[\],\s])(send_outreach_email|save_email_contact|'
+                                            r'web_search|research_topic|find_relevant_contacts_for_task|'
+                                            r'run_agent_action|check_emails|add_task|save_note|'
+                                            r'update_goal_progress)',
+                                            _lb_content,
+                                        )
+                                    ))
+                                    _lb_has_ok = any(w in _lb_content for w in (
+                                        'успешно', 'отправлен', 'sent', 'сохранен', 'saved',
+                                        'найдено', 'found', 'готово', 'done', 'результат', 'result'
+                                    ))
+                                    _lb_patterns.append({
+                                        'tools': _lb_tools_found,
+                                        'ok': _lb_has_ok,
+                                    })
+                                if len(_lb_patterns) >= 3:
+                                    _lb_recent3 = _lb_patterns[:3]
+                                    _lb_all_empty = all(
+                                        not p['ok'] and len(p['tools']) > 0 for p in _lb_recent3
+                                    )
+                                    _lb_similar = True
+                                    if _lb_all_empty:
+                                        _lb_ref_set = set(_lb_recent3[0]['tools'])
+                                        for _lb_p in _lb_recent3[1:]:
+                                            _lb_p_set = set(_lb_p['tools'])
+                                            if not _lb_ref_set or not _lb_p_set:
+                                                _lb_similar = False
+                                                break
+                                            _lb_jaccard = len(_lb_ref_set & _lb_p_set) / max(len(_lb_ref_set | _lb_p_set), 1)
+                                            if _lb_jaccard < 0.5:
+                                                _lb_similar = False
+                                                break
+                                    if _lb_all_empty and _lb_similar:
+                                        _lb_repeat_tools = ', '.join(sorted(_lb_ref_set)[:4])
+                                        logger.warning(
+                                            "[LOOP_BREAKER] User %d agent=%s: ≥3 empty dispatches "
+                                            "with same tools [%s] in 2h — SKIPPING",
+                                            user.id, agent_name, _lb_repeat_tools,
+                                        )
+                                        _loop_breaker_result = (
+                                            f"[LOOP_BREAKER] Этот anchor пропущен: агент {agent_name} "
+                                            f"уже {len(_lb_recent3)} раза подряд за 2ч вызывал "
+                                            f"[{_lb_repeat_tools}] без результата. "
+                                            "Повторный вызов сэкономлен. "
+                                            "Система продолжит мониторинг и перезапустит агента позже."
+                                        )
+                        finally:
+                            _lb_s.close()
+                    except Exception as _lb_err:
+                        logger.debug('[LOOP_BREAKER] gate error: %s', _lb_err)
+
+                    # ── LOOP BREAKER: если gate сработал — пропускаем AI-вызов ──
+                    if _loop_breaker_result:
+                        logger.info(
+                            "[ANCHOR-AUTOPILOT] User %d: loop breaker triggered for %s — skipping AI dispatch",
+                            user.id, agent_name,
+                        )
+                        _raw = (_loop_breaker_result, [], 0)
+                        _ai_err = None
+                    else:
+                        _raw = None
+                        _ai_err = None
                     # Динамический таймаут агента: если outer_timeout_sec передан из _process_user_inner
                     # через wait_for-бюджет → используем не более половины оставшегося бюджета
                     # на попытку (2 попытки × timeout/попытку ≤ outer_timeout_sec - запас 30s).
@@ -10387,30 +10470,31 @@ class AnchorEngine:
                     if outer_timeout_sec and outer_timeout_sec > 60:
                         # min 100s: даже при малом бюджете Hugo/кастомные агенты успевают сделать 1 шаг
                         _agent_exec_timeout = max(100, min(240, (outer_timeout_sec - 30) // 2))
-                    for _try_idx in (1, 2):
-                        try:
-                            _raw = await asyncio.wait_for(
-                                _exec_agent_for_director(
-                                    agent_data, _task_trimmed, user.telegram_id,
-                                ),
-                                timeout=_agent_exec_timeout,
-                            )
-                            _ai_err = None
-                            break
-                        except asyncio.TimeoutError as _te:
-                            _ai_err = _te
-                            logger.warning(
-                                "[ANCHOR-AUTOPILOT] AI timeout try %d/2 for user %d agent=%s",
-                                _try_idx, user.id, agent_name,
-                            )
-                        except Exception as _ex:
-                            _ai_err = _ex
-                            logger.warning(
-                                "[ANCHOR-AUTOPILOT] AI error try %d/2 for user %d agent=%s: %s",
-                                _try_idx, user.id, agent_name, _ex,
-                            )
-                        if _try_idx == 1:
-                            await asyncio.sleep(1.5)
+                    if not _loop_breaker_result:
+                        for _try_idx in (1, 2):
+                            try:
+                                _raw = await asyncio.wait_for(
+                                    _exec_agent_for_director(
+                                        agent_data, _task_trimmed, user.telegram_id,
+                                    ),
+                                    timeout=_agent_exec_timeout,
+                                )
+                                _ai_err = None
+                                break
+                            except asyncio.TimeoutError as _te:
+                                _ai_err = _te
+                                logger.warning(
+                                    "[ANCHOR-AUTOPILOT] AI timeout try %d/2 for user %d agent=%s",
+                                    _try_idx, user.id, agent_name,
+                                )
+                            except Exception as _ex:
+                                _ai_err = _ex
+                                logger.warning(
+                                    "[ANCHOR-AUTOPILOT] AI error try %d/2 for user %d agent=%s: %s",
+                                    _try_idx, user.id, agent_name, _ex,
+                                )
+                            if _try_idx == 1:
+                                await asyncio.sleep(1.5)
 
                     if _ai_err is not None:
                         raise _ai_err
