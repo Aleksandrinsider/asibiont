@@ -12,6 +12,7 @@ from models import Session, Task, User, UserProfile, Subscription, Goal, Post, P
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
+from .forex_analysis import analyze_forex
 from .utils import (
     parse_time_to_datetime,
     generate_unified_recommendations,

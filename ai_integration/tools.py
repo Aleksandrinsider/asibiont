@@ -2308,4 +2308,31 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_forex",
+            "description": "📊 Полный анализ форекс пары: мультитаймфрейм OHLCV, тиковый объём, технические индикаторы (RSI, MACD, Bollinger Bands, SMA, EMA, ATR), анализ объёма (дивергенции, аномалии, POC), AI-вердикт. Требует ALPHAVANTAGE_API_KEY и EXCHANGERATE_API_KEY в API-ключах агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instrument": {
+                        "type": "string",
+                        "description": "Валютная пара. Формат: EUR/USD, GBP/USD, USD/JPY, USD/RUB и т.д."
+                    },
+                    "timeframe": {
+                        "type": "string",
+                        "description": "Таймфрейм: 1min, 5min, 15min, 30min, 60min, daily, weekly, monthly",
+                        "default": "daily"
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "Глубина истории в днях. Max 100.",
+                        "default": 30
+                    }
+                },
+                "required": ["instrument"]
+            }
+        }
+    },
 ]
