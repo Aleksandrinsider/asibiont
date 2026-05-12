@@ -164,3 +164,239 @@ def _build_autopilot_prompt(
 - `_classify_agent_caps`
 - `_sanitize_proactive_text` (гендерная коррекция)
 - `_safe_http` (retry logic)
+
+---
+
+## 13. 🎯 Агент обязан учитывать цели пользователя
+
+**Проблема:** Координатор формирует план, но нет гарантии, что каждое действие привязано к конкретной цели пользователя. Часть действий агентов — «активность ради активности» (многократный RSS, посты без привязки к метрикам целей).
+
+**Решение:** В каждом prompt'е координатора и агента явно указывать цели пользователя и требовать привязки:
+
+```python
+# В _build_autopilot_prompt, после заголовка:
+prompt += "\n\n🎯 User Goals:\n"
+for g in user_goals:
+    prompt += f"  [{g.priority}] {g.title} — progress {g.progress_percentage}%\n"
+
+prompt += "\n⚠️ RULE: Every action MUST serve at least one goal above.\n"
+prompt += "If an action doesn't advance any goal — don't do it.\n"
+```
+
+Универсально: неважно, какие цели у пользователя — они читаются из таблицы `goals` и подставляются динамически.
+
+## 14. 🌐 Язык пользователя — как на лендинге
+
+**Проблема:** Некоторые user-facing ответы смешивают RU и EN, или используют не тот язык.
+
+**Решение:** Автоопределение языка через профиль пользователя (как на лендинге):
+
+```python
+def _detect_user_locale(user) -> str:
+    """Определяет язык — как лендинг: один язык на пользователя."""
+    if hasattr(user, 'language_code') and user.language_code:
+        return user.language_code
+    if hasattr(user, 'locale') and user.locale:
+        return user.locale[:2]
+    return 'en'  # универсальный fallback
+```
+
+Все user-facing строки через словарь с locale-ключом. Внутренняя логика — language-agnostic.
+
+## 15. 📚 DecisionLog: замкнуть цикл обучения
+
+**Проблема:** `decision_log` — write-only. Поле `learned` всегда пустое, `outcome_score` повторяется (0.45/0.75/0.85). Система не учится на ошибках.
+
+**Решение:** Добавить извлечение урока после каждого действия и подачу уроков в следующий prompt:
+
+```python
+# После каждого вызова инструмента — извлечь урок
+async def _extract_lesson(action, result, goal_context, locale='en'):
+    prompt = f"""Analyze: {action} | Result: {result[:300]} | Goal: {goal_context[:200]}
+Extract ONE specific lesson. Return JSON: {{"lesson":"...", "score":0.0-1.0}}"""
+    return await _quick_ai_call_raw(prompt, max_tokens=150)
+
+# Перед dispatch — прочитать уроки
+lessons = session.query(DecisionLog).filter(
+    DecisionLog.user_id == user_id,
+    DecisionLog.learned != '',
+    DecisionLog.created_at > datetime.utcnow() - timedelta(hours=24)
+).all()
+if lessons:
+    prompt += "\n## Lessons from last 24h:\n" + \
+        '\n'.join(f"- {l.learned}" for l in lessons)
+```
+
+Универсально: не привязано к конкретным инструментам или целям.
+
+## 16. 📊 CoordinatorInsights: принудительное сохранение
+
+**Проблема:** Таблица `coordinator_insights` пуста — `_save_coordinator_insights` не сохраняет данные.
+
+**Решение:** AI-генерация инсайтов + fallback-запись:
+
+```python
+# В конце _run_coordinator_dispatch
+insight = await _quick_ai_call_raw(
+    f"Analyze cycle: {n_actions} actions, {n_goals} goals, "
+    f"errors: {errors}. Return JSON insight.",
+    max_tokens=300
+)
+if not insight:
+    insight = '{"type":"cycle_note","summary":"Empty cycle"}'
+
+session.add(CoordinatorInsight(
+    user_id=user_id,
+    insight_type=parsed.get('type', 'cycle_note'),
+    summary=parsed.get('summary', '')[:500],
+    evidence_score=parsed.get('score', 0.0)
+))
+session.commit()
+```
+
+## 17. 🔄 Дедупликация активностей агентов
+
+**Проблема:** Один агент вызывает один и тот же RSS/API 5-10 раз за цикл под разными именами инструментов.
+
+**Решение:** Кэш результатов в памяти цикла + проверка на дубликаты перед созданием AgentActivityLog:
+
+```python
+class CycleCache:
+    def __init__(self, ttl=600):
+        self._cache = {}
+    
+    def _key(self, tool, params):
+        return f"{tool}:{hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()[:16]}"
+    
+    def get(self, tool, params):
+        key = self._key(tool, params)
+        if key in self._cache:
+            ts, result = self._cache[key]
+            if time.time() - ts < self.ttl:
+                return result
+        return None
+    
+    def set(self, tool, params, result):
+        self._cache[self._key(tool, params)] = (time.time(), result)
+```
+
+## 18. 🛡️ Graceful обработка ошибок AI
+
+**Проблема:** TimeoutError роняет агента или весь цикл.
+
+**Решение:** 3-уровневый fallback:
+
+```python
+async def _call_ai_safe(prompt, max_tokens=2000, timeout=60, locale='en'):
+    fallbacks = [
+        prompt,                                                     # full
+        prompt[:4000] + "\n[truncated]",                           # truncated
+        {'en':'Answer: next step?','ru':'Ответь: следующий шаг?'}.get(locale, '')  # emergency
+    ]
+    for level, fb in enumerate(fallbacks, 1):
+        try:
+            return await _quick_ai_call_raw(
+                fb, max_tokens=max_tokens // (2**(level-1)),
+                timeout=timeout // (2**(level-1))
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            continue
+    return None
+```
+
+## 19. 🧪 Обратная связь без участия пользователя
+
+**Проблема:** Система работает вслепую — нет сигнала, правильно ли выбран курс.
+
+**Решение:** Неявные метрики здоровья (из данных, а не от пользователя):
+
+```python
+health = {
+    'task_completion': completed_tasks / max(total_tasks, 1),  # из tasks
+    'error_rate': errors / max(total_actions, 1),              # из AAL
+    'goal_progress': avg_progress,                              # из goals
+    'user_engaged': has_recent_interaction,                    # из interactions
+}
+# Если здоровье > 0.8 → реже циклы
+# Если здоровье < 0.3 → чаще, с приоритетом восстановления
+```
+
+## 20. 🧩 Падение внешних API (Circuit Breaker)
+
+**Проблема:** RSS/внешние API возвращают 502, система продолжает долбиться.
+
+**Решение:** Универсальный Circuit Breaker для любого внешнего сервиса:
+
+```python
+class CircuitBreaker:
+    def __init__(self, threshold=3, recovery=300):
+        self._services = {}
+        self.threshold = threshold
+        self.recovery = recovery
+    
+    async def call(self, name, func, *a, **kw):
+        svc = self._services.setdefault(name, {'state':'closed', 'failures':0, 'last_failure':0})
+        if svc['state'] == 'open':
+            if time.time() - svc['last_failure'] > self.recovery:
+                svc['state'] = 'half-open'
+            else:
+                raise CircuitBreakerOpen(name)
+        try:
+            result = await func(*a, **kw)
+            svc['failures'] = 0
+            svc['state'] = 'closed'
+            return result
+        except:
+            svc['failures'] += 1
+            svc['last_failure'] = time.time()
+            if svc['failures'] >= self.threshold:
+                svc['state'] = 'open'
+            raise
+```
+
+## 21. 🔗 Автоматическая адаптация каналов коммуникации
+
+**Проблема:** Система продолжает использовать канал с 1% отклика без адаптации.
+
+**Решение:** Динамический трекер эффективности (определяет каналы из данных, без hardcode):
+
+```python
+channels = session.query(
+    AAL.activity_type, func.count(AAL.id),
+    func.sum(case((AAL.status == 'replied', 1), else_=0))
+).filter(AAL.user_id == user_id, AAL.created_at > lookback).group_by(AAL.activity_type).all()
+
+for name, total, replies in channels:
+    rate = replies / max(total, 1)
+    if total >= 10 and rate < 0.02:
+        logger.info("Auto-pausing %s (reply rate %.1f%%)", name, rate * 100)
+        _pause_channel(user_id, name)
+```
+
+Универсально: работает для email, Telegram, Discord, SMS, CRM — любых каналов.
+
+## 22. ⏰ Адаптивная частота циклов
+
+**Проблема:** Все агенты работают по фиксированному расписанию (120/240 мин), независимо от продуктивности.
+
+**Решение:** Динамическая частота на основе здоровья системы:
+
+```python
+if health['score'] > 0.8:
+    interval = min(base * 2, 480)      # реже — система работает
+elif health['score'] < 0.3:
+    interval = max(base // 2, 60)     # чаще — нужно восстановление
+```
+
+---
+
+### ⚡ Быстрые победы (каждая < 30 мин)
+
+| # | Фикс | Суть |
+|---|------|------|
+| 1 | `_safe_get()` для всех `.get()` | Предотвращает `AttributeError: 'str' has no 'get'` |
+| 2 | Fallback таймаутов (3 уровня) | Агенты не падают при TimeoutError |
+| 3 | Дедупликация AAL перед вставкой | Нет дублей активности |
+| 4 | Force-save CoordinatorInsights | Появляется стратегическая память |
+| 5 | Backfill пустых `learned` | Запускается самообучение |
+| 6 | Circuit Breaker для внешних API | Нет бесконечных ретраев в 502 |
