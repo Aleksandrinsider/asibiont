@@ -6900,8 +6900,8 @@ class AnchorEngine:
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
-                        _s.execute(_del_text("SET LOCAL statement_timeout = 8000"))
-                        _s.execute(_del_text("SET LOCAL lock_timeout = 5000"))
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 12000"))
+                        _s.execute(_del_text("SET LOCAL lock_timeout = 8000"))
                         _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
                         _s.commit()
                         return True
@@ -20612,7 +20612,7 @@ class AnchorEngine:
             return True  # coordinator ran
 
         except Exception as _coord_main_err:
-            logger.warning("[COORD] coordinator dispatch error: %s", _coord_main_err)
+            logger.warning("[COORD] coordinator dispatch error: %s", _coord_main_err, exc_info=True)
             # Очищаем сессию — иначе round-robin fallback упадёт на commit
             try:
                 session.rollback()
