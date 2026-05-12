@@ -52,6 +52,19 @@ from models import (
 )
 from config import DEEPSEEK_API_KEY, DEFAULT_OUTREACH_EMAIL, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, redact_email
 
+# ── Универсальные фиксы автопилота ──
+from autopilot_fixes import (
+    safe_get,
+    validate_coordinator_response,
+    call_ai_safe,
+    detect_user_locale,
+    build_goal_block,
+    CycleCache,
+    CircuitBreaker,
+    cycle_cache as _global_cycle_cache,
+    circuit_breaker as _global_circuit_breaker,
+)
+
 logger = logging.getLogger(__name__)
 
 # Telegram message limit
@@ -4981,6 +4994,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + _github_rules + _rss_rules + _imap_rules + _no_imap_block
         + _publish_hint + _escalation_block
         + _adaptive_block
+        + build_goal_block(goals_summary or [], locale=detect_user_locale(user))
         + _lang_directive(user)
         + "\n"
     )
@@ -5094,6 +5108,11 @@ class AnchorEngine:
         # Семафор для AI-вызовов — ограничивает параллельные запросы к DeepSeek
         # 20 = баланс между скоростью (15 юзеров в батче × 2-5 AI) и лимитами DeepSeek API
         self._ai_semaphore = asyncio.Semaphore(20)
+        # ── Универсальные компоненты ──
+        # CycleCache: TTL-кэш результатов инструментов (RSS, поиск, API)
+        self._cycle_cache = CycleCache(ttl_seconds=600)
+        # CircuitBreaker: защита внешних сервисов от каскадных ошибок
+        self._circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=300)
         logger.info("[ANCHOR] AnchorEngine initialized")
 
     # ═══════════════════════════════════════════════════════
@@ -12739,6 +12758,12 @@ class AnchorEngine:
         # Инициализируем ДО try — иначе except не увидит _aal_id_c если исключение до строки ~16996
         _aal_id_c = None
         try:
+            # ── Guard: data может быть строкой (повреждённый anchor.data) ──
+            # Исправляет: 'str' object has no attribute 'get'
+            if not isinstance(data, dict):
+                logger.warning("[COORD] data is not dict (%s), resetting to empty", type(data).__name__)
+                data = {}
+
             from ai_integration.autonomous_agent import (
                 _exec_agent_for_director, _quick_ai_call_raw, _parse_agent_integrations,
             )
@@ -16042,13 +16067,21 @@ class AnchorEngine:
                 # В часы пиковой нагрузки DeepSeek обрабатывает 5000+ входных токенов до 90-120с
                 # Крупный промпт (>15K) → DeepSeek может думать 90-120s в пиковые часы
                 _coord_plan_timeouts = [120, 200] if _prompt_chars > 15000 else [70, 120]
-                _plan_json = await _quick_ai_call_raw(
-                    [{"role": "user", "content": _plan_prompt}],
+                # ── call_ai_safe: 3 уровня fallback при таймауте ──
+                _plan_locale = detect_user_locale(user)
+                _plan_messages = [{"role": "user", "content": _plan_prompt}]
+                _plan_json = await call_ai_safe(
+                    _quick_ai_call_raw,
+                    _plan_messages,
                     max_tokens=_plan_max_tokens,
+                    timeout=max(_coord_plan_timeouts),  # Самый большой таймаут
+                    locale=_plan_locale,
                     temperature=0.3,  # Низкая температура для стабильного JSON
                     _caller='coordinator_plan',
-                    _timeouts=_coord_plan_timeouts,
                 )
+                if _plan_json is None:
+                    # call_ai_safe исчерпал все уровни — используем fallback
+                    raise TimeoutError("call_ai_safe: all 3 levels exhausted for coordinator_plan")
             except Exception as _pe:
                 logger.warning("[COORD] plan generation failed: %s", _pe)
                 # Fallback: строим минимальный план из доступных агентов и первой активной цели
@@ -19912,7 +19945,8 @@ class AnchorEngine:
                 }
 
                 async def _save_coordinator_insights(_uid=user.id, _snap=_ci_cycle_snapshot):
-                    """Background: AI решает что запомнить → пишет в CoordinatorInsight."""
+                    """Background: AI решает что запомнить → пишет в CoordinatorInsight.
+                    Использует call_ai_safe для устойчивости к таймаутам."""
                     try:
                         from models import CoordinatorInsight as _CIbg, Session as _CISess
                         import datetime as _ci_dt_bg, re as _ci_re_bg
@@ -19940,20 +19974,27 @@ class AnchorEngine:
                                 "keep_old=false — заменяет старый вывод того же типа. "
                                 "Если нет новых паттернов — верни []."
                             )
-                            _raw = await _quick_ai_call_raw(
+                            # ── call_ai_safe: защита от таймаута в background ──
+                            _raw = await call_ai_safe(
+                                _quick_ai_call_raw,
                                 [{"role": "user", "content": _prompt}],
-                                max_tokens=250, temperature=0.3, _caller='coordinator_insights',
+                                max_tokens=250, timeout=30,
+                                temperature=0.3, _caller='coordinator_insights',
                             )
+                            if not _raw:
+                                logger.debug('[COORD] insights bg: AI returned None (all levels exhausted)')
+                                return
                             _m = _ci_re_bg.search(r'\[[\s\S]*?\]', _raw or '')
                             if not _m:
+                                logger.debug('[COORD] insights bg: no JSON array in response')
                                 return
                             _saved = 0
                             for _item in (json.loads(_m.group()) or []):
-                                _itype = _item.get('type', 'strategy_pattern')
-                                _summary = (_item.get('summary') or '').strip()
+                                _itype = safe_get(_item, 'type', 'strategy_pattern')
+                                _summary = (safe_get(_item, 'summary') or '').strip()
                                 if not _summary or len(_summary) < 10:
                                     continue
-                                if not _item.get('keep_old', True):
+                                if not safe_get(_item, 'keep_old', True):
                                     _old = _s.query(_CIbg).filter(
                                         _CIbg.user_id == _uid, _CIbg.insight_type == _itype,
                                     ).order_by(_CIbg.updated_at.desc()).first()
@@ -19986,7 +20027,7 @@ class AnchorEngine:
                     except Exception as _oe:
                         logger.debug('[COORD] insights bg outer: %s', _oe)
 
-                asyncio.ensure_future(_save_coordinator_insights())
+                asyncio.create_task(_save_coordinator_insights())
             except Exception as _ci_outer_err:
                 logger.debug('[COORD] coordinator_insights outer: %s', _ci_outer_err)
 

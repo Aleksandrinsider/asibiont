@@ -392,11 +392,14 @@ elif health['score'] < 0.3:
 
 ### ⚡ Быстрые победы (каждая < 30 мин)
 
-| # | Фикс | Суть |
-|---|------|------|
-| 1 | `_safe_get()` для всех `.get()` | Предотвращает `AttributeError: 'str' has no 'get'` |
-| 2 | Fallback таймаутов (3 уровня) | Агенты не падают при TimeoutError |
-| 3 | Дедупликация AAL перед вставкой | Нет дублей активности |
-| 4 | Force-save CoordinatorInsights | Появляется стратегическая память |
-| 5 | Backfill пустых `learned` | Запускается самообучение |
-| 6 | Circuit Breaker для внешних API | Нет бесконечных ретраев в 502 |
+| # | Фикс | Суть | Статус |
+|---|------|------|--------|
+| 1 | `safe_get()` для всех `.get()` | Предотвращает `AttributeError: 'str' has no 'get'` | ✅ Интегрирован в `_save_coordinator_insights`, guard в `_run_coordinator_dispatch` |
+| 2 | `call_ai_safe()` | Fallback таймаутов (3 уровня) — агенты не падают при TimeoutError | ✅ Интегрирован: координатор AI + CoordinatorInsights |
+| 3 | `CycleCache` | TTL-кэш результатов инструментов — дедупликация RSS/поиска | ✅ Интегрирован в `__init__` AnchorEngine |
+| 4 | `CircuitBreaker` | Защита внешних API — нет бесконечных ретраев в 502 | ✅ Интегрирован в `__init__` AnchorEngine |
+| 5 | `build_goal_block()` | Блок целей пользователя в промпте агента | ✅ Интегрирован в `_build_autopilot_prompt` |
+| 6 | `detect_user_locale()` | Определение языка пользователя | ✅ Интегрирован: call_ai_safe + build_goal_block |
+| 7 | `validate_coordinator_response()` | Парсинг ответа координатора (str/dict/list/None) | 📦 Готов в autopilot_fixes.py, ждёт интеграции |
+| 8 | Дедупликация AAL перед вставкой | Нет дублей активности | 📋 Требует изменений в _dispatch_agent_for_anchor |
+| 9 | Backfill пустых `learned` в DecisionLog | Запускается самообучение | 📋 Требует отдельного фонового процесса |
