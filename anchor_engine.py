@@ -7334,13 +7334,37 @@ class AnchorEngine:
                         f"Используй web_search/research_topic. Если задача без интеграции невыполнима — "
                         f"скажи пользователю ОДИН раз: подключить в https://asibiont.com/dashboard"
                     )
-            # 2. Email-анкер но email-отправка не настроена на платформе
+            # 2. Email-анкер но email-отправка не настроена (Gmail OAuth / SMTP / Resend ключи)
             _email_anchor_types = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
-            if anchor.anchor_type in _email_anchor_types and not _os_intg.getenv('RESEND_API_KEY'):
-                _missing_intg_notes.append(
-                    "❌ Email-отправка через платформу не настроена. "
-                    "Используй email-агента с Gmail/Яндекс ключами."
-                )
+            if anchor.anchor_type in _email_anchor_types:
+                _has_email_cap = bool(getattr(user, 'google_oauth_token', None) or '')
+                if not _has_email_cap:
+                    try:
+                        from models import UserAgent as _UA_eml_intg
+                        _ag_with_gmail = session.query(_UA_eml_intg.id).filter(
+                            _UA_eml_intg.user_id == user.id,
+                            _UA_eml_intg.google_oauth_token.isnot(None),
+                            _UA_eml_intg.google_oauth_token != ''
+                        ).first()
+                        _has_email_cap = _ag_with_gmail is not None
+                        if not _has_email_cap:
+                            _ag_keys_rows = session.query(_UA_eml_intg.user_api_keys).filter(
+                                _UA_eml_intg.user_id == user.id,
+                                _UA_eml_intg.user_api_keys.isnot(None),
+                                _UA_eml_intg.user_api_keys != ''
+                            ).all()
+                            _all_keys_lower = ' '.join((r[0] or '').lower() for r in _ag_keys_rows)
+                            _has_email_cap = any(s in _all_keys_lower for s in (
+                                'smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_',
+                                'gmail_user=', 'gmail_app_password', 'gmail_pass='
+                            ))
+                    except Exception:
+                        pass
+                if not _has_email_cap:
+                    _missing_intg_notes.append(
+                        "❌ Email-отправка не настроена. Подключи Gmail OAuth в настройках профиля "
+                        "или добавь SMTP/Resend/Sendgrid ключи агенту."
+                    )
             # 3. Поиск разработчиков без GitHub-интеграции
             _tech_kw_anchor = [
                 'github', 'developer', 'разработчик', 'программист',
