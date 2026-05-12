@@ -10501,23 +10501,6 @@ class AnchorEngine:
                 except Exception as _ai_err:
                     _raw = None
                     logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d after retry: %s", user.id, _ai_err)
-                    # Вместо полной тишины — отправляем краткий статус-отчёт
-                    _goals_summary = data.get('goals', [])
-                    if _goals_summary and self.bot:
-                        _goal_lines = ', '.join(g.get('title', '')[:50] for g in _goals_summary[:3])
-                        # Hollow fallback suppressed — anchor will be retried in 45 min
-                        logger.info(
-                            "[ANCHOR-AUTOPILOT] user %d: AI call failed, suppressing hollow fallback for %s",
-                            user.id, agent_name,
-                        )
-                        try:
-                            await _safe_send(
-                                self.bot,
-                                user.telegram_id,
-                                f"ASI:\nВременный сбой автопилота у агента {agent_name}. Повторю задачу автоматически через ~15 минут.",
-                            )
-                        except Exception as _tg_fail_notice:
-                            logger.debug("[ANCHOR-AUTOPILOT] fail notice send: %s", _tg_fail_notice)
                     # Помечаем AAL как failed — чтобы guard не блокировал следующие dispatches
                     if _aal_id:
                         try:
