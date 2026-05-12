@@ -9085,8 +9085,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         )
     if dialog_context:
         system_prompt += (
-            f"\n\n[КОНТЕКСТ — профиль пользователя, его email-контакты, цели, история диалога. "
-            f"Используй чтобы понимать КТО пользователь, КОМУ он пишет, ЧТО ищет]:\n{dialog_context}"
+            f"\n\n📌 ПРИОРИТЕТНАЯ ДИРЕКТИВА — что нужно сделать прямо сейчас (сообщение пользователя и контекст задачи). "
+            f"Это ГЛАВНАЯ ЗАДАЧА — выполни её в первую очередь, не отклоняясь:\n{dialog_context}"
         )
 
     # Авто-загрузка контекста пользователя ТОЛЬКО если не передан извне
@@ -12157,7 +12157,7 @@ def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, re
 
 # Кэш контекста директора: { user_id: {'ctx': str, 'history': list, 'expires': float} }
 _DIRECTOR_CTX_CACHE: dict = {}
-_DIRECTOR_CTX_TTL = 60  # секунд
+_DIRECTOR_CTX_TTL = 10  # секунд (маленький TTL чтобы сообщения пользователя быстро попадали в контекст агента)
 
 async def _office_director_chat(user_message: str, user_id: int, progress_callback=None) -> str | dict | None:
     """
@@ -12940,6 +12940,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _md_ctx_parts.append(_user_full_ctx)
         if _history_block.strip():
             _md_ctx_parts.append(_history_block.strip())
+        # Явно передаём текущее сообщение пользователя как приоритетную директиву
+        if user_message and user_message.strip():
+            _md_ctx_parts.append(
+                f"📩 ТЕКУЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ (приоритетная директива — выполни ЕЁ в первую очередь):\n{user_message.strip()}"
+            )
         _md_prev_results: list[str] = []
         for _md_idx, _md_t in enumerate(_tasks_list):
             _md_agent_name = _md_t.get('agent_name', '')
@@ -13012,6 +13017,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _agent_ctx_parts.append(_user_full_ctx)
     if _history_block.strip():
         _agent_ctx_parts.append(_history_block.strip())
+    # Явно передаём текущее сообщение пользователя как приоритетную директиву
+    # (история может быть закеширована и не содержать свежего сообщения)
+    if user_message and user_message.strip():
+        _agent_ctx_parts.append(
+            f"📩 ТЕКУЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ (приоритетная директива — выполни ЕЁ в первую очередь):\n{user_message.strip()}"
+        )
     _del_ctx = '\n\n'.join(_agent_ctx_parts)
 
     _ag = _find_agent(decision.get('agent_name', ''))
