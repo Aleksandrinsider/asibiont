@@ -8080,12 +8080,20 @@ async def api_interactions_handler(request):
             interactions = _iq.order_by(Interaction.created_at.desc()).limit(_limit).all()
         interactions.reverse()  # Back to chronological order
         
-        logger.info(f"Loaded last {len(interactions)} interactions for user {user.id}")
+        # DIAGNOSTIC LOGS: count total interactions in DB for this user
+        _total_in_db = session_db.query(Interaction).filter_by(user_id=user.id).count()
+        logger.info(f"[CHAT_DIAG] User {user.id}: total interactions in DB={_total_in_db}, "
+                    f"loaded={len(interactions)}, limit={_limit}, page_mode={_page_mode}, "
+                    f"page={_page}, per_page={_per_page}")
 
         # Get history cleared timestamp from DB
         history_cleared_timestamp = 0
         if user.history_cleared_at:
             history_cleared_timestamp = user.history_cleared_at.timestamp()
+            logger.info(f"[CHAT_DIAG] User {user.id}: history_cleared_at={user.history_cleared_at.isoformat()}, "
+                        f"timestamp={history_cleared_timestamp}")
+        else:
+            logger.info(f"[CHAT_DIAG] User {user.id}: history_cleared_at=None (no clear)")
 
         # Filter interactions:
         # 1. Skip cleared history
@@ -8141,7 +8149,27 @@ async def api_interactions_handler(request):
                 _dedup_recent[_dedup_key] = _ts
             filtered_interactions.append(i)
         
-        logger.info(f"After filtering: {len(filtered_interactions)} interactions")
+        # DIAGNOSTIC: count what was filtered at each stage
+        _skipped_history = 0
+        _skipped_empty = 0
+        _skipped_dedup = 0
+        for i in interactions:
+            if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() <= history_cleared_timestamp:
+                _skipped_history += 1
+            elif i.content is None or i.content.strip() == '':
+                _skipped_empty += 1
+        _skipped_dedup = len(interactions) - len(filtered_interactions) - _skipped_history - _skipped_empty
+        _msg_types = {}
+        for i in filtered_interactions:
+            _msg_types[i.message_type] = _msg_types.get(i.message_type, 0) + 1
+        logger.info(f"[CHAT_DIAG] User {user.id}: after filter — "
+                    f"total_in_db={_total_in_db}, "
+                    f"loaded={len(interactions)}, "
+                    f"passed_filter={len(filtered_interactions)}, "
+                    f"skipped_history={_skipped_history}, "
+                    f"skipped_empty={_skipped_empty}, "
+                    f"skipped_dedup={_skipped_dedup}, "
+                    f"message_types={_msg_types}")
 
         # Get user timezone
         user_tz = pytz.UTC
