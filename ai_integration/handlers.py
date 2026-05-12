@@ -13674,7 +13674,7 @@ async def start_email_campaign(
     sender_email: str = None,
     tone: str = 'professional',
     max_emails: int = 0,
-    daily_limit: int = 100,
+    daily_limit: int = 1000000,
     landing_url: str = None,
     user_id: int = None,
     sent_by_agent: str = None,
@@ -13798,7 +13798,7 @@ async def start_email_campaign(
             if is_dup:
                 # Обновляем существующую кампанию вместо создания новой
                 if daily_limit > ex.daily_limit:
-                    ex.daily_limit = min(daily_limit, 100)
+                    ex.daily_limit = max(1, int(daily_limit))
                 if max_emails and max_emails > (ex.max_emails or 0):
                     ex.max_emails = max_emails
                 session.commit()
@@ -13837,7 +13837,7 @@ async def start_email_campaign(
             sender_email=sender_email,
             landing_url=(landing_url or '').strip()[:500] or None,
             max_emails=max_emails,
-            daily_limit=min(daily_limit, 100),
+            daily_limit=max(1, int(daily_limit)),
             status='active',
         )
         session.add(campaign)
@@ -13976,7 +13976,7 @@ async def update_email_campaign(
             campaign.max_emails = max(0, int(max_emails))
             changes.append(f"макс. писем: {max_emails if max_emails > 0 else 'безлимитно'}")
         if daily_limit is not None:
-            campaign.daily_limit = min(max(1, int(daily_limit)), 100)
+            campaign.daily_limit = max(1, int(daily_limit))
             changes.append(f"лимит/день: {campaign.daily_limit}")
         if status is not None and status in ('active', 'paused', 'completed', 'cancelled'):
             campaign.status = status
