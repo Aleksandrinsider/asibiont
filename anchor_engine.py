@@ -27235,49 +27235,6 @@ class AnchorEngine:
                 else:
                     logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: AI returned empty body (opt-out?), skip reply")
 
-                # Уведомляем пользователя о полученном ответе
-                try:
-                    _contact_label = recipient_name or recipient_email
-                    _reply_preview = reply_text[:200].strip()
-                    _send_result_lower = (_send_result or '').lower()
-                    _lang_mismatch = 'язык reply_body' in _send_result_lower
-                    if _reply_body and _send_result and ('отправлен' in _send_result.lower() or 'sent' in _send_result.lower() or 'reply sent' in _send_result.lower()):
-                        _notify_msg = (
-                            f"📩 Получен ответ от {_contact_label}"
-                            + (f" ({recipient_company})" if recipient_company else "")
-                            + f" — кампания «{campaign_name}»\n\n"
-                            f"💬 Их письмо:\n{_reply_preview}\n\n"
-                            f"✅ Я автоматически ответил(а) — ответ отправлен."
-                        )
-                    elif _lang_mismatch:
-                        _notify_msg = (
-                            f"📩 Получен ответ от {_contact_label}"
-                            + (f" ({recipient_company})" if recipient_company else "")
-                            + f" — кампания «{campaign_name}»\n\n"
-                            f"💬 Их письмо:\n{_reply_preview}\n\n"
-                            f"⚠️ Автоответ пока не отправлен: AI написал черновик не на языке контакта. "
-                            f"Письмо сохранено, нужен ручной ответ или повторный запуск."
-                        )
-                    elif _reply_body:
-                        _notify_msg = (
-                            f"📩 Получен ответ от {_contact_label}"
-                            + (f" ({recipient_company})" if recipient_company else "")
-                            + f" — кампания «{campaign_name}»\n\n"
-                            f"💬 Их письмо:\n{_reply_preview}\n\n"
-                            f"⚠️ Автоответ не отправлен: {(_send_result or 'ошибка')[:200]}"
-                        )
-                    else:
-                        _notify_msg = (
-                            f"📩 Получен ответ от {_contact_label}"
-                            + (f" ({recipient_company})" if recipient_company else "")
-                            + f" — кампания «{campaign_name}»\n\n"
-                            f"💬 Их письмо:\n{_reply_preview}\n\n"
-                            f"ℹ️ Автоответ не отправлен (возможно отписка/отказ)."
-                        )
-                    await self.bot.send_message(chat_id=user.telegram_id, text=_notify_msg)
-                except Exception as _ntf_err:
-                    logger.warning(f"[ANCHOR] email_reply_received notify error: {_ntf_err}")
-
                 # Списываем токены
                 if not FREE_ACCESS_MODE and _reply_body:
                     spend_tokens(user.telegram_id, 'email_send',
