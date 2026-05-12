@@ -2653,7 +2653,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 'search_repos, list_issues, comment_on_issue, star_repo\n'
                 '  🔗 Цепочки: search_users → save_email_contact → send_outreach_email | '
                 'list_issues → comment_on_issue (нетворкинг) | search_repos → research_topic → create_post\n'
-                '  🔄 Пагинация: page=2,3... если все contacted. Меняй query каждый цикл.'
+                '  🔄 КОГДА ВСЕ CONTACTED — действуй по алгоритму (НЕ иди на page 2 с тем же query):\n'
+                '     1) Сначала list_email_contacts → есть unsent? → отправляй письма ИМ (не ищи новых!)\n'
+                '     2) Все уже получили письма → СМЕНИ АУДИТОРИЮ: другой language:, location:, followers-диапазон, тип репо\n'
+                '     3) Все сегменты GitHub исчерпаны → comment_on_issue (нетворкинг) или search_repos (партнёры)\n'
+                '  ❌ page=2 с тем же query = ошибка: если page=1 вернул только contacted, page=2 вернёт тех же людей'
             )
         elif _cat == 'email':
             _intg_connected.append(
@@ -4815,7 +4819,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + (
             "🐙 GitHub search: используй квалификаторы (language:X followers:>N repos:>N location:X).\n"
             "  ❌ Неправильно: 'AI testing developers' → ✅ Правильно: 'language:python repos:>3'\n"
-            "  Пустой page 1 → смени query, НЕ пробуй page 2 с тем же запросом.\n\n"
+            "  Пустой page 1 → смени query, НЕ пробуй page 2 с тем же запросом.\n"
+            "  Все contacted в page 1 → НЕ иди на page 2! Сначала list_email_contacts — если unsent есть, отправляй им.\n"
+            "  Если все уже получили письма → СМЕНИ АУДИТОРИЮ: другой language:/location:/followers: или comment_on_issue.\n\n"
             if python_code and 'github' in (python_code or '').lower() else ''
         )
     )
@@ -4911,7 +4917,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "▸ ШАГ 2 — ОЦЕНКА РЕЗУЛЬТАТА (после каждого инструмента):\n"
         "  Инструмент вернул данные → 'Что конкретно изменилось? Приблизило ли это к цели?'\n"
         "  Ошибка → передай ТОЧНУЮ формулировку. Не придумывай причину. Переключись на альтернативу.\n"
-        "  Нулевой результат → это сигнал сменить подход, а не повторить попытку.\n\n"
+        "  Нулевой результат → это сигнал сменить подход, а не повторить попытку.\n"
+        "  📰 RSS вернул HTML-мусор (<a href... без заголовков статей) → источник сломан. Не читай его повторно.\n"
+        "     Вместо этого: web_search('новости ИИ site:habr.com') или get_news_trends или research_topic.\n\n"
 
         "▸ ШАГ 3 — АДАПТАЦИЯ (если прогресс стоит):\n"
         "  'Мы делаем то же самое и ждём другого результата' — классическая ловушка.\n"
@@ -8471,7 +8479,7 @@ class AnchorEngine:
                                         f'⚠️ Discord использовался {_disc_count_c} раз — зацикливание! '
                                         f'Предложи {_chosen_name} использовать: {_alt_str_c}.'
                                     )
-                                elif _gh_count_c >= 5:
+                                elif _gh_count_c >= 3:
                                     _loop_channel_hint_c = (
                                         f'⚠️ GitHub использовался {_gh_count_c} раз — попробуй другой канал: '
                                         f'{_alt_str_c}.'
@@ -12256,6 +12264,11 @@ class AnchorEngine:
             _ctx = (
                 f"Данные от коллеги {prev_agent.name}:\n{result[:300]}\n\n"
                 + (
+                    "⚠️ Коллега не успел выполнить задачу (timeout/перезапуск процесса). "
+                    "Данных нет — действуй как с чистого листа: выполни исходную задачу самостоятельно.\n\n"
+                    if any(w in (result or '').lower() for w in ('timeout', 'process_restart', 'chain_timeout', 'перезапуск', 'не уложился')) else ""
+                )
+                + (
                     f"📧 КОНТАКТЫ ДЛЯ ОТПРАВКИ ПРЯМО СЕЙЧАС: {', '.join(_found_emails[:5])}\n"
                     f"→ Твоя задача: вызови send_outreach_email или negotiate_by_email для каждого из них!\n\n"
                     if _found_emails and _email_agent_relay else ""
@@ -15696,7 +15709,7 @@ class AnchorEngine:
                     + (_email_analytics_str[:500] if _email_analytics_str else '')
                     + (_multiday_review_str[:500] if _multiday_review_str else '')
                     + (_empirical_guidance_str[:600] if _empirical_guidance_str else '')
-                    + (_coordinator_insights_str[:400] if _coordinator_insights_str else '')
+                    + (_coordinator_insights_str[:800] if _coordinator_insights_str else '')
                 )
                 _analysis_prompt = (
                     "Ты — стратегический советник команды AI-агентов. "
