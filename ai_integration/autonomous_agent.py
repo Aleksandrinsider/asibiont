@@ -4629,9 +4629,14 @@ class HybridAutonomousAgent:
                 # Субагенты встревают ТОЛЬКО при явном вызове:
                 # 1. Пользователь написал @имя или имя-префикс (обработано выше)
                 # 2. ASI сам передаёт управление агенту (через focused_agent set внутри tool-chain)
-                # Автоматического инжекта без вызова — нет.
+                # 3. Если явного упоминания нет — проверяем focused_agent (установлен предыдущим @mention)
                 if not _mention_not_found and _active_agent_id is None:
-                    pass  # ASI default — не подтягиваем focused_agent автоматически
+                    _focused_id = get_user_active_agent(user_id)
+                    if _focused_id:
+                        _active_agent_id = _focused_id
+                        # Не обрезаем сообщение — focused агент подхватывается автоматически
+                        # для контекста, а команда может быть на другую тему
+                        logger.info(f"[AGENT] auto-routed to focused_agent id={_focused_id}")
 
                 # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
                 if _stripped_prefix_end is not None:
