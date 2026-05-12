@@ -4326,6 +4326,15 @@ class HybridAutonomousAgent:
             if cognitive_hints:
                 dynamic_context += cognitive_hints
 
+            # ═══ ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (self-learning: стиль, тренды, повторяющиеся темы, эффективность инструментов) ═══
+            try:
+                _learner = get_learner()
+                _profile_hint = _learner.get_user_model_hint(user_id)
+                if _profile_hint:
+                    dynamic_context += _profile_hint
+            except Exception as _ple:
+                logger.debug(f"[SELF-LEARN] profile hint skipped: {_ple}")
+
             # ═══ ИНТЕГРАЦИИ (факты: что подключено + как использовать) ═══
             _agent_map = []
             try:
@@ -4368,17 +4377,27 @@ class HybridAutonomousAgent:
                 emotion = CognitiveEngine.detect_emotion(user_message)
                 intent = CognitiveEngine.classify_intent(user_message)
                 
-                # Семантическая память из Pinecone
+                # ═══ СЕМАНТИЧЕСКАЯ ПАМЯТЬ (Pinecone — универсально для всех целей/интеграций) ═══
                 memory_context = ""
                 try:
                     memory_context = await asyncio.wait_for(
-                        build_memory_context(user_id, user_message, max_chars=1200),
-                        timeout=4
+                        build_memory_context(user_id, user_message, max_chars=2000),
+                        timeout=5
                     )
                     if memory_context:
-                        dynamic_context += f"\n[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]\n{memory_context}\n"
+                        # Структурированный блок: сначала инструкция по использованию, потом данные
+                        _mem_instruction = (
+                            "→ ИСПОЛЬЗУЙ эту память: персонализируй ответ, не повторяй прошлых советов, "
+                            "учитывай предпочтения и интеграции. Память работает ВСЕГДА — для любых целей."
+                        )
+                        dynamic_context += (
+                            f"\n[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]\n"
+                            f"{_mem_instruction}\n"
+                            f"{memory_context}\n"
+                        )
+                        logger.info(f"[VECTOR] Memory context injected: ~{len(memory_context)} chars for user {user_id}")
                 except asyncio.TimeoutError:
-                    logger.warning("[VECTOR] Memory search timeout (>4s), skipping")
+                    logger.warning("[VECTOR] Memory search timeout (>5s), skipping")
                 except Exception as e:
                     logger.warning(f"[VECTOR] Memory search failed: {e}")
                 
@@ -7772,6 +7791,26 @@ def _build_user_context_sync(user_db_id: int) -> str:
                     )
     except Exception:
         pass
+
+    # --- Семантическая память из Pinecone (универсально для всех агентов) ---
+    try:
+        from .vector_memory import _build_memory_context_sync
+        _telegram_id = user.telegram_id if user else None
+        if _telegram_id:
+            # Используем универсальный запрос для извлечения релевантной памяти
+            _sem_mem = _build_memory_context_sync(
+                _telegram_id,
+                "контекст: цели, предпочтения, решения, инсайты пользователя",
+                max_chars=1200
+            )
+            if _sem_mem:
+                parts.append(
+                    "🧠 СЕМАНТИЧЕСКАЯ ПАМЯТЬ (прошлые обсуждения, решения, предпочтения):\n"
+                    + _sem_mem + "\n"
+                    + "→ Используй эту информацию для персонализации. Не повторяй прошлых советов."
+                )
+    except Exception as _sem_err:
+        logger.debug('[CONTEXT] semantic memory load skipped: %s', _sem_err)
 
     return '\n\n'.join(parts)
 
