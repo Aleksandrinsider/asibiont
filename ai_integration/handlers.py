@@ -10814,6 +10814,22 @@ async def get_forex_analysis(instrument: str, amount: float = 1.0,
     _base_cur, _target_cur = _raw.split('/', 1)
     _pair_display = f"{_base_cur}/{_target_cur}"
 
+    # ExchangeRate-API не поддерживает сырьевые активы (нефть, золото и т.д.)
+    _COMMODITY_TICKERS = {'BRENT', 'WTI', 'CRUDE', 'OIL', 'GOLD', 'XAU', 'SILVER', 'XAG',
+                          'PLATINUM', 'XPT', 'PALLADIUM', 'XPD', 'COPPER', 'NATURAL_GAS'}
+    if _base_cur in _COMMODITY_TICKERS:
+        _etf_map = {'BRENT': 'BNO', 'WTI': 'USO', 'CRUDE': 'USO', 'OIL': 'USO',
+                    'GOLD': 'GLD', 'XAU': 'GLD', 'SILVER': 'SLV', 'XAG': 'SLV'}
+        _etf = _etf_map.get(_base_cur)
+        _hint = f" — попробуй get_stock_price(symbol='{_etf}')" if _etf else ""
+        return (
+            f"⚠️ ExchangeRate-API не поддерживает котировки {_pair_display} (сырьевой актив).\n\n"
+            f"Альтернативы:{_hint}\n"
+            "1️⃣ get_forex_analysis(instrument='EUR/USD') — для валютных пар\n"
+            "2️⃣ web_search(query='цена нефти Brent сегодня') — актуальная цена из новостей\n"
+            "3️⃣ get_stock_price для ETF, следующих за нефтью (BNO=Brent, USO=WTI)"
+        )
+
     # Загружаем оба ключа за один проход по агентам
     _er_key = None
     _av_key = None

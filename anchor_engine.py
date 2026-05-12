@@ -6900,8 +6900,8 @@ class AnchorEngine:
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
-                        _s.execute(_del_text("SET LOCAL statement_timeout = 3000"))
-                        _s.execute(_del_text("SET LOCAL lock_timeout = 2000"))
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 8000"))
+                        _s.execute(_del_text("SET LOCAL lock_timeout = 5000"))
                         _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
                         _s.commit()
                         return True
@@ -12760,6 +12760,11 @@ class AnchorEngine:
         try:
             # ── Guard: data может быть строкой (повреждённый anchor.data) ──
             # Исправляет: 'str' object has no attribute 'get'
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except (json.JSONDecodeError, TypeError):
+                    data = {}
             if not isinstance(data, dict):
                 logger.warning("[COORD] data is not dict (%s), resetting to empty", type(data).__name__)
                 data = {}
