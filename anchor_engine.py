@@ -22777,9 +22777,9 @@ class AnchorEngine:
         ).count()
         _email_daily_limit = 1000000  # default: effectively unlimited
         if email_campaigns:
-            _max_dl = max((c.daily_limit or 1000000) for c in email_campaigns)
-            if _max_dl > 0:
-                _email_daily_limit = max(_max_dl, 1000000)
+            _limits = [c.daily_limit for c in email_campaigns if c.daily_limit is not None and c.daily_limit > 0]
+            if _limits:
+                _email_daily_limit = max(_limits)
 
         # ── Определяем исчерпанные стратегии (все инструменты категории провалились) ──
         _STRATEGY_TOOLS = {
@@ -23600,8 +23600,8 @@ class AnchorEngine:
                             tone=campaign.tone or 'professional',
                             sender_name=_sender_name,
                             sender_email=DEFAULT_OUTREACH_EMAIL,
-                            max_emails=campaign.max_delegations or 20,
-                            daily_limit=min(campaign.daily_limit or 5, 50),
+                            max_emails=campaign.max_delegations or 500,
+                            daily_limit=min(campaign.daily_limit or 50, 200),
                             status='active',
                         )
                         session.add(_ext_camp)
@@ -23787,33 +23787,35 @@ class AnchorEngine:
                 and o.status in ('sent', 'delivered', 'opened', 'replied')
             )
 
-            remaining_daily = max(0, 1000000 - sent_today)
+            remaining_daily = max(0, (campaign.daily_limit or 1000000) - sent_today)
 
             # max_emails=0 означает безлимитную кампанию
             if campaign.max_emails and campaign.max_emails > 0:
                 remaining_total = max(0, campaign.max_emails - (campaign.emails_sent or 0))
 
-                # ── AUTO-SCALE max_emails: если лимит кампании исчерпан и есть результат ──
-                # Увеличиваем на 50% (до 10000 макс) если есть replied/interested/opened
+                # ── AUTO-SCALE max_emails: если лимит кампании исчерпан — увеличиваем ──
+                # Даже без ответов: холодная рассылка не даёт быстрых сигналов,
+                # поэтому при 0 сигналах увеличиваем на +100%, при наличии сигналов на +50%.
                 if remaining_total == 0 and not is_paused:
                     _positive_signals = sum(
                         1 for o in _camp_outreach
                         if o.status in ('replied', 'interested', 'opened')
                     )
                     _reply_rate = _positive_signals / max(1, campaign.emails_sent or 1)
-                    # Автоувеличение если: ≥2 позитивных сигнала ИЛИ reply rate > 5%
-                    if _positive_signals >= 2 or (_reply_rate > 0.05 and (campaign.emails_sent or 0) >= 20):
-                        _old_max = campaign.max_emails
-                        _new_max = min(int(_old_max * 1.5), 10000)
-                        if _new_max > _old_max:
-                            campaign.max_emails = _new_max
-                            remaining_total = _new_max - (campaign.emails_sent or 0)
-                            session.commit()
-                            logger.info(
-                                f"[ANCHOR] Auto-scaled max_emails for campaign #{campaign.id} "
-                                f"«{campaign.name}»: {_old_max} → {_new_max} "
-                                f"(positive={_positive_signals}, rate={_reply_rate:.1%})"
-                            )
+                    _old_max = campaign.max_emails
+                    # Всегда увеличиваем при исчерпании (даже без ответов):
+                    # +100% если нет сигналов, +50% если были
+                    _increase_pct = 1.0 if _positive_signals == 0 else 0.5
+                    _new_max = min(int(_old_max * (1 + _increase_pct)), 10000)
+                    if _new_max > _old_max:
+                        campaign.max_emails = _new_max
+                        remaining_total = _new_max - (campaign.emails_sent or 0)
+                        session.commit()
+                        logger.info(
+                            f"[ANCHOR] Auto-scaled max_emails for campaign #{campaign.id} "
+                            f"«{campaign.name}»: {_old_max} → {_new_max} "
+                            f"(positive={_positive_signals}, rate={_reply_rate:.1%})"
+                        )
             else:
                 remaining_total = 999999  # безлимит
 
@@ -25974,7 +25976,7 @@ class AnchorEngine:
                 # anchor_data может содержать старое имя пользователя вместо имени агента
                 if live_campaign.sender_name:
                     sender_name = live_campaign.sender_name
-                _daily_limit_safe = 1000000
+                _daily_limit_safe = live_campaign.daily_limit or 1000000
                 # Не используем COUNT(*) по большой таблице: берём ограниченный срез по лимиту.
                 _sent_today_rows = session.query(EmailOutreach.id).filter(
                     EmailOutreach.campaign_id == campaign_id,
