@@ -382,7 +382,7 @@ def _has_existing_email_signature(text: str, sender_name: str = '') -> bool:
         return True
 
     # Already contains brand/footer lines that usually belong to signature
-    if any(m in _tail_l for m in ('asibiont.com', 't.me/asibiont', 'автор проекта, asi biont')):
+    if any(m in _tail_l for m in ('asibiont.com', 't.me/asibiont', 'asi biont')):
         return True
 
     # Last-line patterns: sign-off line + name line
@@ -400,7 +400,12 @@ def _has_existing_email_signature(text: str, sender_name: str = '') -> bool:
 
 
 def _build_sender_role_line(session, user_id: int, sender_name: str) -> str:
-    """Build optional role/company line for sender signature."""
+    """Build optional role/company line for sender signature.
+    
+    NOTE: «Автор проекта» (Author of the project) is always stripped
+    from position — it's the platform creator's internal role that
+    should not appear in outgoing email signatures.
+    """
     if not session or not user_id:
         return ''
     try:
@@ -410,6 +415,12 @@ def _build_sender_role_line(session, user_id: int, sender_name: str) -> str:
             return ''
         _pos = (getattr(_prof_sig, 'position', '') or '').strip()
         _comp = (getattr(_prof_sig, 'company', '') or '').strip()
+        # ── Убираем «Автор проекта» из подписи ──
+        import re as _re_ap
+        _pos = _re_ap.sub(r'(?i)автор\s+проекта\s*,?\s*', '', _pos).strip()
+        _pos = _re_ap.sub(r'(?i),\s*автор\s+проекта', '', _pos).strip()
+        if not _pos and not _comp:
+            return ''
         if _pos and _comp:
             return f"{_pos}, {_comp}"
         if _pos:
