@@ -9761,12 +9761,6 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         )
         content = content.strip()
 
-        # ── Travelpayouts: автоматически добавляем реферальные ссылки если в посте travel-тема ──
-        try:
-            content = _ensure_travelpayouts_links(content, user_id)
-        except Exception as _tp_e:
-            logger.debug("[TRAVELPAYOUTS] injection skipped: %s", _tp_e)
-
         if not content:
             return "Текст поста не может быть пустым после очистки."
 
@@ -10587,20 +10581,6 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
                 "Telegram-канал — для аудитории: инсайты, кейсы, аналитика. "
                 "Переформулируй контент как экспертный пост для подписчиков."
             )
-
-        # ── Travelpayouts: автоматически добавляем реферальные ссылки если в посте travel-тема ──
-        try:
-            if isinstance(content_data, str):
-                content_data = _ensure_travelpayouts_links(content_data, user_id)
-                content = content_data  # синхронизируем оригинальную переменную
-            elif isinstance(content_data, dict):
-                for _tp_key in ('body', 'text', 'cta'):
-                    if _tp_key in content_data and isinstance(content_data[_tp_key], str):
-                        content_data[_tp_key] = _ensure_travelpayouts_links(
-                            content_data[_tp_key], user_id,
-                        )
-        except Exception as _tp_e:
-            logger.debug("[TRAVELPAYOUTS] injection skipped in publish_to_telegram: %s", _tp_e)
 
         result = await marketing_agent.publish_to_telegram(
             content=content_data,
