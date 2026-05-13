@@ -6034,6 +6034,21 @@ try:
 except Exception as e:
     print('Ошибка Travelpayouts: ' + str(e))`
             },
+            ref_links: {
+                name: 'Мои реферальные ссылки',
+                fields: [
+                    {k:'REF_LINKS', label:'Вставьте ваши реферальные ссылки (по одной KEY=VALUE на строке или просто URL)', ph:'TPX_FLIGHTS_URL=https://aviasales.tpx.lu/TvuKbwJO?erid=...,TPX_HOTELS_URL=https://hotellook.tpx.lu/YYYY?erid=...', t:'textarea', opt:false}
+                ],
+                hint: 'Просто вставьте ваши готовые реферальные ссылки. Никаких API-токенов и ключей не нужно.',
+                code: `import os
+REF_LINKS = os.environ.get('REF_LINKS', '')
+if REF_LINKS.strip():
+    print('=== Мои реферальные ссылки ===')
+    for item in REF_LINKS.split(','):
+        item = item.strip()
+        if item:
+            print('  ' + item)`
+            },
             tutu: {
                 name: 'Tutu.ru (ЖД билеты)',
                 fields: [
@@ -8372,6 +8387,7 @@ except Exception as e:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Путешествия / Доставка</option>
                             <option value="aviasales">Aviasales (авиабилеты)</option>
                             <option value="travelpayouts">Travelpayouts (партнёрские ссылки)</option>
+                            <option value="ref_links">Мои реферальные ссылки</option>
                             <option value="tutu">Tutu.ru (ЖД билеты)</option>
                             <option value="flightradar">Flightradar24 (рейсы)</option>
                             <option value="cdek">СДЭК (доставка)</option>

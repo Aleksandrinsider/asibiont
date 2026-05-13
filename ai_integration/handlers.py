@@ -236,11 +236,12 @@ def _detect_travel_topics(content: str) -> set:
 
 
 def _fetch_latest_travelpayouts_links(user_id: int) -> dict:
-    """Достаёт последние Travelpayouts ссылки из AgentActivityLog.
+    """Достаёт последние Travelpayouts ссылки из AgentActivityLog и user_api_keys.
 
     Ищет:
       - прямые ссылки с marker=509031 (для программ с has_direct_marker=True)
       - короткие .tpx.lu ссылки (для ВСЕХ программ)
+      - REF_LINKS из user_api_keys (пользовательские реферальные ссылки)
 
     Returns dict {category_key: url} или пустой dict.
     """
@@ -252,6 +253,32 @@ def _fetch_latest_travelpayouts_links(user_id: int) -> dict:
             if not _user:
                 logger.debug("[TRAVELPAYOUTS-DEBUG] fetch links: user not found (tg_id=%s)", user_id)
                 return {}
+
+            _all_links = {}
+
+            # 0) Прямое чтение REF_LINKS из user_api_keys (без кода агента)
+            _api_keys = _user.user_api_keys or ''
+            _ref_links_raw = ''
+            for _line in _api_keys.split('\n'):
+                _line = _line.strip()
+                if _line.startswith('REF_LINKS='):
+                    _ref_links_raw = _line[len('REF_LINKS='):]
+                    break
+            if _ref_links_raw:
+                for _item in _ref_links_raw.split(','):
+                    _item = _item.strip()
+                    if not _item:
+                        continue
+                    # Если формат KEY=VALUE, то берём URL после =
+                    if '=' in _item:
+                        _url = _item.split('=', 1)[1].strip()
+                    else:
+                        _url = _item
+                    _all_links['custom_' + str(len(_all_links))] = _url
+                    logger.debug(
+                        "[TRAVELPAYOUTS-DEBUG] Found REF_LINK from user_api_keys: %s",
+                        _url[:60],
+                    )
 
             _cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
             _rows = (
@@ -271,7 +298,7 @@ def _fetch_latest_travelpayouts_links(user_id: int) -> dict:
                 "[TRAVELPAYOUTS-DEBUG] AgentActivityLog query: found %d generate_links rows (48h)",
                 len(_rows),
             )
-            if not _rows:
+            if not _rows and not _all_links:
                 return {}
 
             # Маппинг домен → категория
@@ -334,6 +361,7 @@ def _build_travelpayouts_block(topics: set, links: dict) -> str:
       - Если в links есть URL для категории → используем его
       - Если нет, но has_direct_marker=True → используем default_url
       - Если нет И has_direct_marker=False → пропускаем (нужна .tpx.lu от скрипта)
+      - custom_* ключи (из REF_LINKS пользователя) добавляются в конец как есть
     """
     _blocks = []
     for _cat in ('flights', 'hotels', 'trains', 'insurance',
@@ -357,6 +385,22 @@ def _build_travelpayouts_block(topics: set, links: dict) -> str:
                 )
                 continue
         _blocks.append(f"{_cfg['emoji']} {_cfg['label']}: {_url}")
+
+    # Пользовательские ссылки из REF_LINKS (custom_*) — добавляем в конец
+    _custom_keys = [k for k in links if k.startswith('custom_')]
+    for _ck in _custom_keys:
+        _url = links[_ck]
+        # Пробуем подобрать эмодзи по домену
+        _emoji = '🔗'
+        _u_low = _url.lower()
+        for _cat, _cfg in _TRAVELPAYOUTS_PROGRAMS.items():
+            for _dom in _cfg['domains']:
+                if _dom in _u_low:
+                    _emoji = _cfg['emoji']
+                    break
+            if _emoji != '🔗':
+                break
+        _blocks.append(f"{_emoji} {_url}")
 
     if not _blocks:
         logger.debug("[TRAVELPAYOUTS-DEBUG] build_block: no blocks to add")
