@@ -5762,11 +5762,17 @@ class HybridAutonomousAgent:
         # если модель случайно дала неверную форму, выравниваем под имя активного агента.
         try:
             _ag_name_final = ''
+            _ag_gender = None
             _ag_ctx = self._active_agent_data.get(user_id)
             if isinstance(_ag_ctx, dict):
                 _ag_name_final = (_ag_ctx.get('name') or '').strip()
+                _ag_gender_raw = (_ag_ctx.get('gender') or '').strip().lower()
+                if _ag_gender_raw in ('female', 'женский', 'жен'):
+                    _ag_gender = True
+                elif _ag_gender_raw in ('male', 'мужской', 'муж'):
+                    _ag_gender = False
             if _ag_name_final:
-                final = _normalize_agent_gender_grammar(final, _ag_name_final)
+                final = _normalize_agent_gender_grammar(final, _ag_name_final, is_female=_ag_gender)
             # Мягкая правка частой фразы (качество текста, без изменения логики).
             final = re.sub(r'(?i)\bкартинка\s+готов\.?', 'Изображение готово.', final or '')
         except Exception as _gfix_err:
@@ -8205,7 +8211,7 @@ _MALE_NAMES_ENDING_AYA = {
 
 # Женские имена НЕ заканчивающиеся на а/я (иностранные, исключения)
 _FEMALE_NAMES_NO_AYA = {
-    'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary', 
+    'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary',
     'кэтрин', 'catherine', 'маргарет', 'margaret', 'джейн', 'jane', 'хелен', 'helen',
     'эдит', 'edith', 'джудит', 'judith', 'рут', 'ruth', 'эстер', 'esther',
     'кармен', 'carmen', 'долорес', 'dolores', 'мерседес', 'mercedes', 'инес', 'ines',
@@ -8214,29 +8220,38 @@ _FEMALE_NAMES_NO_AYA = {
     'изабель', 'isabel', 'мишель', 'michelle', 'рейчел', 'rachel', 'дебора', 'deborah',
 }
 
-def _detect_agent_is_female(name: str) -> bool:
-    """Определяет женский ли род агента по имени. Универсальная функция."""
+def _detect_agent_is_female(name: str, explicit_gender: str = '') -> bool:
+    """Определяет женский ли род агента по имени. Универсальная функция.
+    
+    Если explicit_gender задан ('male'/'female') — используется он как истина.
+    Иначе — эвристика по имени (проверка наборов, окончание на а/я).
+    """
+    # Приоритет: явный пол из БД (задан при создании агента)
+    if explicit_gender:
+        g = explicit_gender.strip().lower()
+        if g == 'female':
+            return True
+        if g == 'male':
+            return False
+    # Fallback: эвристика по имени
     name = (name or '').strip()
     if not name:
         return False
-    # Берём первое слово (имя без фамилии)
     first = name.split()[0]
     first_lower = first.lower()
-    # Явно женские имена (иностранные, не на а/я)
     if first_lower in _FEMALE_NAMES_NO_AYA:
         return True
-    # Явно мужские имена на а/я
     if first_lower in _MALE_NAMES_ENDING_AYA:
         return False
-    # Женские имена обычно заканчиваются на а/я
     if first_lower[-1] in 'ая' and first_lower[-2:] not in ('ша', 'жа'):
         return True
     return False
 
 
-def _normalize_agent_gender_grammar(text: str, agent_name: str) -> str:
+def _normalize_agent_gender_grammar(text: str, agent_name: str, is_female: bool | None = None) -> str:
     """Safety-net: выравнивает базовые русские формы прошедшего времени под род агента.
     Для EN-текста ничего не меняет.
+    is_female — приоритетный флаг из БД (gender агента). Если None — определяется по имени.
     """
     t = (text or '').strip()
     if not t:
@@ -8246,7 +8261,7 @@ def _normalize_agent_gender_grammar(text: str, agent_name: str) -> str:
     if not _re_g.search(r'[А-Яа-яЁё]', t):
         return t
 
-    _is_fem = _detect_agent_is_female(agent_name)
+    _is_fem = is_female if is_female is not None else _detect_agent_is_female(agent_name)
     _pairs = [
         ('нашёл', 'нашла'), ('нашел', 'нашла'), ('сделал', 'сделала'),
         ('подготовил', 'подготовила'), ('проверил', 'проверила'), ('отправил', 'отправила'),
@@ -8281,9 +8296,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _depth >= 2:
         return f"Агент {agent.get('name', '?')}: превышена глубина делегирования, задача принята.", []
 
-    # Определяем род агента по имени для правильных fallback-фраз
+    # Определяем род агента по имени (приоритет — явный пол из БД)
     _aname_fb = (agent.get('name') or '').strip()
-    _is_fem = _detect_agent_is_female(_aname_fb)
+    _ag_gender_explicit = (agent.get('gender') or '').strip()
+    _is_fem = _detect_agent_is_female(_aname_fb, explicit_gender=_ag_gender_explicit)
     _done_fb = 'Задачу выполнила.' if _is_fem else 'Задачу выполнил.'
 
     # Язык пользователя — для условных директив
@@ -11754,7 +11770,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _tool_data_fb.append(_td_fb)
             _tool_data_fb_str = '\n'.join(_tool_data_fb[-3:]) if _tool_data_fb else ''
             if _tool_data_fb_str:
-                _is_fem_fb = _detect_agent_is_female(agent.get('name') or '')
+                _ag_gender_explicit_fb = (agent.get('gender') or '').strip()
+                _is_fem_fb = _detect_agent_is_female(agent.get('name') or '', explicit_gender=_ag_gender_explicit_fb)
                 _gender_fb = (
                     "Ты женского рода — пиши: нашла, обнаружила, проверила, отправила, сделала.\n"
                     if _is_fem_fb else

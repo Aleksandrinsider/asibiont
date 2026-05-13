@@ -125,8 +125,16 @@ _FEMALE_NAMES_NO_AYA = {
     'chloe', 'хлоя', 'zoe', 'зои', 'audrey', 'одри',
 }
 
-def _detect_agent_is_female(name: str) -> bool:
-    """Определяет женский ли род агента по имени."""
+def _detect_agent_is_female(name: str, explicit_gender: str = '') -> bool:
+    """Определяет женский ли род агента по имени.
+    explicit_gender — явный пол из БД ('male'/'female'), приоритетнее эвристики по имени.
+    """
+    if explicit_gender:
+        g = explicit_gender.strip().lower()
+        if g == 'female':
+            return True
+        if g == 'male':
+            return False
     name = (name or '').strip()
     if not name:
         return False
