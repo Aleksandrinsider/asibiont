@@ -6067,81 +6067,6 @@ try:
 except Exception as e:
     print('Ошибка ЖД: ' + str(e))`
             },
-            level_travel: {
-                name: 'Level.Travel (поиск туров)',
-                fields: [
-                    {k:'LEVEL_TRAVEL_TOKEN', label:'API токен (partner.level.travel > Настройки > API)', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
-                ],
-                hint: 'Level.Travel — агрегатор туров от 120+ туроператоров. Комиссия 10%. Получить токен: partner.level.travel > Настройки > API > Создать токен.',
-                code: `import urllib.request, json, os
-TOKEN = os.environ.get('LEVEL_TRAVEL_TOKEN', '')
-CTRY  = os.environ.get('AGENT_PARAM_COUNTRY', 'Турция')
-CITY  = os.environ.get('AGENT_PARAM_CITY', '')
-FROM  = os.environ.get('AGENT_PARAM_FROM', 'Москва')
-DATE  = os.environ.get('AGENT_PARAM_DATE', '')
-NIGHTS = os.environ.get('AGENT_PARAM_NIGHTS', '7')
-ADULTS = os.environ.get('AGENT_PARAM_ADULTS', '2')
-ACTION = os.environ.get('AGENT_ACTION', 'search_tours')
-BASE   = 'https://partner.level.travel/api/v1'
-HEADERS = {'X-Api-Token': TOKEN, 'Accept': 'application/json'}
-try:
-    # Поиск туров
-    if ACTION in ('search_tours', 'check_all'):
-        import urllib.parse as _up
-        params = {
-            'from_city': FROM,
-            'adults': ADULTS,
-            'nights': NIGHTS,
-        }
-        if CTRY:
-            params['to_country'] = CTRY
-        if CITY:
-            params['to_cities'] = CITY
-        if DATE:
-            params['date_from'] = DATE
-        qs = _up.urlencode(params)
-        req = urllib.request.Request(BASE + '/tours/search?' + qs, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=20) as r:
-            d = json.loads(r.read().decode())
-
-        tours = d.get('tours', d.get('results', d.get('data', [])))
-        meta = d.get('meta', {})
-        total = meta.get('total', len(tours))
-        print('Level.Travel: найдено туров в ' + (CTRY or 'мир') + ' — ' + str(total))
-        if tours:
-            for t in tours[:8]:
-                name = t.get('hotel', {}).get('name', t.get('hotel_name', '?'))
-                country = t.get('country', {}).get('name', t.get('country_name', ''))
-                price = t.get('price', {}).get('total', t.get('price', '?'))
-                nights = t.get('nights', NIGHTS)
-                date = t.get('start_date', t.get('departure_date', DATE))[:10] if t.get('start_date') else (DATE or '?')
-                meal = t.get('meal', {}).get('name', t.get('meal_type', ''))
-                stars = t.get('hotel', {}).get('stars', t.get('stars', ''))
-                stars_str = ('★' * int(stars)) if stars else ''
-                print('  ' + stars_str + ' ' + name + (' (' + country + ')' if country else ''))
-                print('    ' + str(price) + ' руб., ' + str(nights) + ' ночей, ' + date + ', ' + meal)
-                # Партнёрская ссылка
-                tour_id = t.get('id', t.get('tour_id', ''))
-                if tour_id:
-                    print('    Ссылка: https://partner.level.travel/tour/' + str(tour_id) + '?token=' + TOKEN)
-        else:
-            print('  Туры не найдены. Попробуйте изменить параметры: страну, даты, город вылета.')
-
-    # Список стран (подсказка агенту)
-    if ACTION in ('list_countries', 'check_all'):
-        req = urllib.request.Request(BASE + '/countries', headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=10) as r:
-            c_list = json.loads(r.read().decode())
-        countries = c_list if isinstance(c_list, list) else c_list.get('countries', [])
-        print('Level.Travel — доступные страны:')
-        for c in countries[:15]:
-            cname = c.get('name', c.get('title', str(c)))
-            cid = c.get('id', '')
-            print('  ' + cname + (' (id: ' + str(cid) + ')' if cid else ''))
-
-except Exception as e:
-    print('Ошибка Level.Travel: ' + str(e))`
-            },
             flightradar: {
                 name: 'Flightradar24 (рейсы)',
                 fields: [
@@ -7817,7 +7742,6 @@ except Exception as e:
             aws_s3:          ['upload_file', 's3_list', 's3_upload'],
             aviasales:       ['search_flights', 'aviasales_search'],
             travelpayouts:   ['generate_affiliate_links', 'search_prices'],
-            level_travel:    ['search_tours', 'list_countries'],
             tutu:            ['search_flights', 'tutu_search'],
             flightradar:     ['flightradar_status', 'check_flight'],
             cdek:            ['cdek_track', 'check_delivery'],
@@ -8448,7 +8372,6 @@ except Exception as e:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Путешествия / Доставка</option>
                             <option value="aviasales">Aviasales (авиабилеты)</option>
                             <option value="travelpayouts">Travelpayouts (партнёрские ссылки)</option>
-                            <option value="level_travel">Level.Travel (поиск туров)</option>
                             <option value="tutu">Tutu.ru (ЖД билеты)</option>
                             <option value="flightradar">Flightradar24 (рейсы)</option>
                             <option value="cdek">СДЭК (доставка)</option>
