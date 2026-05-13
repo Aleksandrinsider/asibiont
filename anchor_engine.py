@@ -11284,7 +11284,17 @@ class AnchorEngine:
                             except Exception as _apfe:
                                 logger.debug("[ANCHOR-AUTOPILOT] user_fin_amounts error: %s", _apfe)
                             _ap_gen_nums = {re.sub(r'\s', '', m) for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cleaned_result)}
-                            _ap_halluc_nums = _ap_gen_nums - _ap_user_fin
+                            # Исключаем легитимные числа, которые НЕ являются финансовыми галлюцинациями:
+                            # — текущий год и ближайшие годы (1900-2099)
+                            # — однозначно не-финансовые паттерны: ID постов, record slugs
+                            _ap_safe_nums: set[str] = set()
+                            _current_year = datetime.now(timezone.utc).year
+                            for _yr in range(_current_year - 5, _current_year + 5):
+                                _ap_safe_nums.add(str(_yr))
+                            # Также числа из внешних источников (RSS, API) — если они не в контексте денег
+                            # Финансовый паттерн (руб/₽/$/€/eur/usd с числом) уже отфильтрован _fin_halluc_re выше.
+                            # Просто числа без валютного контекста — НЕ блокируем.
+                            _ap_halluc_nums = _ap_gen_nums - _ap_user_fin - _ap_safe_nums
                             if _ap_halluc_nums:
                                 logger.warning(
                                     "[ANCHOR-AUTOPILOT] FINANCIAL HALLUCINATION blocked user=%d agent=%s halluc_nums=%s text=%r",
@@ -19836,7 +19846,12 @@ class AnchorEngine:
                 )
                 if _cleaned and _fin_coord_re.search(_cleaned):
                     _cs_gen_nums = {re.sub(r'\s', '', m) for m in re.findall(r'\b(\d[\d\s]{1,8}\d|\d{3,})\b', _cleaned)}
-                    _cs_halluc_nums = _cs_gen_nums - _coord_user_fin_amounts
+                    # Исключаем легитимные года
+                    _cs_safe_nums: set[str] = set()
+                    _cs_cur_year = datetime.now(timezone.utc).year
+                    for _yr in range(_cs_cur_year - 5, _cs_cur_year + 5):
+                        _cs_safe_nums.add(str(_yr))
+                    _cs_halluc_nums = _cs_gen_nums - _coord_user_fin_amounts - _cs_safe_nums
                     if _cs_halluc_nums:
                         logger.warning(
                             "[COORD] FINANCIAL HALLUCINATION blocked step user=%d agent=%s halluc_nums=%s text=%r",

@@ -14566,6 +14566,27 @@ async def send_outreach_email(
                 f"выполняю send_follow_up_email.\n{_fu_result}"
             )
 
+        # ── ANTI-SPAM: глобальная дедупликация по email (все кампании, все агенты) ──
+        # Если контакт уже получал письмо от ЛЮБОГО агента за последние 30 дней — блокируем.
+        # Это предотвращает дублирующийся аутрич от разных агентов (Hugo/Pablo/Olivia и т.д.)
+        GLOBAL_DEDUP_DAYS = 30
+        _global_existing = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            EmailOutreach.sent_at >= dt.now(tz.utc) - timedelta(days=GLOBAL_DEDUP_DAYS),
+        ).first()
+        if _global_existing:
+            _gc_camp = session.query(EmailCampaign).filter_by(id=_global_existing.campaign_id).first()
+            _gc_name = _gc_camp.name if _gc_camp else f'#{_global_existing.campaign_id}'
+            _gc_sent_by = _global_existing.sent_by_agent or 'unknown'
+            _gc_days_ago = (dt.now(tz.utc) - _global_existing.sent_at.replace(tzinfo=tz.utc)).days if _global_existing.sent_at else '?'
+            return (
+                f"⛔ {recipient_email} уже получал письмо {_gc_days_ago} дн. назад "
+                f"от агента {_gc_sent_by} в кампании «{_gc_name}». "
+                f"НЕ отправляй повторно — ищи новые контакты через web_search или list_email_contacts."
+            )
+
         # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
         # 1. Не слать тому, кому уже отправляли из другой кампании последние 14 дней
         CROSS_CAMPAIGN_COOLDOWN_DAYS = 14
@@ -14579,6 +14600,18 @@ async def send_outreach_email(
         if cross_existing:
             other_camp = session.query(EmailCampaign).filter_by(id=cross_existing.campaign_id).first()
             other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
+            # Проверяем, не слишком ли рано для follow-up, ПРЕЖДЕ чем перенаправлять
+            if cross_existing.last_follow_up_at:
+                _last = cross_existing.last_follow_up_at
+                if not _last.tzinfo:
+                    _last = _last.replace(tzinfo=tz.utc)
+                _days_since = (dt.now(tz.utc) - _last).days
+                if _days_since < 3:
+                    return (
+                        f"⛔ {recipient_email} уже в кампании «{other_name}» (агент {cross_existing.sent_by_agent or '?'}), "
+                        f"follow-up ещё рано ({_days_since} дн. из 3 мин.). "
+                        f"Ищи новые контакты через web_search."
+                    )
             _auto_body = body or _build_default_followup_body(
                 user_lang=(getattr(user, 'language', 'ru') or 'ru'),
                 recipient_name=(recipient_name or ''),
@@ -18224,6 +18257,14 @@ async def save_email_contact(
         email_clean = (email or '').strip().lower()
         if not email_clean or '@' not in email_clean:
             return " Некорректный email"
+        # Валидация формата: домен должен содержать точку (TLD)
+        _email_local_part = email_clean.split('@')[0]
+        _email_domain_part = email_clean.split('@')[-1]
+        import re as _re_email
+        if not _re_email.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_clean):
+            return (f"⛔ {email_clean} — некорректный формат email. "
+                    f"Домен должен содержать точку (например name@domain.com). "
+                    f"Найди реальный email через web_search или проверь в incoming письмах.")
 
         # Внутренние агенты не должны сохраняться как email-лиды для outreach.
         def _norm_agent_token(_s: str) -> str:
@@ -18508,11 +18549,14 @@ async def update_email_contact_status(
 
 async def list_email_contacts(
     status_filter: str = 'all',
+    exclude_bounced: bool = True,
     user_id: int = None,
     session=None,
     close_session: bool = True,
 ):
-    """Список email-контактов из справочника пользователя."""
+    """Список email-контактов из справочника пользователя.
+    exclude_bounced=True — не показывать контакты со статусом bounced (отскок/недоставлено).
+    """
     if not session:
         session = Session()
         close_session = True
@@ -18523,6 +18567,8 @@ async def list_email_contacts(
             return " Пользователь не найден"
 
         query = session.query(EmailContact).filter_by(user_id=user.id)
+        if exclude_bounced:
+            query = query.filter(EmailContact.status != 'bounced')
         if status_filter and status_filter != 'all':
             query = query.filter_by(status=status_filter)
         total_count = query.count()
