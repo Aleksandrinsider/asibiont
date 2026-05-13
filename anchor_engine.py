@@ -103,14 +103,20 @@ async def _safe_http(**kwargs):
 
 def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
     """Определяет род агента. Приоритет — явный пол из БД (explicit_gender).
-    Если explicit_gender не задан — возвращает False (мужской род по умолчанию).
+    Если explicit_gender не задан или содержит неопределённое значение —
+    определяет по окончанию имени (name-based fallback).
     """
     if explicit_gender:
         g = explicit_gender.strip().lower()
-        if g == 'female':
+        if g in ('female', 'женский', 'жен'):
             return True
-        if g == 'male':
+        if g in ('male', 'мужской', 'муж'):
             return False
+    # Name-based fallback: русские женские имена оканчиваются на а/я
+    if name:
+        _name_clean = name.strip()
+        if _name_clean and _name_clean[-1] in 'аяАЯ' and _name_clean[-2:].lower() not in ('ша', 'жа'):
+            return True
     return False
 
 
@@ -12507,7 +12513,7 @@ class AnchorEngine:
                 or _is_delegation_message(_chain_clean, _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
-                _is_fem_chain = _detect_agent_is_female(_next_ag.name)
+                _is_fem_chain = _detect_agent_is_female(_next_ag.name, explicit_gender=getattr(_next_ag, 'gender', ''))
                 _chain_sanitized = _sanitize_proactive_text(_chain_clean, is_fem=_is_fem_chain)
                 try:
                     await self.bot.send_message(
@@ -28438,7 +28444,7 @@ class AnchorEngine:
                                 for n, g in _ua_names
                                 if (n or '').strip()
                                 and (n or '').strip().lower() in _short_low
-                                and ((g or '').lower() == 'female' or _detect_agent_is_female(n or ''))
+                                and ((g or '').lower() == 'female' or _detect_agent_is_female(n or '', explicit_gender=g))
                             }
                             if _fem_names:
                                 _short = _sanitize_proactive_text(_short, fem_names=_fem_names)
@@ -28492,8 +28498,19 @@ class AnchorEngine:
                             '',
                             message,
                         ).strip()
-                    # Гендерная коррекция: is_fem=False для мужских агентов
-                    _is_fem_agent = _detect_agent_is_female(_agent_name)
+                    # Гендерная коррекция: определяем род агента по настройкам или имени
+                    _agent_gender = ''
+                    try:
+                        from models import UserAgent as _UA_gender
+                        _ua_gender_row = session.query(_UA_gender.gender).filter(
+                            _UA_gender.author_id == user.id,
+                            _UA_gender.name == _agent_name,
+                        ).first()
+                        if _ua_gender_row:
+                            _agent_gender = _ua_gender_row[0] or ''
+                    except Exception:
+                        pass
+                    _is_fem_agent = _detect_agent_is_female(_agent_name, explicit_gender=_agent_gender)
                     message = _sanitize_proactive_text(message, is_fem=_is_fem_agent)
                 except Exception as _gender_agent_err:
                     logger.debug("[ANCHOR] agent gender fix failed: %s", _gender_agent_err)

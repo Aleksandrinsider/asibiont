@@ -8352,7 +8352,7 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         "Не используй шаблонные фразы — будь живым и естественным.\n"
     )
     _agent_name_str = (_agent.get('name') or '').strip()
-    _agent_fem = _detect_agent_is_female(_agent_name_str)
+    _agent_fem = _detect_agent_is_female(_agent_name_str, explicit_gender=_agent.get('gender', ''))
     if _agent_fem:
         _system += (
             f"ГЕНДЕР: {_agent_name_str} — женское имя. Используй женский род: "
@@ -8483,14 +8483,20 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
 
 def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
     """Определяет род агента. Приоритет — явный пол из БД (explicit_gender).
-    Если explicit_gender не задан — возвращает False (мужской род по умолчанию).
+    Если explicit_gender не задан или содержит неопределённое значение —
+    определяет по окончанию имени (name-based fallback).
     """
     if explicit_gender:
         g = explicit_gender.strip().lower()
-        if g == 'female':
+        if g in ('female', 'женский', 'жен'):
             return True
-        if g == 'male':
+        if g in ('male', 'мужской', 'муж'):
             return False
+    # Name-based fallback: русские женские имена оканчиваются на а/я
+    if name:
+        _name_clean = name.strip()
+        if _name_clean and _name_clean[-1] in 'аяАЯ' and _name_clean[-2:].lower() not in ('ша', 'жа'):
+            return True
     return False
 
 
@@ -13827,7 +13833,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             if _answered_agent_early:
                 try:
                     from anchor_engine import _sanitize_proactive_text as _spt_direct, _detect_agent_is_female as _daf_direct
-                    _is_fem_direct = _daf_direct(_answered_agent_early.get('name', ''))
+                    _is_fem_direct = _daf_direct(
+                        _answered_agent_early.get('name', ''),
+                        explicit_gender=_answered_agent_early.get('gender', ''),
+                    )
                     _corrected = _spt_direct(response_text, is_fem=_is_fem_direct)
                     if _corrected and _corrected.strip():
                         response_text = _corrected
