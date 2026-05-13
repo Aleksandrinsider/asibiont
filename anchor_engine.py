@@ -20606,6 +20606,27 @@ class AnchorEngine:
                                     try: _sum_sess.close()
                                     except Exception: pass
                                     return True
+
+                                # AAL dedup: если за последние 40 мин уже есть coordinator_summary в AAL —
+                                # пропускаем ВСЕ сохранения (и Interaction, и AAL), чтобы не плодить
+                                # дубли в хронологии дашборда при каждом цикле координатора.
+                                _recent_aal = _sum_sess.execute(_sql_sumchk(
+                                    "SELECT id FROM agent_activity_log WHERE user_id=:uid "
+                                    "AND activity_type='coordinator_summary' "
+                                    "AND created_at >= :cutoff LIMIT 1"
+                                ), {'uid': user.id, 'cutoff': _sum_cutoff}).fetchone()
+                                if _recent_aal:
+                                    logger.info(
+                                        "[COORD] coordinator_summary AAL deduped — recent entry (id=%s), skipping all saves",
+                                        _recent_aal[0]
+                                    )
+                                    try: _sum_sess.close()
+                                    except Exception: pass
+                                    # Не отправляем в Telegram — AAL уже есть
+                                    return True
+
+                                # Interaction dedup: если за последние 40 мин уже есть coordinator_summary
+                                # в Interaction — сохраняем только AAL (для хронологии), Interaction не дублируем.
                                 _recent_summary = _sum_sess.execute(_sql_sumchk(
                                     "SELECT id FROM interactions WHERE user_id=:uid "
                                     "AND message_type='proactive' "
@@ -20614,7 +20635,7 @@ class AnchorEngine:
                                 ), {'uid': user.id, 'cutoff': _sum_cutoff}).fetchone()
                                 if _recent_summary:
                                     logger.info("[COORD] coordinator_summary interaction deduped — recent exists (id=%s)", _recent_summary[0])
-                                    # Interaction дедуплицирована, но AAL всё равно создаём для хронологии
+                                    # Interaction уже есть, но AAL ещё нет — сохраняем только AAL
                                     try:
                                         _goals_titles_dd = ', '.join(
                                             (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])

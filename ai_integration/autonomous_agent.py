@@ -7224,45 +7224,40 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
 
             # Сравниваем первые 80 символов нормализованного текста
             _dedup_prefix = _raw_text[:80]
-            if _is_directive:
-                # Exact prefix dedup: 60 минут (расширено с 5 чтобы не повторять одинаковые поручения)
-                _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=60)
-                _recent_for_exact = (
-                    _s.query(_Intr)
-                    .filter(
-                        _Intr.user_id == _u.id,
-                        _Intr.message_type == 'agent_msg',
-                        _Intr.created_at >= _since,
-                    )
-                    .order_by(_Intr.created_at.desc())
-                    .limit(30)
-                    .all()
+            # Exact prefix dedup: 40 минут — для ВСЕХ сообщений (ASI + агенты),
+            # чтобы предотвратить дублирование при множественных путях сохранения.
+            # Раньше дедуплицировались только ASI-директивы, агентские отчёты — нет.
+            _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=40)
+            _recent_for_exact = (
+                _s.query(_Intr)
+                .filter(
+                    _Intr.user_id == _u.id,
+                    _Intr.message_type == 'agent_msg',
+                    _Intr.created_at >= _since,
                 )
-                for _rd in _recent_for_exact:
-                    _rd_txt = str(_rd.content or '').strip()
-                    _rd_agent = ''
-                    try:
-                        _p_rd = json.loads(_rd_txt)
-                        if isinstance(_p_rd, dict) and isinstance(_p_rd.get('__agent'), dict):
-                            _rd_agent = str(_p_rd.get('__agent', {}).get('name') or '').strip()
-                            _rd_txt = str(_p_rd.get('text') or '').strip()
-                    except Exception:
-                        pass
+                .order_by(_Intr.created_at.desc())
+                .limit(30)
+                .all()
+            )
+            for _rd in _recent_for_exact:
+                _rd_txt = str(_rd.content or '').strip()
+                try:
+                    _p_rd = json.loads(_rd_txt)
+                    if isinstance(_p_rd, dict) and isinstance(_p_rd.get('__agent'), dict):
+                        _rd_txt = str(_p_rd.get('text') or '').strip()
+                except Exception:
+                    pass
 
-                    # Не считаем отчёты Кристины/Марка директивами
-                    if _rd_agent and _rd_agent.upper() != 'ASI':
-                        continue
+                if _rd_txt and _rd_txt[:80].lower() == _dedup_prefix.lower():
+                    logger.warning(
+                        "[DIRECTOR] DEDUP: identical message already sent %s ago for tg=%s, skipping: %s...",
+                        str(_dt_dir.now(_tz_dir.utc) - _rd.created_at.replace(tzinfo=_tz_dir.utc))[:7],
+                        telegram_id, _dedup_prefix[:40]
+                    )
+                    return False
 
-                    if _rd_txt and _rd_txt[:80].lower() == _dedup_prefix.lower():
-                        logger.warning(
-                            "[DIRECTOR] DEDUP: identical directive already sent %s ago for tg=%s, skipping: %s...",
-                            str(_dt_dir.now(_tz_dir.utc) - _rd.created_at.replace(tzinfo=_tz_dir.utc))[:7],
-                            telegram_id, _dedup_prefix[:40]
-                        )
-                        return False
-
-                # Semantic dedup: если за последние 2ч уже была директива с теми же ключевыми фразами
-                # (напр. "застрял на 44%, сменим тактику" → "застрял на 44%, давай сменим")
+            # Semantic dedup: только для ASI-директив (специфические маркеры переключения тактики).
+            if _is_directive:
                 _sem_since = _dt_dir.now(_tz_dir.utc) - _td_dir(hours=2)
                 _content_lower = _raw_text.lower()
                 _SEM_MARKERS = ('застрял', 'сменим тактику', 'смени тактику', 'давай сменим',
@@ -7283,16 +7278,12 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
                     )
                     for _rd in _recent_directives:
                         _rd_txt = str(_rd.content or '')
-                        _rd_agent = ''
                         try:
                             _p_rd = json.loads(_rd_txt)
                             if isinstance(_p_rd, dict) and isinstance(_p_rd.get('__agent'), dict):
-                                _rd_agent = str(_p_rd.get('__agent', {}).get('name') or '').strip()
                                 _rd_txt = str(_p_rd.get('text') or '')
                         except Exception:
                             pass
-                        if _rd_agent and _rd_agent.upper() != 'ASI':
-                            continue  # skip non-director agent reports
                         _rd_txt = _rd_txt.lower()
                         if any(_re_sem_dd.search(m, _rd_txt) for m in _SEM_MARKERS):
                             logger.warning(
