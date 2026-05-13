@@ -6044,8 +6044,8 @@ class HybridAutonomousAgent:
                     _ag_gender = True
                 elif _ag_gender_raw in ('male', 'мужской', 'муж'):
                     _ag_gender = False
-            if _ag_name_final:
-                final = _normalize_agent_gender_grammar(final, _ag_name_final, is_female=_ag_gender)
+            if _ag_name_final or _ag_gender is not None:
+                final = _normalize_agent_gender_grammar(final, _ag_name_final or '', is_female=_ag_gender)
             # Мягкая правка частой фразы (качество текста, без изменения логики).
             final = re.sub(r'(?i)\bкартинка\s+готов\.?', 'Изображение готово.', final or '')
         except Exception as _gfix_err:
@@ -8482,9 +8482,8 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
 
 
 def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
-    """Определяет род агента. Приоритет — явный пол из БД (explicit_gender).
-    Если explicit_gender не задан или содержит неопределённое значение —
-    определяет по окончанию имени (name-based fallback).
+    """Определяет род агента. Только по явному полю gender из БД (explicit_gender).
+    Если gender не задан — возвращает False (мужской род по умолчанию).
     """
     if explicit_gender:
         g = explicit_gender.strip().lower()
@@ -8492,18 +8491,13 @@ def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
             return True
         if g in ('male', 'мужской', 'муж'):
             return False
-    # Name-based fallback: русские женские имена оканчиваются на а/я
-    if name:
-        _name_clean = name.strip()
-        if _name_clean and _name_clean[-1] in 'аяАЯ' and _name_clean[-2:].lower() not in ('ша', 'жа'):
-            return True
     return False
 
 
 def _normalize_agent_gender_grammar(text: str, agent_name: str, is_female: bool | None = None) -> str:
     """Safety-net: выравнивает базовые русские формы прошедшего времени под род агента.
     Для EN-текста ничего не меняет.
-    is_female — приоритетный флаг из БД (gender агента). Если None — определяется по имени.
+    is_female — флаг из БД (gender агента). None = False (мужской род по умолчанию).
     """
     t = (text or '').strip()
     if not t:

@@ -128,12 +128,9 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 {_job_line}
 """
 
-    # Гендерная инструкция: приоритет — поле gender из БД, fallback — окончание имени
+    # Гендерная инструкция: только по явному полю gender из БД
     _gender_bd = (agent_data.get('gender') or '').strip().lower()
     _is_fem = _gender_bd in ('female', 'женский', 'жен')
-    if not _is_fem and _gender_bd not in ('male', 'мужской', 'муж'):
-        # Fallback: женские имена обычно заканчиваются на а/я
-        _is_fem = bool(name) and name[-1] in 'аяАЯ' and name[-2:].lower() not in ('ша', 'жа')
     if _is_fem:
         overlay += (
             "\nВАЖНО: Ты ЖЕНЩИНА. Используй женский род во всех формах: "
