@@ -3520,8 +3520,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # ── Матрица делегирования команды ──
     _team_block = ''
     if team_profiles:
+        # Guard: фильтруем не-dict элементы (защита от повреждённых данных)
+        _team_profiles_safe = [tp for tp in (team_profiles or []) if isinstance(tp, dict)]
         _delegate_lines = []
-        for tp in team_profiles:
+        for tp in _team_profiles_safe:
             if tp.get('name') == agent_name:
                 continue
             _tp_caps = tp.get('capabilities', [])[:5]
@@ -12930,6 +12932,13 @@ class AnchorEngine:
                     'script_actions': _script_actions[:8],
                 })
 
+            # Guard: фильтруем элементы _profiles — защита от повреждённых данных (строки вместо dict)
+            _raw_profiles = _profiles
+            _profiles = [p for p in _raw_profiles if isinstance(p, dict)]
+            _n_filtered = len(_raw_profiles) - len(_profiles)
+            if _n_filtered:
+                logger.warning("[COORD] filtered %d non-dict items from _profiles", _n_filtered)
+
             _goals = [g for g in (data.get('goals', []) or []) if isinstance(g, dict)]
             # Нормализуем progress из метрики (progress_percentage в снапшоте может быть устаревшим)
             for _g_norm in _goals:
@@ -14129,10 +14138,15 @@ class AnchorEngine:
             # Гарантируем минимум 1 шаг на каждого реального агента + 1 на каждую цель.
             _n_real_agents = len([a for a in real_agents if getattr(a, 'id', 0) != 0])
             # Динамически определяем агентов по типу интеграций (для промпта)
-            _email_ag_names = [p['name'] for p in _profiles if any(c.get('key') == 'email' for c in p.get('caps', []))]
-            _other_ag_names = [p['name'] for p in _profiles if not any(c.get('key') == 'email' for c in p.get('caps', []))]
+            # Guard: _profiles может содержать строки (повреждённые данные БД) — фильтруем только dict
+            _profiles_dicts = [p for p in _profiles if isinstance(p, dict)]
+            if len(_profiles_dicts) != len(_profiles):
+                _n_str = len(_profiles) - len(_profiles_dicts)
+                logger.warning("[COORD] filtered %d non-dict elements from _profiles", _n_str)
+            _email_ag_names = [p['name'] for p in _profiles_dicts if any(c.get('key') == 'email' for c in p.get('caps', []))]
+            _other_ag_names = [p['name'] for p in _profiles_dicts if not any(c.get('key') == 'email' for c in p.get('caps', []))]
             # Diagnostic: логируем какие агенты переданы в координатор
-            _agent_names_list = [p.get('name', '') for p in _profiles if p.get('name', '').strip()]
+            _agent_names_list = [p.get('name', '') for p in _profiles_dicts if p.get('name', '').strip()]
             logger.info("[COORD] Starting with %d agent profiles: %s", len(_agent_names_list), _agent_names_list)
             # Шаги плана: не более 3 агентов за цикл.
             # Причина: каждый агент получает до 150с → 5+ агентов = 12+ мин > порог stuck-очистки (15 мин).
