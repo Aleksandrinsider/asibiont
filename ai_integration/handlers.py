@@ -7,8 +7,9 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import requests
 import aiohttp
+import asyncio
 from ai_integration.utils import _safe_http
-from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach, EmailContact, Anchor, AnchorPriority
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach, EmailContact, Anchor, AnchorPriority, UserAgent
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
@@ -21877,3 +21878,108 @@ async def push_file_to_github(
     except Exception as _e:
         logger.error(f"[PUSH_FILE_GITHUB] error: {_e}")
         return f"Ошибка при записи файла в GitHub: {_e}"
+
+
+# ── ask_agent ──────────────────────────────────────────────────────────────────
+async def ask_agent(agent_name: str, question: str, user_id: int = None) -> str:
+    """
+    Задать вопрос другому агенту команды и получить ответ.
+    Используется AI-агентами через инструмент ask_agent.
+    """
+    if not user_id:
+        return "Ошибка: не указан user_id"
+    if not agent_name or not agent_name.strip():
+        return "Ошибка: не указано имя агента"
+    if not question or not question.strip():
+        return "Ошибка: не указан вопрос"
+
+    _an = agent_name.strip()
+    try:
+        from .autonomous_agent import _exec_agent_for_director
+
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return "Ошибка: пользователь не найден"
+
+            # Ищем агента по имени (case-insensitive) среди активных
+            agents = session.query(UserAgent).filter(
+                UserAgent.user_id == user.id,
+                UserAgent.is_active == True
+            ).all()
+
+            target_agent = None
+            for a in agents:
+                if _an.lower() == (a.name or '').strip().lower():
+                    target_agent = a
+                    break
+
+            if not target_agent:
+                return f"Агент '{_an}' не найден в твоей команде"
+
+            # Строим словарь агента как ожидает _exec_agent_for_director
+            agent_dict = {
+                'name': target_agent.name or '',
+                'python_code': target_agent.python_code or '',
+                'job_title': target_agent.job_title or '',
+                'specialization': target_agent.specialization or '',
+                'description': target_agent.description or '',
+                'user_api_keys': target_agent.user_api_keys or '',
+                'service_label': target_agent.service_label or '',
+                'gender': target_agent.gender or '',
+            }
+
+            # Задача — ответить на вопрос коллеги
+            task = f"Ответь на вопрос от другого агента: {question}"
+
+            # Запускаем агента-получателя через _exec_agent_for_director
+            # с таймаутом 25 секунд
+            try:
+                result = await asyncio.wait_for(
+                    _exec_agent_for_director(agent_dict, task, user_id),
+                    timeout=25.0,
+                )
+            except asyncio.TimeoutError:
+                return f"Агент {_an} сейчас занят, попробуй спросить позже"
+            except Exception as _exec_err:
+                logger.warning(f"[ASK_AGENT] exec error: {_exec_err}")
+                return f"Не удалось получить ответ от {_an}: {_exec_err}"
+
+            if result and isinstance(result, tuple) and result[0]:
+                return result[0]
+            return f"Агент {_an} не дал ответа на вопрос"
+
+        finally:
+            session.close()
+    except Exception as _e:
+        logger.error(f"[ASK_AGENT] error: {_e}")
+        return f"Ошибка при обращении к агенту {_an}: {_e}"
+
+
+# ── tell_agent ─────────────────────────────────────────────────────────────────
+async def tell_agent(agent_name: str, message: str, user_id: int = None) -> str:
+    """
+    Отправить сообщение/факт/результат другому агенту (без ожидания ответа).
+    Используется AI-агентами через инструмент tell_agent.
+    """
+    if not agent_name or not agent_name.strip():
+        return "Ошибка: не указано имя агента"
+    if not message or not message.strip():
+        return "Ошибка: не указано сообщение"
+
+    _an = agent_name.strip()
+    try:
+        from .autonomous_agent import _agent_bus_push_message
+
+        success = await _agent_bus_push_message(
+            recipient_name=_an,
+            message=message.strip(),
+            sender_name='агент',
+        )
+        if success:
+            return f"✅ Информация передана агенту {_an}"
+        return f"Не удалось передать информацию агенту {_an}"
+    except Exception as _e:
+        logger.error(f"[TELL_AGENT] error: {_e}")
+        return f"Ошибка при отправке сообщения агенту {_an}: {_e}"
