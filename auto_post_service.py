@@ -719,51 +719,8 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         except Exception as img_err:
             logger.warning(f"[AUTO_POST] Image generation failed for {user_id}: {img_err}")
 
-        # === Создаём blog Note (source='blog') чтобы пост отображался на сайте ===
-        try:
-            # Защита: если предыдущий commit/log упал, очищаем failed transaction state.
-            session.rollback()
-            from models import Note as _NoteAP
-            from ai_integration.handlers import _make_blog_slug as _make_slug_ap
-            _blog_title_ap = content.strip().split('\n')[0][:120].strip()
-            if not _blog_title_ap or len(_blog_title_ap) < 5:
-                _blog_title_ap = content[:80].strip()
-            _blog_content_ap = content.strip()
-            # Если есть картинка — вставляем в начало контента блог-поста
-            if post.image_data:
-                _blog_content_ap = f"![Иллюстрация к посту](/blog/image/PENDING_AP_ID)\n\n{_blog_content_ap}"
-            elif image_url:
-                _blog_content_ap = f"![Иллюстрация к посту]({image_url})\n\n{_blog_content_ap}"
-            _blog_note_ap = _NoteAP(
-                user_id=user.id,
-                title=_blog_title_ap,
-                content=_blog_content_ap,
-                source='blog',
-            )
-            session.add(_blog_note_ap)
-            session.commit()
-            _blog_note_ap.slug = _make_slug_ap(_blog_title_ap, _blog_note_ap.id)
-            if post.image_data:
-                _blog_note_ap.image_data = post.image_data
-                _blog_note_ap.image_mime = post.image_mime or 'image/webp'
-                _blog_note_ap.content = _blog_note_ap.content.replace('PENDING_AP_ID', str(_blog_note_ap.id))
-            session.commit()
-            logger.info(f"[AUTO_POST] Blog note created: id={_blog_note_ap.id}, slug={_blog_note_ap.slug!r}")
-            # Fire-and-forget EN translation
-            try:
-                import asyncio as _aio_ap
-                from ai_integration.handlers import _translate_blog_post_to_en as _tr_ap
-                _aio_ap.get_running_loop().create_task(
-                    _tr_ap(_blog_note_ap.id, _blog_title_ap, _blog_content_ap)
-                )
-            except Exception:
-                pass
-        except Exception as _bn_ap_err:
-            logger.warning(f"[AUTO_POST] Blog note creation failed: {_bn_ap_err}")
-            try:
-                session.rollback()
-            except Exception:
-                pass
+        # Ежедневные отчёты НЕ создают blog Note — они идут только в ленту новостей (Post).
+        # Публичный блог на сайте /blog/ предназначен для ручных/осознанных публикаций.
 
         # === Публикация в Telegram канал (если настроен) ===
         channel_published = False
