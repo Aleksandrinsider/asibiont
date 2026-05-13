@@ -1369,7 +1369,7 @@ class OfficeEngine:
                 )
                 if not agents:
                     continue
-                # Cooldown: не было ли L2-координации за последние 30 минут?
+                # Cooldown: не было ли L2-координации за последние 10 минут?
                 from models import Anchor
                 _now = datetime.now(timezone.utc)
                 recent = (
@@ -1378,7 +1378,7 @@ class OfficeEngine:
                         Anchor.user_id == prof.user_id,
                         Anchor.anchor_type == 'agent_office_update',
                         Anchor.source.like('l2-coord:%'),
-                        Anchor.created_at >= _now - timedelta(minutes=30),
+                        Anchor.created_at >= _now - timedelta(minutes=10),
                     )
                     .first()
                 )
@@ -1406,7 +1406,7 @@ class OfficeEngine:
             await asyncio.sleep(3)
 
     async def _coordinate_user_goals(self, entry: dict):
-        """ASI анализирует цели и назначает задачу одному агенту."""
+        """ASI анализирует цели и распределяет задачи между агентами."""
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
         import aiohttp
 
@@ -1587,60 +1587,31 @@ class OfficeEngine:
         finally:
             s.close()
 
-        # Собираем реальные инструменты каждого агента
+        # Собираем реальные инструменты каждого агента через универсальный парсер
         _agents_caps = []
         _all_agent_keys = ''  # собираем ключи ВСЕХ агентов для проверки интеграций
         for aid, aname, aspec, adesc in agents:
             _line = f"- {aname} ({aspec or 'специалист'})"
-            # Инferируем возможности из api_keys
             try:
                 from models import UserAgent as _UA_coord
                 _ua_c = s.query(_UA_coord).filter_by(id=aid).first()
                 if _ua_c:
                     _raw_keys = getattr(_ua_c, 'user_api_keys', '') or ''
+                    _python_code = getattr(_ua_c, 'python_code', '') or ''
+                    _tools_allowed = getattr(_ua_c, 'tools_allowed', '') or ''
                     try:
                         from config import decrypt_token as _dt_coord
                         _keys_c = (_dt_coord(_raw_keys) if _raw_keys.startswith(('enc:', 'obf:')) else _raw_keys).lower()
                     except Exception:
                         _keys_c = _raw_keys.lower()
                     _all_agent_keys += ' ' + _keys_c
-                    _caps_c = []
-                    if any(k in _keys_c for k in ('smtp_', 'resend_', 'sendgrid_', 'mailgun_', 'gmail_', 'yandex_', 'mailru_')):
-                        _caps_c.append('отправка email')
-                    if any(k in _keys_c for k in ('imap_', 'gmail_')):
-                        _caps_c.append('чтение почты')
-                    if 'telegram' in _keys_c:
-                        _caps_c.append('Telegram')
-                    if 'github' in _keys_c:
-                        _caps_c.append('GitHub search_users→save_email_contact→send_outreach_email')
-                    if any(k in _keys_c for k in ('rss_', 'rss')):
-                        _caps_c.append('RSS-мониторинг')
-                    if any(k in _keys_c for k in ('amo_', 'amocrm')):
-                        _caps_c.append('AmoCRM (сделки, контакты)')
-                    if any(k in _keys_c for k in ('alphavantage', 'alpha_vantage')):
-                        _caps_c.append('биржевые данные (Alpha Vantage)')
-                    if any(k in _keys_c for k in ('slack', 'slack_bot')):
-                        _caps_c.append('Slack')
-                    if any(k in _keys_c for k in ('notion', 'notion_token')):
-                        _caps_c.append('Notion')
-                    if any(k in _keys_c for k in ('linkedin', 'li_at')):
-                        _caps_c.append('LinkedIn')
-                    if any(k in _keys_c for k in ('vk_', 'vkontakte')):
-                        _caps_c.append('ВКонтакте')
-                    if any(k in _keys_c for k in ('twitter', 'x_api')):
-                        _caps_c.append('Twitter/X')
-                    if any(k in _keys_c for k in ('youtube', 'yt_api')):
-                        _caps_c.append('YouTube')
-                    if any(k in _keys_c for k in ('jira', 'atlassian')):
-                        _caps_c.append('Jira')
-                    if any(k in _keys_c for k in ('trello',)):
-                        _caps_c.append('Trello')
-                    if any(k in _keys_c for k in ('hubspot',)):
-                        _caps_c.append('HubSpot')
-                    if any(k in _keys_c for k in ('google_sheets', 'gsheets')):
-                        _caps_c.append('Google Sheets')
-                    if _caps_c:
-                        _line += f" [{', '.join(_caps_c)}]"
+                    # Универсальное определение способностей — покрывает ЛЮБЫЕ интеграции
+                    from ai_integration.autonomous_agent import _parse_agent_integrations
+                    _caps = _parse_agent_integrations(
+                        _raw_keys, python_code=_python_code, tools_allowed=_tools_allowed,
+                    )
+                    if _caps:
+                        _line += f" [{', '.join(_caps)}]"
                     else:
                         _line += " [веб-поиск, исследования, создание постов]"
             except Exception:
@@ -1783,10 +1754,10 @@ class OfficeEngine:
             "   АЛЬТЕРНАТИВА: «Найди 15-20 контактов через search_users по [критерий] и отправь каждому через send_outreach_email».\n"
             "   Одна задача агента должна генерировать 10-50 писем за цикл, а не одно.\n\n"
             "Ответь JSON (без ```):\n"
-            '{"action": "delegate", "agent_name": "имя", "task": "...", "goal": "...", "urgency": "normal"}\n'
-            'или {"action": "delegate_multiple", "assignments": [{"agent_name": "...", "task": "...", "goal": "...", "urgency": "normal"}, ...]}\n'
+            '{"action": "delegate_multiple", "assignments": [{"agent_name": "...", "task": "...", "goal": "...", "urgency": "normal"}, ...]}\n'
             'или {"action": "wait", "reason": "..."}\n'
-            "ТОЛЬКО JSON, без пояснений."
+            "ТОЛЬКО JSON, без пояснений.\n"
+            "ВАЖНО: Назначай задачи МИНИМУМ 2 агентам за цикл. Распределяй задачи между разными агентами чтобы каждый двигал свою часть целей."
         )
 
         answer = None
@@ -1797,7 +1768,7 @@ class OfficeEngine:
                         "https://api.deepseek.com/chat/completions",
                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                         json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                              "max_tokens": 2000, "temperature": 0.4},
+                              "max_tokens": 2000, "temperature": 0.7},
                         timeout=aiohttp.ClientTimeout(total=180),
                     ) as resp:
                         if resp.status != 200:
@@ -1833,30 +1804,26 @@ class OfficeEngine:
             logger.info("[OFFICE-L2] user=%d: wait — %s", user_db_id, plan.get('reason', '')[:60])
             return
 
-        # Нормализуем: single delegate и delegate_multiple → общий список
+        # Всегда delegate_multiple — AI распределяет задачи между агентами
         if action == 'delegate_multiple':
-            _assignments = plan.get('assignments', [])[:3]  # max 3 агента за цикл
-        elif action == 'delegate':
-            _an = (plan.get('agent_name') or plan.get('agent') or '').strip()
-            _at = plan.get('task', '').strip()
-            _ag = plan.get('goal', '').strip()
-            if not _an or not _at:
-                return
-            _assignments = [{'agent_name': _an, 'task': _at, 'goal': _ag,
-                             'urgency': plan.get('urgency', 'normal')}]
+            _assignments = plan.get('assignments', [])  # все агенты без лимита
         else:
             return
 
-        from models import Session as Db2, Anchor, AnchorPriority
+        from models import Session as Db2
         _now = datetime.now(timezone.utc)
 
-        for _asgn in _assignments:
+        # ── Пункт 5+6: Реальный запуск агентов с async fan-out ──
+        from ai_integration.autonomous_agent import _exec_agent_for_director
+
+        async def _process_one_assignment(_asgn):
+            """Обработать одно назначение: валидация + запуск агента через _exec_agent_for_director."""
             _aname = (_asgn.get('agent_name') or _asgn.get('agent') or '').strip()
             _atask = (_asgn.get('task') or '').strip()
             _agoal = (_asgn.get('goal') or '').strip()
             _urgency = _asgn.get('urgency', 'normal')
             if not _aname or not _atask:
-                continue
+                return None
 
             # ── Safety net: логируем если ИИ ещё упоминает недоступные сервисы (промпт учит не делать этого) ──
             _has_banned = any(s in _atask.lower() for s in ('linkedin', 'calendly', 'apollo.io', 'sales navigator'))
@@ -1869,7 +1836,7 @@ class OfficeEngine:
                     )
                 _atask = _atask.strip()
                 if not _atask:
-                    continue
+                    return None
 
             # ── Safety net: мягкий антилуп (промпт учит не повторяться, но на всякий случай) ──
             try:
@@ -1954,7 +1921,7 @@ class OfficeEngine:
                                 "[OFFICE-L2] TOOL-DEDUP: user=%d, %s tool=%s repeated %dx in 24h (threshold=%d) — skip: %s",
                                 user_db_id, _aname, _task_tools, _tool_repeat_count, _base_threshold, _atask[:60],
                             )
-                            continue
+                            return None
 
                     # ── Word-overlap dedup (оригинальная проверка) ──
                     _high_overlap_count = 0
@@ -1968,7 +1935,7 @@ class OfficeEngine:
                     if _high_overlap_count >= 2 and not _is_email_flow_task:
                         logger.info("[OFFICE-L2] TEACH-MISS antiloop: user=%d, %s has %d similar tasks in 24h — skipping: %s",
                                     user_db_id, _aname, _high_overlap_count, _atask[:60])
-                        continue
+                        return None
                 finally:
                     _s_dup.close()
             except Exception as _dup_err:
@@ -1981,7 +1948,7 @@ class OfficeEngine:
             )
             if not _agent_match:
                 logger.debug("[OFFICE-L2] agent not found: %s", _aname)
-                continue
+                return None
 
             _agent_id, _agent_name_db, _agent_spec, _agent_desc = _agent_match
 
@@ -2014,7 +1981,7 @@ class OfficeEngine:
                     "[OFFICE-L2] VAGUE-SKIP: task for %s is too short/vague (%d chars, tool=%s): %s",
                     _aname, len(_atask), _task_has_tool, _atask[:80],
                 )
-                continue
+                return None
 
             # Создаём задачу-делегирование + лог (без лишних якорей/сообщений)
             # NB: _auto_delegate_to_agent_sync создаёт agent_task(status='accepted').
@@ -2027,6 +1994,35 @@ class OfficeEngine:
 
             logger.info("[OFFICE-L2] user=%d: delegated to %s [%s]: %s",
                         user_db_id, _agent_name_db, _urgency, _atask[:60])
+
+            # ── Реальный запуск агента через tool-calling цикл ──
+            try:
+                _agent_dict = {
+                    'id': _agent_id,
+                    'name': _agent_name_db,
+                    'specialization': _agent_spec,
+                    'description': _agent_desc,
+                }
+                _exec_result = await _exec_agent_for_director(
+                    _agent_dict, _atask, user_db_id,
+                )
+                if _exec_result:
+                    _result_summary = (
+                        _exec_result[0] if isinstance(_exec_result, (list, tuple))
+                        else str(_exec_result)
+                    )
+                    _auto_complete_agent_task_sync(
+                        user_db_id, _agent_id, _agent_name_db,
+                        f'Цель: {_agoal[:120]}. {_atask[:600]}',
+                    )
+                return _exec_result
+            except Exception as _exec_err:
+                logger.warning("[OFFICE-L2] agent %s exec error: %s", _agent_name_db, _exec_err)
+                return None
+
+        # Запускаем всех агентов параллельно через async fan-out
+        _tasks = [_process_one_assignment(_asgn) for _asgn in _assignments]
+        _results = await asyncio.gather(*_tasks)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
