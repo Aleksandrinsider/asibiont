@@ -28,8 +28,9 @@ import random
 import re
 import inspect
 import traceback
+import time
 import pytz
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, API_TIMEOUT_QUICK, API_TIMEOUT_NORMAL, API_TIMEOUT_LONG, API_TIMEOUT_SCRIPT
 from models import Session, User, Task, UserProfile, Goal
@@ -1456,6 +1457,113 @@ async def _get_quick_ai_session() -> aiohttp.ClientSession:
             _QUICK_AI_SESSION_CREATED = _now
             logger.debug("[AI] Created new quick (background) AI session")
     return _QUICK_AI_SESSION
+
+# ─── Agent Anti-Loop / Thinking System ────────────────────────────────
+_AGENT_ACTION_MEMORY: dict[str, dict] = {}
+_AGENT_ACTION_MEMORY_TTL: float = 86400.0  # 24h
+
+def _fingerprint_params(params: dict) -> str:
+    """Создаёт компактный отпечаток параметров tool call для обнаружения повторов."""
+    _key_fields = (
+        'email', 'contact_email', 'to_email', 'recipient_email',
+        'from_email', 'sender_email', 'email_address',
+        'contact', 'username', 'login', 'handle',
+        'github_url', 'repo_url', 'telegram_channel',
+        'discord_channel', 'task_id', 'goal_id',
+        'query', 'topic', 'message', 'text', 'content',
+    )
+    _parts = []
+    for _k in _key_fields:
+        _v = params.get(_k, '')
+        if _v:
+            _v_str = str(_v).strip().lower()[:80]
+            if _v_str:
+                _parts.append(f"{_k}={_v_str}")
+    if _parts:
+        return '|'.join(_parts)
+    try:
+        _j = json.dumps(params, sort_keys=True, ensure_ascii=False)[:100]
+        return _j
+    except Exception:
+        return str(params)[:100]
+
+def _record_agent_action(agent_name: str, tool_name: str, params: dict, user_id: int) -> None:
+    """Записывает tool call в глобальную память с таймстампом. Очищает устаревшие записи."""
+    _fp = _fingerprint_params(params)
+    _key = f"{agent_name}|{tool_name}|{_fp}|{user_id}"
+    _now = time.time()
+    # очистка устаревших
+    _stale = [k for k, v in _AGENT_ACTION_MEMORY.items()
+              if (_now - v.get('ts', 0)) > _AGENT_ACTION_MEMORY_TTL]
+    for _sk in _stale:
+        _AGENT_ACTION_MEMORY.pop(_sk, None)
+    if _key not in _AGENT_ACTION_MEMORY:
+        _AGENT_ACTION_MEMORY[_key] = {'count': 0, 'ts': _now, 'tool': tool_name}
+    _AGENT_ACTION_MEMORY[_key]['count'] += 1
+    _AGENT_ACTION_MEMORY[_key]['ts'] = _now
+
+
+def _check_agent_loop_risk(agent_name: str, tool_name: str, params: dict, user_id: int, threshold: int = 3) -> tuple:
+    """Проверяет, не зациклился ли агент на одном и том же tool call.
+    Возвращает (is_looping, warning_message)."""
+    _fp = _fingerprint_params(params)
+    _key = f"{agent_name}|{tool_name}|{_fp}|{user_id}"
+    _entry = _AGENT_ACTION_MEMORY.get(_key)
+    if _entry and _entry['count'] >= threshold:
+        _msg = (
+            f"⚠️ ОБНАРУЖЕН ЦИКЛ: агент '{agent_name}' вызвал {tool_name} "
+            f"с теми же параметрами {_entry['count']} раз. "
+            f"Отпечаток: {_fp}. "
+            f"Действие ЗАБЛОКИРОВАНО. Смени подход или остановись."
+        )
+        return (True, _msg)
+    return (False, '')
+
+
+def _build_thinking_context(user_id: int, agent_name: str, task: str) -> str:
+    """Анализирует AgentActivityLog за последние 24ч и строит блок размышления для агента."""
+    _lines: list[str] = []
+    try:
+        from models import Session as _SessT, AgentActivityLog as _ALogT
+        _cutoff = datetime.utcnow() - timedelta(hours=24)
+        _sess = _SessT()
+        try:
+            _logs = _sess.query(_ALogT).filter(
+                _ALogT.user_id == user_id,
+                _ALogT.tool_name.isnot(None),
+                _ALogT.timestamp >= _cutoff
+            ).order_by(_ALogT.timestamp.asc()).all()
+            _tool_counter: dict[str, int] = {}
+            _prev_tool = ''
+            for _log in _logs:
+                _tn = _log.tool_name or ''
+                if _tn:
+                    _tool_counter[_tn] = _tool_counter.get(_tn, 0) + 1
+                if _tn and _tn == _prev_tool:
+                    _lines.append(f"  ⚠️ Дважды подряд вызван {_tn} — возможен микро-цикл")
+                _prev_tool = _tn
+            # предупреждения о частых повторах
+            for _tn, _cnt in _tool_counter.items():
+                if _cnt >= 5:
+                    _lines.append(f"  ⚠️ {_tn} вызван {_cnt} раз за 24ч — высокая повторяемость")
+            if _lines:
+                _lines.insert(0, "🧠 [БЛОК РАЗМЫШЛЕНИЯ] Анализ твоих недавних действий:")
+        finally:
+            _sess.close()
+    except Exception as _e:
+        _lines.append(f"  ⚠️ Ошибка анализа истории: {_e}")
+    return '\n'.join(_lines)
+
+
+def _get_agent_inline_think_token() -> str:
+    """Компактная инструкция для system prompt — заставляет агента думать перед действием."""
+    return (
+        "🧠 ПРЕЖДЕ ЧЕМ ВЫЗВАТЬ ИНСТРУМЕНТ: "
+        "1) Спроси себя «Я уже делал это для этого контакта? Не будет ли повтора?» "
+        "2) Если инструмент уже вызывался ≥3 раз с теми же параметрами — ОСТАНОВИСЬ. "
+        "3) Подумай, что можно сделать иначе: смени подход, проанализируй результат, доложи. "
+        "4) Если ничего нового сделать нельзя — просто напиши отчёт, не вызывай инструменты."
+    )
 
 async def _get_shared_ai_session() -> aiohttp.ClientSession:
     global _SHARED_AI_SESSION, _SHARED_AI_SESSION_CREATED
@@ -8740,6 +8848,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Название проекта/компании из профиля агента (передаётся из контекста пользователя)
         _company_ctx = (agent.get('company') or '').strip()
         _team_ctx = f"команде {_company_ctx}" if _company_ctx else 'команде'
+        # ── Thinking context + anti-loop token ──
+        _think_ctx_block = _build_thinking_context(user_id, agent.get('name', '?'), task) if _is_autopilot_task else ''
+        _think_token = _get_agent_inline_think_token()
         system_prompt = (
             f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
             f"{_gender_note}"
@@ -8747,6 +8858,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"{_intg_line}\n"
             f"{_kb_block}\n"
             f"{_integration_facts_block}\n"
+            f"{_think_ctx_block}\n\n"
+            f"{_think_token}\n\n"
 
             "🧠 АЛГОРИТМ РАБОТЫ (каждый цикл):\n\n"
 
@@ -10901,6 +11014,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                             timeout=_TOOL_TIMEOUTS.get(_tname, _TOOL_TIMEOUT),
                                         )
                                         _r0 = _tres[0] if _tres else {"success": False}
+                                        _record_agent_action(agent.get('name', '?'), _tname, _targs, user_id)
                                         if _r0.get('success'):
                                             _raw_r0 = _r0['result']
                                             if isinstance(_raw_r0, dict) and '_human_summary' in _raw_r0:
@@ -10990,6 +11104,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Проверяем доступность инструмента (not elif — delegate_to_agent уже переименован выше)
             if _allowed_tools and _tname not in _allowed_tools:
                 logger.warning("[DIRECTOR-EXEC] bypass tools_allowed block for %s", _tname)
+
+            # ── ANTI-LOOP GUARD: проверка на повторный вызов с теми же параметрами ──
+            _loop_risk, _loop_warn = _check_agent_loop_risk(
+                agent.get('name', '?'), _tname, _targs, user_id, threshold=3
+            )
+            if _loop_risk:
+                logger.warning("[DIRECTOR-EXEC] LOOP DETECTED: %s — blocking %s", _loop_warn, _tname)
+                _tc_result = json.dumps({
+                    "error": (
+                        f"⛔ ЦИКЛ ОБНАРУЖЕН: ты уже вызывал {_tname} с теми же параметрами "
+                        f"много раз. Это не работает. Смени подход: другой контакт, другой запрос, "
+                        f"другой инструмент. Если ничего нового сделать нельзя — напиши отчёт и заверши."
+                    )
+                }, ensure_ascii=False)
+                _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                _tool_call_count += 1
+                continue
 
             if True:
                 # ── GUARD: block update_goal_progress if only research tools were used ──
@@ -11082,6 +11213,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         timeout=_TOOL_TIMEOUTS.get(_tname, _TOOL_TIMEOUT),
                     )
                     _r0 = _tres[0] if _tres else {"success": False}
+                    # ── Запись действия в глобальную память для anti-loop ──
+                    _record_agent_action(agent.get('name', '?'), _tname, _targs, user_id)
                     if _r0.get('success'):
                         _raw_r0b = _r0['result']
                         if isinstance(_raw_r0b, dict) and '_human_summary' in _raw_r0b:
