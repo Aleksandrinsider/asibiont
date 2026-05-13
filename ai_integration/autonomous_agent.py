@@ -5798,15 +5798,15 @@ class HybridAutonomousAgent:
                 if _stuck_tools:
                     _stuck_str = ', '.join(_stuck_tools)
                     logger.warning(f"[CYCLE_DETECT] Tools stuck ≥2 iters: {_stuck_str} — injecting stop")
+                    # УНИВЕРСАЛЬНАЯ инструкция — не привязана к конкретным инструментам
                     messages.append({
                         "role": "system",
                         "content": (
                             f"⚠️ СТОП-СИГНАЛ СИСТЕМЫ: инструменты [{_stuck_str}] вызывались 2+ раза "
-                            f"и возвращали ошибки. "
-                            f"ОБЯЗАТЕЛЬНО: 1) если publish_to_telegram — лимит исчерпан, используй "
-                            f"save_note и скажи пользователю что публикация запланирована на завтра. "
-                            f"2) В любом другом случае — опиши что сделал и что не получилось, "
-                            f"предложи альтернативный инструмент или подход. НЕ повторяй неудачный вызов."
+                            f"подряд и возвращали ошибки. "
+                            f"ОБЯЗАТЕЛЬНО: опиши что сделал и что не получилось, "
+                            f"предложи альтернативный инструмент или подход. "
+                            f"НЕ повторяй неудачный вызов — это тупик."
                         )
                     })
                     # Сбрасываем счётчики чтобы не спамить каждую итерацию
@@ -7325,6 +7325,9 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
 # ══ Универсальный контекст пользователя и агента ══════════════════════════════
 
 # Маппинг ключей → человекочитаемые названия сервисов
+# УНИВЕРСАЛЬНЫЙ: можно расширять через переменную окружения INTEGRATION_LABELS_EXTRA
+# или через INTEGRATION_LABELS_EXTRA=... в user_api_keys любого агента.
+# Формат: PREFIX1:метка1,PREFIX2:метка2 (через запятую, ключ:значение)
 _INTEGRATION_LABELS: dict = {
     'GMAIL': 'Gmail (почта)',
     'YANDEX_MAIL': 'Яндекс Почта',
@@ -7407,13 +7410,9 @@ _INTEGRATION_LABELS: dict = {
     'GA4_': 'Google Analytics 4',
     'LINEAR': 'Linear',
     'WEBHOOK_URL': 'Webhook (n8n/Zapier/Make)',
-    'CLICKUP': 'ClickUp',
-    'LINEAR': 'Linear',
-    'FIGMA': 'Figma API',
     'TELEGRAM_BOT': 'Telegram Bot',
-    'OPENWEATHER': 'Погода (OpenWeatherMap)',
     'WEATHER_API': 'Weather API',
-    # Дополнительные интеграции (ранее отсутствовали)
+    # Дополнительные интеграции
     'TWILIO': 'Twilio (звонки/SMS)',
     'TINKOFF': 'Тинькофф Инвестиции',
     'TINKOFF_INVEST': 'Тинькофф Инвестиции',
@@ -7436,7 +7435,6 @@ _INTEGRATION_LABELS: dict = {
     'DEEPSEEK_API': 'DeepSeek AI API',
     'DEEPSEEK_KEY': 'DeepSeek AI API',
     # Биржевые данные (расширенные)
-    'FINNHUB': 'Finnhub (биржевые данные)',
     'POLYGON': 'Polygon.io (биржевые данные)',
     'POLYGON_IO': 'Polygon.io (биржевые данные)',
     'TWELVE_DATA': 'Twelve Data (биржевые данные)',
@@ -7448,6 +7446,16 @@ _INTEGRATION_LABELS: dict = {
     'EXCHANGERATE': 'ExchangeRate-API (курсы валют)',
     'EXCHANGE_RATE': 'ExchangeRate-API (курсы валют)',
 }
+
+# Загрузка дополнительных меток из переменных окружения
+import os as _il_os
+_il_extra = _il_os.environ.get('INTEGRATION_LABELS_EXTRA', '').strip()
+if _il_extra:
+    for _il_pair in _il_extra.split(','):
+        _il_pair = _il_pair.strip()
+        if ':' in _il_pair:
+            _il_k, _il_v = _il_pair.split(':', 1)
+            _INTEGRATION_LABELS[_il_k.strip().upper()] = _il_v.strip()
 
 
 def _agent_tools_from_intg(agent: dict, intg_labels: list) -> str:
@@ -7568,9 +7576,21 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         'exchangerate-api': 'ExchangeRate-API (курсы валют)',
         'exchangerate-api.com': 'ExchangeRate-API (курсы валют)',
     }
+    _known_code_hints_keys = set(_code_hints.keys())
     for hint, label in _code_hints.items():
         if hint in code_lc:
             found.add(label)
+    # УНИВЕРСАЛЬНЫЙ fallback: детектируем ЛЮБЫЕ import/from-импорты,
+    # которых нет в _code_hints. Пример: "import requests" → "Python: requests".
+    # Это позволяет AI знать о нестандартных библиотеках агента.
+    import re as _re_imports
+    _all_imports = set()
+    for _m in _re_imports.finditer(r'(?:^|\n)\s*(?:import|from)\s+([a-z0-9_.]+)', code_lc):
+        _mod = _m.group(1).strip().split('.')[0].strip()
+        if _mod and len(_mod) >= 2 and _mod not in _known_code_hints_keys:
+            _all_imports.add(_mod)
+    for _mod in sorted(_all_imports)[:5]:  # макс 5 незнакомых импортов
+        found.add(f'Python: {_mod}')
 
     # 3. Из tools_allowed (JSON)
     try:
@@ -7655,6 +7675,16 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         for t in tools:
             if t in _tool_labels:
                 found.add(_tool_labels[t])
+            else:
+                # УНИВЕРСАЛЬНЫЙ fallback: для любых НЕИЗВЕСТНЫХ инструментов
+                # генерируем читаемое название из snake_case.
+                # Пример: create_github_issue → "Create Github Issue"
+                _readable = (' '.join(
+                    w.capitalize() if w not in ('a', 'an', 'the', 'for', 'to', 'of', 'in', 'by', 'via', 'with')
+                    else w for w in t.replace('_', ' ').split()
+                )).strip()
+                if _readable and len(_readable) >= 3:
+                    found.add(f'Инструмент: {_readable}')
     except Exception as _e:
         logger.debug("suppressed: %s", _e)
 
@@ -8839,13 +8869,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _connected_actions = []
         for _ih in _intg_hint[:8]:
             _ih_low = _ih.lower()
+            _matched = False
             for _cap_key, _cap_desc in _INTG_CAPABILITIES.items():
                 if _cap_key in _ih_low:
                     _connected_caps.append(f"  • {_ih} = {_cap_desc}")
                     # Добавляем конкретные action-примеры если есть
                     if _cap_key in _INTG_ACTIONS:
                         _connected_actions.append(f"  {_ih}:\n    {_INTG_ACTIONS[_cap_key]}")
+                    _matched = True
                     break
+            # УНИВЕРСАЛЬНЫЙ fallback: если интеграция не описана в _INTG_CAPABILITIES,
+            # генерируем описание автоматически из названия сервиса.
+            # Это позволяет AI понимать ЛЮБУЮ интеграцию без обновления кода.
+            if not _matched:
+                # Извлекаем базовое имя (первое слово до пробела/скобок)
+                _base_name = _ih.split('(')[0].split(':')[0].split('（')[0].strip()
+                _generic_cap = f"доступ к API {_base_name}: данные, поиск, аналитика, управление"
+                _connected_caps.append(f"  • {_ih} = {_generic_cap}")
         _caps_block = '\n'.join(_connected_caps) if _connected_caps else ''
         _actions_block = '\n'.join(_connected_actions) if _connected_actions else ''
         _intg_action_hint = (
@@ -9201,6 +9241,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "     недоступны без интеграции, а не придумывай цифры из головы.\n"
             "  Не изобретай email. Используй РЕАЛЬНЫЕ данные из инструментов и контекста.\n"
             "Отвечать на email ДОЛЖЕН тот агент, который отправлял исходное письмо.\n"
+            "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
+            "исследования, заметки, email, публикации, напоминания, делегирование и многое другое. "
+            "Не ограничивай себя текстом — ДЕЙСТВУЙ.\n"
             + _lang_line +
             (f"Формат делегирования: {_delegate_example}\n" if _delegate_example else
                "Формат: DELEGATE[Имя]: подробное поручение (2-3 предложения): инструмент + данные (email/имена/ссылки) + ожидаемый результат.\n")
@@ -9991,24 +10034,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     try:
         from .tools import get_available_tools as _gat_aware
         _all_tools_info = _gat_aware()
-        _TOOL_LABELS = {
-            'add_task': 'создать задачу', 'complete_task': 'закрыть задачу',
-            'edit_task': 'изменить задачу', 'delete_task': 'удалить задачу',
-            'list_tasks': 'список задач', 'create_goal': 'создать цель',
-            'list_goals': 'список целей', 'delegate_task': 'поручить агенту/человеку',
-            'research_topic': 'исследование темы', 'web_search': 'веб-поиск',
-            'send_email': 'отправить email', 'negotiate_by_email': 'переговоры по email',
-            'send_outreach_email': 'холодное письмо', 'save_email_contact': 'сохранить контакт',
-            'create_post': 'создать пост', 'publish_to_telegram': 'пост в TG',
-            'publish_to_discord': 'пост в Discord', 'generate_image': 'генерация картинки',
-            'start_content_campaign': 'автопостинг', 'find_relevant_contacts_for_task': 'поиск контактов',
-            'find_and_message_relevant_users': 'найти и написать людям',
-            'start_delegation_campaign': 'поиск исполнителей',
-            'update_profile': 'обновить профиль', 'run_agent_action': 'внешнее действие',
-            'update_goal_progress': 'обновить прогресс цели',
-            'send_message_to_user': 'сообщение пользователю',
-            'set_contact_alert': 'алерт на контакт',
-        }
+        # УНИВЕРСАЛЬНАЯ генерация меток из tool descriptions — не требует ручного обновления
+        _TOOL_LABELS = {}
+        for _tl_t in _all_tools_info:
+            _tl_n = _tl_t.get('function', {}).get('name', '')
+            _tl_d = _tl_t.get('function', {}).get('description', '')
+            if _tl_n and _tl_d:
+                # Первое предложение как краткая метка (обрезаем до 55 символов)
+                _tl_short = _tl_d.split('.')[0].strip().rstrip(':;, ')
+                if len(_tl_short) > 55:
+                    _tl_short = _tl_short[:52] + '...'
+                _TOOL_LABELS[_tl_n] = _tl_short
         if _exclude_for_agent:
             _my_tools = [t['function']['name'] for t in _all_tools_info
                          if t['function']['name'] not in _exclude_for_agent]
@@ -10076,15 +10112,43 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
     _TOOL_TIMEOUT = 55  # дефолтный таймаут
-    # Адаптивные таймауты: тяжёлые инструменты получают больше времени, лёгкие — меньше
-    _TOOL_TIMEOUTS: dict[str, int] = {
-        'research_topic': 60, 'web_search': 30, 'get_news_trends': 30,
-        'negotiate_by_email': 50, 'run_agent_action': 130, 'generate_image': 50,
-        'schedule_background_task': 45,
-        'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
-        'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
-        'save_note': 10, 'search_notes': 10, 'update_profile': 10, 'send_message_to_user': 15, 'send_email': 20,
-    }
+    # УНИВЕРСАЛЬНЫЕ адаптивные таймауты — автоматически определяются по имени инструмента
+    # Категории: research=60, email=50, action=130, image=50, schedule=45,
+    # task=15, note=10, profile=10, message=15, всё остальное=55
+    _TOOL_TIMEOUTS: dict[str, int] = {}
+    # Категории по префиксам/подстрокам в имени инструмента
+    _TOOL_TIMEOUT_RULES: list[tuple[tuple, int]] = [
+        (('run_agent_action',), 130),
+        (('research', 'web_search', 'get_news', 'quick_topic', 'research_and'), 60),
+        (('negotiate', 'send_email', 'send_outreach', 'reply_to', 'send_follow'), 50),
+        (('generate_image',), 50),
+        (('schedule_background',), 45),
+        (('add_task', 'complete_task', 'edit_task', 'delete_task', 'list_task',
+          'reschedule_task', 'restore_task', 'get_task', 'check_time',
+          'set_reminder', 'create_goal', 'update_goal', 'complete_goal',
+          'delete_goal', 'list_goal', 'manage_delegation', 'start_delegation',
+          'cancel_delegation', 'accept_delegated', 'reject_delegated',
+          'get_delegation'), 15),
+        (('save_note', 'search_notes', 'edit_note', 'add_note'), 10),
+        (('update_profile', 'get_system_status', 'switch_agent', 'list_marketplace'), 10),
+        (('send_message', 'reply_to_user', 'get_incoming', 'get_message',
+          'find_partners', 'analyze_group', 'find_relevant'), 15),
+        (('publish_to_telegram', 'publish_to_discord', 'create_post', 'edit_post',
+          'get_posts', 'delete_post', 'set_content', 'start_content',
+          'manage_content', 'generate_marketing', 'save_email_contact',
+          'list_email_contacts', 'set_contact_alert', 'set_content_strategy'), 20),
+    ]
+    # Сначала пробуем точное совпадение
+    if _my_tools:
+        for _t_name in _my_tools:
+            _matched = False
+            for _patterns, _timeout in _TOOL_TIMEOUT_RULES:
+                if any(_t_name.startswith(p) for p in _patterns):
+                    _TOOL_TIMEOUTS[_t_name] = _timeout
+                    _matched = True
+                    break
+            if not _matched:
+                _TOOL_TIMEOUTS[_t_name] = _TOOL_TIMEOUT  # fallback
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
@@ -10834,11 +10898,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 ).strip()
 
             # ── Anti-hallucination: agent claims tool error without calling tool ──
-            # If autopilot agent says "error/can't send" in text but never called the tool,
+            # If agent says "error/can't send" in text but never called the tool,
             # force it to actually call the tool instead of fabricating errors from history.
+            # Работает для autopilot и non-autopilot режимов делегированных задач.
             _HALLUCINATION_KW = ('ошибк', 'не смог', 'не удал', 'сбой', 'не работ', 'не отправ', 'не получил', 'техническ',
-                                  'упёрся', 'упёрлась', 'ограничен', 'лимит', 'нет доступа', 'недоступ')
-            if (_is_autopilot_task and _iter == 0 and not _tool_calls and _tool_call_count == 0
+                                  'упёрся', 'упёрлась', 'ограничен', 'лимит', 'нет доступа', 'недоступ',
+                                  'не прописан', 'нет токен', 'нет ключ', 'нет настроек', 'не настроен',
+                                  'не хват', 'не доступ', 'нет возможности', 'нет инструмент', 'нет интеграц')
+            if (_iter == 0 and not _tool_calls and _tool_call_count == 0
                     and _content and any(kw in _content.lower() for kw in _HALLUCINATION_KW)):
                 logger.warning(
                     "[DIRECTOR-EXEC] anti-hallucination: %s claims error without tool call, forcing retry",
@@ -10884,9 +10951,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'запускаю', 'начинаю', 'сейчас сделаю', 'пробую',
                 'i will try', 'let me try', 'trying ',
             )
+            # УНИВЕРСАЛЬНЫЙ anti-meta/noop — работает для любых делегированных задач (autopilot + non-autopilot)
             _is_meta_noop = (
-                _is_autopilot_task
-                and _iter == 0
+                _iter == 0
                 and not _tool_calls
                 and _tool_call_count == 0
                 and bool(_meta_lc)
@@ -10947,9 +11014,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'ничего не делегировано', 'не делегировано',
                 'which option', 'what should we do', 'which way should we go',
             )
+            # УНИВЕРСАЛЬНЫЙ anti-consultative-stall — работает для любых делегированных задач
             _is_consultative_stall = (
-                _is_autopilot_task
-                and _iter == 0
+                _iter == 0
                 and not _tool_calls
                 and _tool_call_count == 0
                 and bool(_meta_lc)
@@ -11004,9 +11071,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'готово', 'done', 'completed', 'sent', 'saved', 'found',
             )
             _looks_like_action_claim = any(_kw in _claim_lc for _kw in _ACTION_CLAIM_KW)
+            # УНИВЕРСАЛЬНЫЙ anti-fake-action — работает для любых делегированных задач
             _is_claim_without_tools = (
-                _is_autopilot_task
-                and bool(_claim_lc)
+                bool(_claim_lc)
                 and _looks_like_action_claim
                 and not _tool_calls
                 and _tool_call_count == 0
@@ -11179,6 +11246,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if _my_tools_safe:
                     _priority_order = [
                         'web_search', 'research_topic', 'run_agent_action',
+                        'create_github_issue',
                         'find_relevant_contacts_for_task', 'check_emails',
                         'send_outreach_email', 'start_email_campaign',
                     ]
