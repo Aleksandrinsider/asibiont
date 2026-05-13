@@ -3191,80 +3191,21 @@ async def delegate_task(
                 return (_cut or _txt[:_limit]).strip(' ,;:.-')
 
             def _live_assignment_text(_agent_name: str, _task_text: str) -> str:
-                def _normalize_assignment_phrase(_txt: str) -> str:
-                    _s = (_txt or '').strip()
-                    if not _s:
-                        return ''
-
-                    _inf_map = {
-                        'найти': 'Найди',
-                        'проверить': 'Проверь',
-                        'сохранить': 'Сохрани',
-                        'собрать': 'Собери',
-                        'сделать': 'Сделай',
-                        'подготовить': 'Подготовь',
-                        'написать': 'Напиши',
-                        'создать': 'Создай',
-                        'опубликовать': 'Опубликуй',
-                        'отправить': 'Отправь',
-                        'проанализировать': 'Проанализируй',
-                        'исследовать': 'Исследуй',
-                        'сравнить': 'Сравни',
-                        'сформировать': 'Сформируй',
-                        'составить': 'Составь',
-                        'заняться': 'Займись',
-                    }
-                    _inf_words = '|'.join(_ren.escape(k) for k in _inf_map.keys())
-
-                    # Если текст начинается с "тематического заголовка", а дальше идёт действие,
-                    # отбрасываем заголовок и оставляем саму команду.
-                    _first_action = _ren.search(rf'\b({_inf_words})\b', _s, flags=_ren.IGNORECASE)
-                    if _first_action and _first_action.start() > 0:
-                        _lead = _s[:_first_action.start()].strip(' ,.;:-')
-                        _is_heading_like = len(_lead) <= 140 and not _ren.search(r'[.!?]', _lead)
-                        if _is_heading_like:
-                            _s = _s[_first_action.start():].lstrip(' ,.;:-')
-
-                    # Переводим инфинитивы в начале предложений в повелительное наклонение.
-                    def _repl(match):
-                        _prefix = match.group(1) or ''
-                        _verb = (match.group(2) or '').lower()
-                        return f"{_prefix}{_inf_map.get(_verb, match.group(2))}"
-
-                    _s = _ren.sub(rf'(^|[.!?]\s+)({_inf_words})\b', _repl, _s, flags=_ren.IGNORECASE)
-                    _s = _ren.sub(r'\s{2,}', ' ', _s).strip(' ,;')
-                    return _s
-
-                # Показываем title задачи как есть — ИИ уже написал его в нужной форме.
-                # Никаких regex-обрезаний и таблиц спряжений: "учи ИИ, не кастрируй текст".
-                _task_lines = [ln.strip() for ln in (_task_text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n') if ln.strip()]
-                # Собираем строки до первого структурного заголовка.
-                # НЕ берём только первую строку — LLM иногда переносит фразу на следующую
-                # строку (например "email (один\nконтакт)."), что обрезало бы текст.
-                _SKIP_HEADERS = (
-                    'данные для работы', 'ключевые данные', 'детали', 'описание',
-                    'шаги', 'план', 'задача', 'дедлайн', 'ожидание в отчёте',
-                    'ожидание в отчете', 'каналы', 'активные цели',
-                )
-                _base_parts = []
-                for _ln in _task_lines:
-                    _ln_lc = _ln.lower().rstrip(' :')
-                    if any(_ln_lc.startswith(h) for h in _SKIP_HEADERS):
-                        break
-                    if _ln.endswith(':') and len(_ln) < 80 and not _ren.search(r'[.!?]', _ln[:-1]):
-                        break
-                    _base_parts.append(_ln)
-                    # Достаточно когда собрали полное предложение или 300 символов
-                    _joined = ' '.join(_base_parts)
-                    if len(_joined) >= 300 or _ren.search(r'[.!?]\s*$', _joined):
-                        break
-                _base = ' '.join(_base_parts).strip()
-                _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip()
-                _base = _normalize_assignment_phrase(_base)
+                # Минимальная очистка: убираем технические префиксы, оставляем смысл.
+                # AI сам пишет в нужной форме — не кастрируем regex-ами.
+                _task_text = _ren.sub(
+                    r'^(ОТВЕТЬ НА ВОПРОС|ЗАДАЧА|ДЕЛЕГИРУЮ|АВТОПИЛОТ)\s*[:(]\s*',
+                    '', (_task_text or '').strip(), flags=_ren.IGNORECASE
+                ).strip()
                 _generic = f'{_agent_name}, продолжи работу по текущей задаче.'
-                if not _base:
+                if not _task_text:
                     return _generic
-                _msg = f'{_agent_name}, {_base}'
+                # Убираем имя агента из начала если AI случайно добавил
+                _cleaned = _ren.sub(
+                    rf'^\s*{_ren.escape(_agent_name)}\s*[,:.]?\s*',
+                    '', _task_text, flags=_ren.IGNORECASE
+                ).strip()
+                _msg = f'{_agent_name}, {_cleaned}' if _cleaned else _generic
                 if not _msg.rstrip().endswith(('.', '!', '?')):
                     _msg = _msg.rstrip() + '.'
                 _sanitized = sanitize_live_team_chat_text(
@@ -3281,15 +3222,9 @@ async def delegate_task(
                     _is_fem = _is_fem_agent(_agent_name)
                     _fallback = 'Вот что я нашла: пока данных мало, продолжаю проверку.' if _is_fem else 'Вот что я нашел: пока данных мало, продолжаю проверку.'
                     return sanitize_live_team_chat_text(_fallback, anchor_type='agent_delegation', speaker_name=_agent_name)
-                _txt = _ren.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _txt)
-                _txt = _ren.sub(r'\n\s*[•\-\*]\s*', '\n', _txt)
-                _txt = _ren.sub(r'\n\s*\d+[.)\]]\s*', '\n', _txt)
-                _txt = _ren.sub(r'\n{2,}', '\n', _txt)
-                _txt = _strip_structured_text(_txt, _max_len=400)
-                _sent = [s.strip() for s in _ren.split(r'(?<=[.!?])\s+', _txt) if s.strip()]
-                _txt = ' '.join(_sent[:2]).strip() if _sent else _txt
-                _txt = _truncate_by_word(_txt, 280)
-                # Капитализируем первую букву — без искусственного префикса "Вот что я нашла"
+                # Сохраняем характер и стиль агента — убираем только явный мусор
+                _txt = _ren.sub(r'\n{3,}', '\n\n', _txt)
+                # Капитализируем первую букву
                 _txt = (_txt[:1].upper() + _txt[1:]) if _txt and _txt[:1].islower() else _txt
                 return sanitize_live_team_chat_text(_txt.strip(), anchor_type='agent_delegation', speaker_name=_agent_name)
 
