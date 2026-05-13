@@ -5979,7 +5979,8 @@ except Exception as e:
                 name: 'Travelpayouts (партнёрские ссылки)',
                 fields: [
                     {k:'TRAVELPAYOUTS_MARKETER_TOKEN', label:'API токен Маркетера (travelpayouts.com > Разработчикам > Маркетер API)', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'TRAVELPAYOUTS_MARKER', label:'Ваш marker ID (shmarker из кабинета Travelpayouts)', ph:'123456', t:'text'}
+                    {k:'TRAVELPAYOUTS_MARKER', label:'Ваш marker ID (shmarker из кабинета Travelpayouts)', ph:'123456', t:'text'},
+                    {k:'TPX_LU_URLS', label:'Ваши .tpx.lu ссылки (по одной на строке или через запятую)', ph:'https://aviasales.tpx.lu/TvuKbwJO?erid=...,https://hotellook.tpx.lu/XXXX?erid=...', t:'textarea', opt:true}
                 ],
                 hint: 'Travelpayouts — партнёрская сеть авиабилетов, отелей, ЖД (до 50% CPA). Токен: travelpayouts.com > Разработчикам > Маркетер API. Marker: travelpayouts.com > Настройки > Партнёрский идентификатор.',
                 code: `import urllib.request, json, os
@@ -6011,6 +6012,15 @@ try:
         ins_url = 'https://cherehapa.travelpayouts.com/?marker=' + MARKER + '&from=' + city_enc
         print('  🛡 Страховка для ' + CITY + ': ' + ins_url)
 
+        # .tpx.lu короткие ссылки из настроек пользователя
+        tpx_lu_raw = os.environ.get('TPX_LU_URLS', '')
+        if tpx_lu_raw.strip():
+            print('--- .tpx.lu партнёрские ссылки ---')
+            for item in tpx_lu_raw.split(','):
+                item = item.strip()
+                if item:
+                    print('  ' + item)
+
     # Поиск лучших цен через Data API
     if ACTION in ('search_prices', 'check_all'):
         print('\x3d\x3d\x3d Travelpayouts — поиск цен \x3d\x3d\x3d')
@@ -6033,21 +6043,6 @@ try:
 
 except Exception as e:
     print('Ошибка Travelpayouts: ' + str(e))`
-            },
-            ref_links: {
-                name: 'Мои реферальные ссылки',
-                fields: [
-                    {k:'REF_LINKS', label:'Вставьте ваши реферальные ссылки (по одной KEY=VALUE на строке или просто URL)', ph:'TPX_FLIGHTS_URL=https://aviasales.tpx.lu/TvuKbwJO?erid=...,TPX_HOTELS_URL=https://hotellook.tpx.lu/YYYY?erid=...', t:'textarea', opt:false}
-                ],
-                hint: 'Просто вставьте ваши готовые реферальные ссылки. Никаких API-токенов и ключей не нужно.',
-                code: `import os
-REF_LINKS = os.environ.get('REF_LINKS', '')
-if REF_LINKS.strip():
-    print('=== Мои реферальные ссылки ===')
-    for item in REF_LINKS.split(','):
-        item = item.strip()
-        if item:
-            print('  ' + item)`
             },
             tutu: {
                 name: 'Tutu.ru (ЖД билеты)',
@@ -8387,7 +8382,6 @@ except Exception as e:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Путешествия / Доставка</option>
                             <option value="aviasales">Aviasales (авиабилеты)</option>
                             <option value="travelpayouts">Travelpayouts (партнёрские ссылки)</option>
-                            <option value="ref_links">Мои реферальные ссылки</option>
                             <option value="tutu">Tutu.ru (ЖД билеты)</option>
                             <option value="flightradar">Flightradar24 (рейсы)</option>
                             <option value="cdek">СДЭК (доставка)</option>

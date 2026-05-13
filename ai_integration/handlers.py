@@ -241,7 +241,7 @@ def _fetch_latest_travelpayouts_links(user_id: int) -> dict:
     Ищет:
       - прямые ссылки с marker=509031 (для программ с has_direct_marker=True)
       - короткие .tpx.lu ссылки (для ВСЕХ программ)
-      - REF_LINKS из user_api_keys (пользовательские реферальные ссылки)
+      - TPX_LU_URLS из user_api_keys (пользовательские .tpx.lu ссылки)
 
     Returns dict {category_key: url} или пустой dict.
     """
@@ -256,28 +256,23 @@ def _fetch_latest_travelpayouts_links(user_id: int) -> dict:
 
             _all_links = {}
 
-            # 0) Прямое чтение REF_LINKS из user_api_keys (без кода агента)
+            # 0) Прямое чтение TPX_LU_URLS из user_api_keys (без кода агента)
             _api_keys = _user.user_api_keys or ''
-            _ref_links_raw = ''
+            _tpx_lu_raw = ''
             for _line in _api_keys.split('\n'):
                 _line = _line.strip()
-                if _line.startswith('REF_LINKS='):
-                    _ref_links_raw = _line[len('REF_LINKS='):]
+                if _line.startswith('TPX_LU_URLS='):
+                    _tpx_lu_raw = _line[len('TPX_LU_URLS='):]
                     break
-            if _ref_links_raw:
-                for _item in _ref_links_raw.split(','):
+            if _tpx_lu_raw:
+                for _item in _tpx_lu_raw.split(','):
                     _item = _item.strip()
                     if not _item:
                         continue
-                    # Если формат KEY=VALUE, то берём URL после =
-                    if '=' in _item:
-                        _url = _item.split('=', 1)[1].strip()
-                    else:
-                        _url = _item
-                    _all_links['custom_' + str(len(_all_links))] = _url
+                    _all_links['custom_' + str(len(_all_links))] = _item
                     logger.debug(
-                        "[TRAVELPAYOUTS-DEBUG] Found REF_LINK from user_api_keys: %s",
-                        _url[:60],
+                        "[TRAVELPAYOUTS-DEBUG] Found TPX_LU_URL from user_api_keys: %s",
+                        _item[:60],
                     )
 
             _cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
