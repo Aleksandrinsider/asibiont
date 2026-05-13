@@ -961,6 +961,12 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'setup': 'AVIASALES_API_KEY / TRAVELPAYOUTS_MARKETER_TOKEN',
     },
     {
+        'label': 'Level.Travel',
+        'keywords': ('level.travel', 'level travel', 'левел тревел', 'поиск туров', 'туры', 'горящие туры', 'пакетные туры'),
+        'presence': ('level_travel', 'level.travel', 'level-travel'),
+        'setup': 'LEVEL_TRAVEL_TOKEN',
+    },
+    {
         'label': 'Google Maps',
         'keywords': ('google maps', 'гугл карты', 'геолокация', 'маршрут', 'место'),
         'presence': ('google_maps', 'gmaps_key'),
@@ -7157,6 +7163,8 @@ _INTEGRATION_LABELS: dict = {
     'AVIASALES': 'Aviasales',
     'TUTU': 'Tutu.ru',
     'TRAVELPAYOUTS': 'Travelpayouts (партнёрские ссылки)',
+    'LEVEL_TRAVEL': 'Level.Travel (поиск туров)',
+    'LEVEL.': 'Level.Travel (поиск туров)',
     'SIPUNI': 'Sipuni (телефония)',
     'VOXIMPLANT': 'VoxImplant (телефония)',
     'FIREBASE': 'Firebase/Firestore',
@@ -7297,6 +7305,8 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         'msal': 'Microsoft OAuth (Outlook/Teams)',
         'exchangerate-api': 'ExchangeRate-API (курсы валют)',
         'exchangerate-api.com': 'ExchangeRate-API (курсы валют)',
+        'level.travel': 'Level.Travel (поиск туров)',
+        'partner.level.travel': 'Level.Travel (поиск туров)',
     }
     for hint, label in _code_hints.items():
         if hint in code_lc:
