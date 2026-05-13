@@ -940,14 +940,17 @@ async def generate_agent_comment(user_id: int, post_text: str, context: str = ''
 
 
 async def check_and_create_posts():
-    """Main function to check and create automatic posts"""
+    """Main function to check and create automatic posts.
+    
+    Creates up to 2 blog posts per user per day at randomly-distributed times.
+    Uses deterministic hashing (user_id + date) to pick 2 time slots per day
+    from the available windows (10:00, 12:00, 14:00, 16:00, 18:00, 20:00, 22:00).
+    """
     session = Session()
     
     try:
-        # Get all active users with profiles
-        users = session.query(User).join(UserProfile).filter(
-            UserProfile.city.isnot(None)  # Only users who completed profile
-        ).all()
+        # Get all active users with profiles (no city filter — all users with profiles)
+        users = session.query(User).join(UserProfile).all()
 
         # Batch-load profiles (avoid N+1 inside the loop)
         _apc_uids = [u.id for u in users]
@@ -964,24 +967,32 @@ async def check_and_create_posts():
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
                 user_now = datetime.now(pytz.UTC).astimezone(user_tz)
                 
-                # Create progress post at random time during the day
-                # Only create if user has tasks and hasn't posted today
                 current_hour = user_now.hour
                 
                 # Post between 10:00 and 23:00
                 if 10 <= current_hour <= 23:
                     today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
                     
-                    # Check how many posts already created today (max 1 per day)
+                    # Check how many posts already created today (max 2 per day)
                     posts_today = session.query(Post).filter(
                         Post.user_id == user.id,
                         Post.created_at >= today_start
                     ).count()
                     
-                    if posts_today < 1:
-                        # 3% chance per check for more random timing
-                        if random.random() < 0.03:
-                            logger.info(f"Creating progress post for user {user.telegram_id} (post #{posts_today + 1} today)")
+                    if posts_today < 2:
+                        # Deterministic scheduling: pick 2 random time slots per user per day
+                        # This ensures consistent slot selection throughout the day
+                        import hashlib
+                        day_seed = f"{user.id}:{user_now.strftime('%Y-%m-%d')}"
+                        day_hash = int(hashlib.md5(day_seed.encode()).hexdigest()[:8], 16)
+                        
+                        # Available 2-hour check windows: 10, 12, 14, 16, 18, 20, 22
+                        available_hours = list(range(10, 24, 2))  # [10, 12, 14, 16, 18, 20, 22]
+                        rng = random.Random(day_hash)
+                        post_hours = rng.sample(available_hours, min(2, len(available_hours)))
+                        
+                        if current_hour in post_hours:
+                            logger.info(f"Creating progress post for user {user.telegram_id} (post #{posts_today + 1} today, slot={current_hour}:00)")
                             content = await generate_progress_post(user.telegram_id, session)
                             if content:
                                 await create_auto_post(user.telegram_id, content, session)

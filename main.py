@@ -8534,15 +8534,69 @@ async def api_notes_handler(request):
                     'created_at': (note.created_at.isoformat() + 'Z') if note.created_at else None,
                 }})
 
-            # GET
-            notes = session_db.query(Note).filter_by(user_id=user.id).order_by(Note.created_at.desc()).all()
-            return web.json_response({'notes': [{
+            # GET — свои заметки + blog-посты от избранных контактов
+            # 1. Свои заметки
+            own_notes = session_db.query(Note).filter_by(user_id=user.id).order_by(Note.created_at.desc()).all()
+
+            # 2. Blog-посты от избранных контактов
+            fav_notes = []
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and profile.favorite_contacts:
+                try:
+                    import json as _json_fn
+                    favorite_data = _json_fn.loads(profile.favorite_contacts)
+                    _fav_user_ids = []
+                    for item in favorite_data:
+                        if isinstance(item, int):
+                            _fav_user_ids.append(item)
+                        elif isinstance(item, str):
+                            clean = item.strip().replace('@', '').lower()
+                            if clean:
+                                _fu = session_db.query(User).filter(
+                                    func.lower(User.username) == clean
+                                ).first()
+                                if _fu:
+                                    _fav_user_ids.append(_fu.id)
+                    if _fav_user_ids:
+                        # Fetch blog notes from favorite contacts, exclude own
+                        _fav_user_ids = [uid for uid in _fav_user_ids if uid != user.id]
+                        if _fav_user_ids:
+                            fav_notes_raw = session_db.query(Note).filter(
+                                Note.user_id.in_(_fav_user_ids),
+                                Note.source == 'blog',
+                            ).order_by(Note.created_at.desc()).limit(20).all()
+                            # Map user_id -> username for display
+                            _fav_users_map = {u.id: u for u in session_db.query(User).filter(
+                                User.id.in_(_fav_user_ids)
+                            ).all()}
+                            for fn in fav_notes_raw:
+                                _fu = _fav_users_map.get(fn.user_id)
+                                fav_notes.append({
+                                    'id': fn.id,
+                                    'title': fn.title,
+                                    'content': fn.content,
+                                    'source': fn.source,
+                                    'created_at': (fn.created_at.isoformat() + 'Z') if fn.created_at else None,
+                                    'username': (_fu.first_name or _fu.username or f'user_{_fu.telegram_id}') if _fu else None,
+                                    'is_favorite_post': True,
+                                })
+                except Exception as _fav_err:
+                    logger.debug(f"[NOTES] Error fetching favorite blog notes: {_fav_err}")
+
+            # Merge: свои заметки + blog-посты избранных
+            all_notes = [{
                 'id': n.id,
                 'title': n.title,
                 'content': n.content,
                 'source': n.source,
                 'created_at': (n.created_at.isoformat() + 'Z') if n.created_at else None,
-            } for n in notes]})
+                'is_favorite_post': False,
+            } for n in own_notes] + fav_notes
+
+            # Сортируем merged список по created_at (новые сверху)
+            all_notes.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+            return web.json_response({'notes': all_notes})
         finally:
             session_db.close()
     except Exception as e:
@@ -14753,8 +14807,8 @@ async def start_auto_post_service(app):
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
-# auto_post_service DISABLED — handled by AnchorEngine (post_opportunity anchors)
-# app.on_startup.append(start_auto_post_service)
+# AnchorEngine handles feed posts; auto_post_service creates blog Notes (source='blog')
+app.on_startup.append(start_auto_post_service)
 app.on_shutdown.append(on_shutdown)
 
 
