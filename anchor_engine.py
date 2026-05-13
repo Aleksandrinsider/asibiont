@@ -100,34 +100,10 @@ async def _safe_http(**kwargs):
 # ═══════════════════════════════════════════════════════
 # GENDER DETECTION — local copy to avoid fragile cross-module import
 # ═══════════════════════════════════════════════════════
-_MALE_NAMES_ENDING_AYA = {
-    'илья', 'никита', 'лука', 'кузьма', 'фома', 'акила', 'зосима', 'сила',
-    'митя', 'ваня', 'коля', 'паша', 'гоша', 'дима', 'тёма', 'тема',
-    'вася', 'сеня', 'лёша', 'леша', 'рома', 'миша', 'витя', 'петя', 'федя',
-    'алёша', 'алеша', 'яша', 'кирюша', 'серёжа', 'сережа',
-    'жора', 'сева', 'стёпа', 'степа', 'вова', 'юра', 'лёва', 'лева',
-    'тоша', 'андрюша', 'гриша', 'никоша', 'тимоша', 'даня', 'костя', 'лёня', 'леня',
-    'саша', 'женя', 'валя', 'слава',
-}
-_FEMALE_NAMES_NO_AYA = {
-    'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary',
-    'кэтрин', 'catherine', 'маргарет', 'margaret', 'джейн', 'jane', 'хелен', 'helen',
-    'эдит', 'edith', 'джудит', 'judith', 'рут', 'ruth', 'эстер', 'esther',
-    'кармен', 'carmen', 'долорес', 'dolores', 'мерседес', 'mercedes', 'инес', 'ines',
-    'кэрол', 'carol', 'шарлотт', 'charlotte', 'скарлетт', 'scarlett',
-    'элис', 'alice', 'агнес', 'agnes', 'ингрид', 'ingrid', 'астрид', 'astrid',
-    'изабель', 'isabel', 'мишель', 'michelle', 'рейчел', 'rachel', 'дебора', 'deborah',
-    'olivia', 'оливия', 'sophia', 'sophie', 'софия', 'emma', 'эмма', 'emily', 'эмили',
-    'claire', 'клэр', 'grace', 'грейс', 'eleanor', 'элеонора',
-    'victoria', 'виктория', 'natalie', 'натали', 'клер',
-    'diana', 'диана', 'monica', 'моника', 'jessica', 'джессика', 'jennifer', 'дженнифер',
-    'lauren', 'лорен', 'amber', 'эмбер', 'violet', 'вайолет', 'lily', 'лили',
-    'chloe', 'хлоя', 'zoe', 'зои', 'audrey', 'одри',
-}
 
-def _detect_agent_is_female(name: str, explicit_gender: str = '') -> bool:
-    """Определяет женский ли род агента по имени.
-    explicit_gender — явный пол из БД ('male'/'female'), приоритетнее эвристики по имени.
+def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
+    """Определяет род агента. Приоритет — явный пол из БД (explicit_gender).
+    Если explicit_gender не задан — возвращает False (мужской род по умолчанию).
     """
     if explicit_gender:
         g = explicit_gender.strip().lower()
@@ -135,20 +111,6 @@ def _detect_agent_is_female(name: str, explicit_gender: str = '') -> bool:
             return True
         if g == 'male':
             return False
-    name = (name or '').strip()
-    if not name:
-        return False
-    first = name.split()[0].lower()
-    if first in _FEMALE_NAMES_NO_AYA:
-        return True
-    if first in _MALE_NAMES_ENDING_AYA:
-        return False
-    # Русские и европейские женские имена часто заканчиваются на 'а'/'я'.
-    # Имена в _MALE_NAMES_ENDING_AYA (паша, саша, дима и т.д.) уже отфильтрованы выше,
-    # поэтому дополнительное исключение для 'ша'/'жа' не требуется — оно ошибочно
-    # классифицирует женские имена (Даша, Наташа, Глаша) как мужские.
-    if first[-1:] in 'ая':
-        return True
     return False
 
 

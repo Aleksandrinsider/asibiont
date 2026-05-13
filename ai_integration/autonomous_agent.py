@@ -8198,53 +8198,16 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         logger.debug("[CHIME] save error: %s", _e)
 
 
-# ── Универсальная детекция рода агента по имени ──────────────────────────────
-_MALE_NAMES_ENDING_AYA = {
-    'илья', 'никита', 'лука', 'кузьма', 'фома', 'акила', 'зосима', 'сила',
-    'митя', 'ваня', 'коля', 'паша', 'гоша', 'дима', 'тёма', 'тема',
-    'вася', 'сеня', 'лёша', 'леша', 'рома', 'миша', 'витя', 'петя', 'федя',
-    'алёша', 'алеша', 'яша', 'кирюша', 'серёжа', 'сережа',
-    'жора', 'сева', 'стёпа', 'степа', 'вова', 'юра', 'лёва', 'лева',
-    'тоша', 'андрюша', 'гриша', 'никоша', 'тимоша', 'даня', 'костя', 'лёня', 'леня',
-    'саша', 'женя', 'валя', 'слава',  # ambiguous, но чаще мужские в контексте агентов
-}
-
-# Женские имена НЕ заканчивающиеся на а/я (иностранные, исключения)
-_FEMALE_NAMES_NO_AYA = {
-    'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary',
-    'кэтрин', 'catherine', 'маргарет', 'margaret', 'джейн', 'jane', 'хелен', 'helen',
-    'эдит', 'edith', 'джудит', 'judith', 'рут', 'ruth', 'эстер', 'esther',
-    'кармен', 'carmen', 'долорес', 'dolores', 'мерседес', 'mercedes', 'инес', 'ines',
-    'беатрис', 'кэрол', 'carol', 'шарлотт', 'charlotte', 'скарлетт', 'scarlett',
-    'элис', 'alice', 'агнес', 'agnes', 'ингрид', 'ingrid', 'астрид', 'astrid',
-    'изабель', 'isabel', 'мишель', 'michelle', 'рейчел', 'rachel', 'дебора', 'deborah',
-}
-
-def _detect_agent_is_female(name: str, explicit_gender: str = '') -> bool:
-    """Определяет женский ли род агента по имени. Универсальная функция.
-    
-    Если explicit_gender задан ('male'/'female') — используется он как истина.
-    Иначе — эвристика по имени (проверка наборов, окончание на а/я).
+def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
+    """Определяет род агента. Приоритет — явный пол из БД (explicit_gender).
+    Если explicit_gender не задан — возвращает False (мужской род по умолчанию).
     """
-    # Приоритет: явный пол из БД (задан при создании агента)
     if explicit_gender:
         g = explicit_gender.strip().lower()
         if g == 'female':
             return True
         if g == 'male':
             return False
-    # Fallback: эвристика по имени
-    name = (name or '').strip()
-    if not name:
-        return False
-    first = name.split()[0]
-    first_lower = first.lower()
-    if first_lower in _FEMALE_NAMES_NO_AYA:
-        return True
-    if first_lower in _MALE_NAMES_ENDING_AYA:
-        return False
-    if first_lower[-1] in 'ая' and first_lower[-2:] not in ('ша', 'жа'):
-        return True
     return False
 
 
@@ -8261,7 +8224,7 @@ def _normalize_agent_gender_grammar(text: str, agent_name: str, is_female: bool 
     if not _re_g.search(r'[А-Яа-яЁё]', t):
         return t
 
-    _is_fem = is_female if is_female is not None else _detect_agent_is_female(agent_name)
+    _is_fem = bool(is_female)
     _pairs = [
         ('нашёл', 'нашла'), ('нашел', 'нашла'), ('сделал', 'сделала'),
         ('подготовил', 'подготовила'), ('проверил', 'проверила'), ('отправил', 'отправила'),
