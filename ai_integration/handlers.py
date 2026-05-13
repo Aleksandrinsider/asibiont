@@ -56,6 +56,358 @@ _INTENT_LABELS = {
     'reply': ' ответ',
 }
 
+# ═══════════════════════════════════════════════════════════════
+# Travelpayouts affiliate link injection
+# ═══════════════════════════════════════════════════════════════
+#
+# marker=509031 — ваш идентификатор в Travelpayouts
+#
+# ВАЖНО: Travelpayouts генерирует короткие ссылки через свой трекер
+# (формат: aviasales.tpx.lu/XXXXX). Прямые ссылки с ?marker=509031
+# РАБОТАЮТ только для сайтов, принадлежащих Travelpayouts:
+#   - Aviasales (авиабилеты)
+#   - Hotellook (отели)
+#   - Tutu (Ж/Д)
+#   - Cherehapa (страховка)
+#
+# Для остальных программ (GetYourGuide, EconomyBookings, BlaBlaCar и др.)
+# ссылки ДОЛЖНЫ быть сгенерированы через API Travelpayouts (формат .tpx.lu).
+# Если скрипт агента их не сгенерировал — такие ссылки НЕ ДОБАВЛЯЮТСЯ.
+# ═══════════════════════════════════════════════════════════════
+
+# ── Каталог Travelpayouts-программ ──
+# Ключ = category_id, значение = конфигурация
+# has_direct_marker: True = можно использовать прямую ссылку с ?marker=509031
+#                    False = нужна .tpx.lu короткая ссылка от Travelpayouts
+_TRAVELPAYOUTS_PROGRAMS = {
+    # ── Авиабилеты (Aviasales — свой сайт Travelpayouts, marker работает) ──
+    'flights': {
+        'domains': ('aviasales', 'jetradar', 'budgetair', 'misterfly', 'trip.com'),
+        'emoji': '✈️',
+        'label': 'Авиабилеты',
+        'keyword_groups': (
+            'авиабилет', 'aviasales', 'перелёт', 'перелет', 'билет', 'рейс',
+            'самолёт', 'самолет', 'jetradar',
+        ),
+        'has_direct_marker': True,
+        'default_url': 'https://www.aviasales.ru?marker=509031',
+    },
+    # ── Отели (Hotellook — свой сайт Travelpayouts, marker работает) ──
+    'hotels': {
+        'domains': ('hotellook', 'ostrovok', 'zenhotels', 'roomguru', 'trip.com'),
+        'emoji': '🏨',
+        'label': 'Отели',
+        'keyword_groups': (
+            'отель', 'гостиниц', 'hotel', 'хостел', 'апартамент', 'жиль',
+            'прожива', 'номер', 'поселени',
+        ),
+        'has_direct_marker': True,
+        'default_url': 'https://search.hotellook.com/?marker=509031',
+    },
+    # ── Поезда (Tutu — свой сайт Travelpayouts, shmarker работает) ──
+    'trains': {
+        'domains': ('tutu', 'omio', 'goeuro'),
+        'emoji': '🚄',
+        'label': 'Ж/Д билеты',
+        'keyword_groups': (
+            'поезд', 'ж/д', 'ж\\d', 'железнодорож', 'tutu', 'жд билет',
+            'электричк',
+        ),
+        'has_direct_marker': True,
+        'default_url': 'https://www.tutu.ru/?shmarker=509031',
+    },
+    # ── Страховка (Cherehapa — свой сайт Travelpayouts, marker работает) ──
+    'insurance': {
+        'domains': ('cherehapa', 'sravni'),
+        'emoji': '🛡️',
+        'label': 'Страховка',
+        'keyword_groups': (
+            'страховк', 'cherehapa', 'медицинск', 'мед. страхов', 'мед страхов',
+        ),
+        'has_direct_marker': True,
+        'default_url': 'https://www.cherehapa.ru/?marker=509031',
+    },
+    # ── Аренда авто (нужна .tpx.lu ссылка от Travelpayouts) ──
+    'car_rental': {
+        'domains': ('rentalcars', 'economybookings', 'autoeurope', 'discovercars'),
+        'emoji': '🚗',
+        'label': 'Аренда авто',
+        'keyword_groups': (
+            'аренд', 'авто', 'car rental', 'rental car', 'машин',
+            'прокат', 'drive', 'vehicle',
+        ),
+        'has_direct_marker': False,
+        'default_url': None,
+    },
+    # ── Экскурсии (нужна .tpx.lu ссылка от Travelpayouts) ──
+    'tours': {
+        'domains': ('getyourguide', 'viator', 'tiqets', 'wegotrip', 'sputnik8'),
+        'emoji': '🎫',
+        'label': 'Экскурсии и билеты',
+        'keyword_groups': (
+            'экскурс', 'тур', 'гид', 'достопримечательн', 'аттракцион',
+            'музе', 'парк развлечен', 'активност', 'thing to do',
+        ),
+        'has_direct_marker': False,
+        'default_url': None,
+    },
+    # ── Трансфер (нужна .tpx.lu ссылка от Travelpayouts) ──
+    'transfers': {
+        'domains': ('kiwitaxi', 'intui', 'suntransfers'),
+        'emoji': '🚕',
+        'label': 'Трансфер',
+        'keyword_groups': (
+            'трансфер', 'kiwitaxi', 'такси', 'аэропорт', 'вокзал',
+            'добрать', 'shuttle',
+        ),
+        'has_direct_marker': False,
+        'default_url': None,
+    },
+    # ── Автобусы (нужна .tpx.lu ссылка от Travelpayouts) ──
+    'buses': {
+        'domains': ('busfor', 'omio', '12go', 'gobus'),
+        'emoji': '🚌',
+        'label': 'Автобусы',
+        'keyword_groups': (
+            'автобус', 'busfor', 'bus',
+        ),
+        'has_direct_marker': False,
+        'default_url': None,
+    },
+    # ── Попутчики (нужна .tpx.lu ссылка от Travelpayouts) ──
+    'rideshare': {
+        'domains': ('blablacar', 'bla bla car'),
+        'emoji': '🚘',
+        'label': 'Попутчики',
+        'keyword_groups': (
+            'blablacar', 'bla bla car', 'попутчик', 'попутк',
+        ),
+        'has_direct_marker': False,
+        'default_url': None,
+    },
+    # ── eSIM (нужна .tpx.lu ссылка от Travelpayouts) ──
+    'esim': {
+        'domains': ('airalo', 'holafly'),
+        'emoji': '📱',
+        'label': 'eSIM для путешествий',
+        'keyword_groups': (
+            'esim', 'сим', 'сим-карт', 'связь', 'интернет загра',
+            'airalo', 'мобильн',
+        ),
+        'has_direct_marker': False,
+        'default_url': None,
+    },
+}
+
+# Regex: проверяет наличие marker=509031 ИЛИ shmarker=509031 в тексте
+_TRAVELPAYOUTS_MARKER_RE = re.compile(
+    r'(?:marker|shmarker)\s*=\s*509031',
+    re.IGNORECASE,
+)
+
+# Regex: распознаёт .tpx.lu короткие ссылки Travelpayouts
+# (включая query-параметры вида ?erid=...)
+_TPX_LU_RE = re.compile(
+    r'https?://[a-z0-9-]+\.tpx\.lu/[a-zA-Z0-9]+(?:\?[^\s\n\r\"\'<>]*)?',
+    re.IGNORECASE,
+)
+
+
+def _detect_travel_topics(content: str) -> set:
+    """Определяет, какие travel-темы упомянуты в контенте.
+    Returns: set категорий (ключи _TRAVELPAYOUTS_PROGRAMS).
+    """
+    _low = content.lower()
+    _topics = set()
+    for _cat, _cfg in _TRAVELPAYOUTS_PROGRAMS.items():
+        if any(kw in _low for kw in _cfg['keyword_groups']):
+            _topics.add(_cat)
+    if _topics:
+        logger.info(
+            "[TRAVELPAYOUTS-DEBUG] Content topic detection: %.150s → %s",
+            _low[:150], _topics,
+        )
+    else:
+        logger.debug(
+            "[TRAVELPAYOUTS-DEBUG] No travel keywords in: %.150s",
+            _low[:150],
+        )
+    return _topics
+
+
+def _fetch_latest_travelpayouts_links(user_id: int) -> dict:
+    """Достаёт последние Travelpayouts ссылки из AgentActivityLog.
+
+    Ищет:
+      - прямые ссылки с marker=509031 (для программ с has_direct_marker=True)
+      - короткие .tpx.lu ссылки (для ВСЕХ программ)
+
+    Returns dict {category_key: url} или пустой dict.
+    """
+    try:
+        from models import Session as _TpSess, User as _TpUser, AgentActivityLog as _TpLog
+        _s = _TpSess()
+        try:
+            _user = _s.query(_TpUser).filter_by(telegram_id=user_id).first()
+            if not _user:
+                logger.debug("[TRAVELPAYOUTS-DEBUG] fetch links: user not found (tg_id=%s)", user_id)
+                return {}
+
+            _cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+            _rows = (
+                _s.query(_TpLog)
+                .filter(
+                    _TpLog.user_id == _user.id,
+                    _TpLog.activity_type == 'run_agent_action',
+                    _TpLog.title.ilike('%· generate_links%'),
+                    _TpLog.created_at >= _cutoff,
+                    _TpLog.status == 'completed',
+                )
+                .order_by(_TpLog.created_at.desc())
+                .limit(10).all()
+            )
+
+            logger.debug(
+                "[TRAVELPAYOUTS-DEBUG] AgentActivityLog query: found %d generate_links rows (48h)",
+                len(_rows),
+            )
+            if not _rows:
+                return {}
+
+            # Маппинг домен → категория
+            _domains_map = {}
+            for _cat, _cfg in _TRAVELPAYOUTS_PROGRAMS.items():
+                for _dom in _cfg['domains']:
+                    _domains_map[_dom.lower()] = _cat
+
+            _all_links = {}
+            for _row in _rows:
+                _text = ((_row.result or '') + '\n' + (_row.content or '')).lower()
+
+                # 1) Ищем прямые ссылки с marker=509031
+                _marker_urls = re.findall(
+                    r'https?://[^\s\n\r\"\'<>]+(?:marker|shmarker)[^\s\n\r\"\'<>]*\b',
+                    _text, re.IGNORECASE,
+                )
+                for _u in _marker_urls:
+                    _u_low = _u.lower()
+                    for _dom, _cat in _domains_map.items():
+                        if _dom in _u_low and _cat not in _all_links:
+                            _all_links[_cat] = _u
+                            logger.debug(
+                                "[TRAVELPAYOUTS-DEBUG] Found marker link: %s → %s",
+                                _cat, _u,
+                            )
+                            break
+
+                # 2) Ищем .tpx.lu короткие ссылки
+                _tpx_urls = _TPX_LU_RE.findall(_text)
+                for _u in _tpx_urls:
+                    _u_low = _u.lower()
+                    for _dom, _cat in _domains_map.items():
+                        if _dom in _u_low and _cat not in _all_links:
+                            _all_links[_cat] = _u
+                            logger.debug(
+                                "[TRAVELPAYOUTS-DEBUG] Found .tpx.lu link: %s → %s",
+                                _cat, _u,
+                            )
+                            break
+
+            logger.info(
+                "[TRAVELPAYOUTS] Found %d/%d program links in AgentActivityLog: %s",
+                len(_all_links), len(_TRAVELPAYOUTS_PROGRAMS),
+                {k: v[:60] for k, v in _all_links.items()},
+            )
+            return _all_links
+
+        finally:
+            _s.close()
+    except Exception as _e:
+        logger.debug("[TRAVELPAYOUTS] fetch from AAL failed: %s", _e)
+        return {}
+
+
+def _build_travelpayouts_block(topics: set, links: dict) -> str:
+    """Строит блок с партнёрскими ссылками Travelpayouts.
+
+    Правила:
+      - Если в links есть URL для категории → используем его
+      - Если нет, но has_direct_marker=True → используем default_url
+      - Если нет И has_direct_marker=False → пропускаем (нужна .tpx.lu от скрипта)
+    """
+    _blocks = []
+    for _cat in ('flights', 'hotels', 'trains', 'insurance',
+                  'car_rental', 'tours', 'transfers', 'buses',
+                  'rideshare', 'esim'):
+        if _cat not in topics:
+            continue
+        _cfg = _TRAVELPAYOUTS_PROGRAMS[_cat]
+        _url = links.get(_cat)
+        if not _url:
+            if _cfg.get('has_direct_marker') and _cfg.get('default_url'):
+                _url = _cfg['default_url']
+                logger.debug(
+                    "[TRAVELPAYOUTS-DEBUG] Using default URL for %s: %s",
+                    _cat, _url,
+                )
+            else:
+                logger.debug(
+                    "[TRAVELPAYOUTS-DEBUG] Skipping %s — no link in AAL and no valid default",
+                    _cat,
+                )
+                continue
+        _blocks.append(f"{_cfg['emoji']} {_cfg['label']}: {_url}")
+
+    if not _blocks:
+        logger.debug("[TRAVELPAYOUTS-DEBUG] build_block: no blocks to add")
+        return ''
+
+    _result = '\n\n' + '\n'.join(_blocks)
+    logger.info("[TRAVELPAYOUTS] Built link block:\n%s", _result)
+    return _result
+
+
+def _ensure_travelpayouts_links(content: str, user_id: int) -> str:
+    """Проверяет контент на travel-темы и добавляет партнёрские ссылки Travelpayouts."""
+    if not content or not content.strip():
+        logger.debug("[TRAVELPAYOUTS-DEBUG] ensure: empty content")
+        return content
+
+    # Уже есть marker=509031 → ничего не делаем
+    if _TRAVELPAYOUTS_MARKER_RE.search(content):
+        logger.debug("[TRAVELPAYOUTS-DEBUG] ensure: marker=509031 already in content — skip")
+        return content
+
+    # Детектим темы
+    _topics = _detect_travel_topics(content)
+    if not _topics:
+        return content
+
+    logger.info(
+        "[TRAVELPAYOUTS] Injecting links: user=%s topics=%s",
+        user_id, _topics,
+    )
+
+    # Пытаемся достать ссылки из AgentActivityLog
+    _links = _fetch_latest_travelpayouts_links(user_id)
+
+    # Строим блок
+    _block = _build_travelpayouts_block(_topics, _links)
+    if not _block:
+        logger.info(
+            "[TRAVELPAYOUTS] No valid links to inject for topics %s (links found: %s)",
+            _topics, set(_links.keys()),
+        )
+        return content
+
+    _result = content.strip() + _block
+    logger.info(
+        "[TRAVELPAYOUTS] ✅ Links injected. Final content length: %d chars",
+        len(_result),
+    )
+    return _result
+
+
 def _is_fem_agent(name: str) -> bool:
     """Определяет женский ли род агента по имени."""
     name = (name or '').strip().lower()
@@ -9369,7 +9721,13 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             '', content
         )
         content = content.strip()
-        
+
+        # ── Travelpayouts: автоматически добавляем реферальные ссылки если в посте travel-тема ──
+        try:
+            content = _ensure_travelpayouts_links(content, user_id)
+        except Exception as _tp_e:
+            logger.debug("[TRAVELPAYOUTS] injection skipped: %s", _tp_e)
+
         if not content:
             return "Текст поста не может быть пустым после очистки."
 
@@ -10190,6 +10548,20 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
                 "Telegram-канал — для аудитории: инсайты, кейсы, аналитика. "
                 "Переформулируй контент как экспертный пост для подписчиков."
             )
+
+        # ── Travelpayouts: автоматически добавляем реферальные ссылки если в посте travel-тема ──
+        try:
+            if isinstance(content_data, str):
+                content_data = _ensure_travelpayouts_links(content_data, user_id)
+                content = content_data  # синхронизируем оригинальную переменную
+            elif isinstance(content_data, dict):
+                for _tp_key in ('body', 'text', 'cta'):
+                    if _tp_key in content_data and isinstance(content_data[_tp_key], str):
+                        content_data[_tp_key] = _ensure_travelpayouts_links(
+                            content_data[_tp_key], user_id,
+                        )
+        except Exception as _tp_e:
+            logger.debug("[TRAVELPAYOUTS] injection skipped in publish_to_telegram: %s", _tp_e)
 
         result = await marketing_agent.publish_to_telegram(
             content=content_data,
