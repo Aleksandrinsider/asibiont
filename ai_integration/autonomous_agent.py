@@ -955,10 +955,10 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'setup': 'RESEND_API_KEY',
     },
     {
-        'label': 'Aviasales / Tutu',
-        'keywords': ('авиасалес', 'aviasales', 'tutu', 'билеты на самолёт', 'поиск рейсов'),
-        'presence': ('aviasales', 'tutu', 'avia_token'),
-        'setup': 'AVIASALES_API_KEY',
+        'label': 'Aviasales / Tutu / Travelpayouts',
+        'keywords': ('авиасалес', 'aviasales', 'tutu', 'travelpayouts', 'билеты на самолёт', 'поиск рейсов', 'партнёрские ссылки', 'аффилиат'),
+        'presence': ('aviasales', 'tutu', 'travelpayouts', 'avia_token'),
+        'setup': 'AVIASALES_API_KEY / TRAVELPAYOUTS_MARKETER_TOKEN',
     },
     {
         'label': 'Google Maps',
@@ -7156,6 +7156,7 @@ _INTEGRATION_LABELS: dict = {
     'ONEC_': '1С',
     'AVIASALES': 'Aviasales',
     'TUTU': 'Tutu.ru',
+    'TRAVELPAYOUTS': 'Travelpayouts (партнёрские ссылки)',
     'SIPUNI': 'Sipuni (телефония)',
     'VOXIMPLANT': 'VoxImplant (телефония)',
     'FIREBASE': 'Firebase/Firestore',

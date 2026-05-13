@@ -5975,6 +5975,65 @@ try:
 except Exception as e:
     print('Ошибка Aviasales: ' + str(e))`
             },
+            travelpayouts: {
+                name: 'Travelpayouts (партнёрские ссылки)',
+                fields: [
+                    {k:'TRAVELPAYOUTS_MARKETER_TOKEN', label:'API токен Маркетера (travelpayouts.com > Разработчикам > Маркетер API)', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TRAVELPAYOUTS_MARKER', label:'Ваш marker ID (shmarker из кабинета Travelpayouts)', ph:'123456', t:'text'}
+                ],
+                hint: 'Travelpayouts — партнёрская сеть авиабилетов, отелей, ЖД (до 50% CPA). Токен: travelpayouts.com > Разработчикам > Маркетер API. Marker: travelpayouts.com > Настройки > Партнёрский идентификатор.',
+                code: `import urllib.request, json, os
+TOKEN  = os.environ.get('TRAVELPAYOUTS_MARKETER_TOKEN', '')
+MARKER = os.environ.get('TRAVELPAYOUTS_MARKER', '')
+ORIGIN = os.environ.get('AGENT_PARAM_ORIGIN', 'MOW')
+DEST   = os.environ.get('AGENT_PARAM_DESTINATION', 'LED')
+CITY   = os.environ.get('AGENT_PARAM_CITY', 'Москва')
+ACTION = os.environ.get('AGENT_ACTION', 'generate_links')
+try:
+    # === Партнёрские ссылки Travelpayouts ===
+    if ACTION in ('generate_links', 'check_all'):
+        print('\x3d\x3d\x3d Travelpayouts — партнёрские ссылки (marker: ' + MARKER + ') \x3d\x3d\x3d')
+
+        # Авиабилеты (Aviasales)
+        flight_url = 'https://www.aviasales.ru/search/' + ORIGIN + DEST + '1?marker=' + MARKER
+        print('  ✈ Авиабилеты ' + ORIGIN + ' → ' + DEST + ': ' + flight_url)
+
+        # Отели (Hotellook)
+        city_enc = urllib.parse.quote(CITY)
+        hotel_url = 'https://search.hotellook.com/?location=' + city_enc + '&marker=' + MARKER
+        print('  🏨 Отели в ' + CITY + ': ' + hotel_url)
+
+        # ЖД билеты (Tutu)
+        train_url = 'https://tutu.travelpayouts.com/click?shmarker=' + MARKER + '&url=https%3A%2F%2Fwww.tutu.ru%2Fpoezda%2F' + urllib.parse.quote(ORIGIN) + '%2F' + urllib.parse.quote(DEST) + '%2F'
+        print('  🚆 ЖД ' + ORIGIN + ' → ' + DEST + ': ' + train_url)
+
+        # Страховка (Cherehapa)
+        ins_url = 'https://cherehapa.travelpayouts.com/?marker=' + MARKER + '&from=' + city_enc
+        print('  🛡 Страховка для ' + CITY + ': ' + ins_url)
+
+    # === Поиск лучших цен через Data API ===
+    if ACTION in ('search_prices', 'check_all'):
+        print('\x3d\x3d\x3d Travelpayouts — поиск цен \x3d\x3d\x3d')
+        TOKEN_DATA = os.environ.get('AVIASALES_TOKEN', TOKEN)
+        data_url = 'https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=' + ORIGIN + '&destination=' + DEST + '&currency=rub&sorting=price&limit=5&token=' + TOKEN_DATA
+        try:
+            with urllib.request.urlopen(data_url, timeout=15) as r:
+                d = json.loads(r.read().decode())
+            tickets = d.get('data', [])
+            if tickets:
+                print('  Лучшие цены ' + ORIGIN + ' → ' + DEST + ':')
+                for t in tickets[:5]:
+                    price = t.get('value', t.get('price', '?'))
+                    dep = t.get('departure_at', '')[:10]
+                    print('    ' + str(price) + ' руб. — ' + dep)
+            else:
+                print('  Билетов по маршруту не найдено')
+        except Exception as e:
+            print('  Ошибка поиска цен: ' + str(e))
+
+except Exception as e:
+    print('Ошибка Travelpayouts: ' + str(e))`
+            },
             tutu: {
                 name: 'Tutu.ru (ЖД билеты)',
                 fields: [
@@ -7682,6 +7741,7 @@ except Exception as e:
             firebase:        ['firebase_query', 'firebase_set'],
             aws_s3:          ['upload_file', 's3_list', 's3_upload'],
             aviasales:       ['search_flights', 'aviasales_search'],
+            travelpayouts:   ['generate_affiliate_links', 'search_prices'],
             tutu:            ['search_flights', 'tutu_search'],
             flightradar:     ['flightradar_status', 'check_flight'],
             cdek:            ['cdek_track', 'check_delivery'],
@@ -8311,6 +8371,7 @@ except Exception as e:
                             <option value="aws_s3">AWS S3</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Путешествия / Доставка</option>
                             <option value="aviasales">Aviasales (авиабилеты)</option>
+                            <option value="travelpayouts">Travelpayouts (партнёрские ссылки)</option>
                             <option value="tutu">Tutu.ru (ЖД билеты)</option>
                             <option value="flightradar">Flightradar24 (рейсы)</option>
                             <option value="cdek">СДЭК (доставка)</option>
