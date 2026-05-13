@@ -5990,7 +5990,7 @@ DEST   = os.environ.get('AGENT_PARAM_DESTINATION', 'LED')
 CITY   = os.environ.get('AGENT_PARAM_CITY', 'Москва')
 ACTION = os.environ.get('AGENT_ACTION', 'generate_links')
 try:
-    # === Партнёрские ссылки Travelpayouts ===
+    # Партнёрские ссылки Travelpayouts
     if ACTION in ('generate_links', 'check_all'):
         print('\x3d\x3d\x3d Travelpayouts — партнёрские ссылки (marker: ' + MARKER + ') \x3d\x3d\x3d')
 
@@ -6011,7 +6011,7 @@ try:
         ins_url = 'https://cherehapa.travelpayouts.com/?marker=' + MARKER + '&from=' + city_enc
         print('  🛡 Страховка для ' + CITY + ': ' + ins_url)
 
-    # === Поиск лучших цен через Data API ===
+    # Поиск лучших цен через Data API
     if ACTION in ('search_prices', 'check_all'):
         print('\x3d\x3d\x3d Travelpayouts — поиск цен \x3d\x3d\x3d')
         TOKEN_DATA = os.environ.get('AVIASALES_TOKEN', TOKEN)
