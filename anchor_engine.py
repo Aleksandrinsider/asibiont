@@ -14149,8 +14149,13 @@ class AnchorEngine:
             if len(_profiles_dicts) != len(_profiles):
                 _n_str = len(_profiles) - len(_profiles_dicts)
                 logger.warning("[COORD] filtered %d non-dict elements from _profiles", _n_str)
-            _email_ag_names = [p['name'] for p in _profiles_dicts if any(c.get('key') == 'email' for c in p.get('caps', []))]
-            _other_ag_names = [p['name'] for p in _profiles_dicts if not any(c.get('key') == 'email' for c in p.get('caps', []))]
+            # _caps — это список строк (названия сервисов), не dict'ов.
+            # Проверяем: 'почта', 'gmail' или 'email' в названии → email-агент
+            def _is_email_cap(c: str) -> bool:
+                _cl = c.lower() if isinstance(c, str) else ''
+                return any(x in _cl for x in ('почта', 'gmail', 'email'))
+            _email_ag_names = [p['name'] for p in _profiles_dicts if any(_is_email_cap(c) for c in p.get('caps', []))]
+            _other_ag_names = [p['name'] for p in _profiles_dicts if not any(_is_email_cap(c) for c in p.get('caps', []))]
             # Diagnostic: логируем какие агенты переданы в координатор
             _agent_names_list = [p.get('name', '') for p in _profiles_dicts if p.get('name', '').strip()]
             logger.info("[COORD] Starting with %d agent profiles: %s", len(_agent_names_list), _agent_names_list)
