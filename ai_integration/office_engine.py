@@ -1388,7 +1388,8 @@ class OfficeEngine:
                     'user': user,
                     'user_db_id': prof.user_id,
                     'goals': [(g.id, g.title, g.progress_percentage, g.target_date) for g in goals],
-                    'agents': [(a.id, a.name, a.specialization, a.description) for a in agents],
+                    'agents': [(a.id, a.name, a.specialization, a.description, a.gender,
+                                a.python_code, a.user_api_keys, a.tools_allowed) for a in agents],
                 })
         finally:
             s.close()
@@ -1590,7 +1591,7 @@ class OfficeEngine:
         # Собираем реальные инструменты каждого агента через универсальный парсер
         _agents_caps = []
         _all_agent_keys = ''  # собираем ключи ВСЕХ агентов для проверки интеграций
-        for aid, aname, aspec, adesc in agents:
+        for aid, aname, aspec, adesc, agender, apython, akeys, atools in agents:
             _line = f"- {aname} ({aspec or 'специалист'})"
             try:
                 from models import UserAgent as _UA_coord
@@ -1950,7 +1951,7 @@ class OfficeEngine:
                 logger.debug("[OFFICE-L2] agent not found: %s", _aname)
                 return None
 
-            _agent_id, _agent_name_db, _agent_spec, _agent_desc = _agent_match
+            _agent_id, _agent_name_db, _agent_spec, _agent_desc, _agent_gender, _agent_python, _agent_keys, _agent_tools = _agent_match
 
             # Приоритет под urgency
             _anchor_priority = AnchorPriority.HIGH if _urgency == 'high' else AnchorPriority.LOW
@@ -2002,11 +2003,31 @@ class OfficeEngine:
                     'name': _agent_name_db,
                     'specialization': _agent_spec,
                     'description': _agent_desc,
+                    'gender': _agent_gender,
+                    'python_code': _agent_python,
+                    'user_api_keys': _agent_keys,
+                    'tools_allowed': _agent_tools,
                 }
                 _exec_result = await _exec_agent_for_director(
                     _agent_dict, _atask, user_db_id,
                 )
                 if _exec_result:
+                    # ── Сохраняем отчёт агента как видимое сообщение в чате ──
+                    try:
+                        from ai_integration.autonomous_agent import _save_interaction_for_director
+                        _agent_report_text = (
+                            _exec_result[0] if isinstance(_exec_result, (list, tuple))
+                            else str(_exec_result or '')
+                        )
+                        if _agent_report_text.strip():
+                            import json as _j_rep
+                            _agent_report_json = _j_rep.dumps({
+                                '__agent': {'name': _agent_name_db, 'id': _agent_id},
+                                'text': _agent_report_text.strip(),
+                            }, ensure_ascii=False)
+                            _save_interaction_for_director(user_db_id, _agent_report_json)
+                    except Exception as _save_err:
+                        logger.warning("[OFFICE-L2] save report error: %s", _save_err)
                     _result_summary = (
                         _exec_result[0] if isinstance(_exec_result, (list, tuple))
                         else str(_exec_result)
