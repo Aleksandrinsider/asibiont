@@ -6459,29 +6459,32 @@ class AnchorEngine:
         # Перемещён ПЕРЕД _deliver_batch чтобы гарантировать своевременный dispatch.
         if autopilot_anchors:
             logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot_anchors={len(autopilot_anchors)}, _time_left={_time_left():.0f}s")
-        if autopilot_anchors and _time_left() > 30:
+            # Сначала вычисляем списки якорей независимо от _time_left
             _goal_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'goal_autopilot_review']
             _chat_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'chat_ai_review']
-            _ap_gap_ok = True
-        elif autopilot_anchors:
-            logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot skipped — _time_left={_time_left():.0f}s <= 30")
-            try:
-                _last_ap_delivered = session.query(Anchor.delivered_at).filter(
-                    Anchor.user_id == user.id,
-                    Anchor.anchor_type.in_(list(REVIEW_SILENT_TYPES)),
-                    Anchor.delivered_at.isnot(None),
-                ).order_by(Anchor.delivered_at.desc()).first()
-                if _last_ap_delivered:
-                    _ap_time = _last_ap_delivered[0]
-                    if _ap_time.tzinfo is None:
-                        _ap_time = _ap_time.replace(tzinfo=timezone.utc)
-                    _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
-                    _soft_min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 2)
-                    if _ap_gap < _soft_min_gap:
-                        _ap_gap_ok = False
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ review deferred (last delivered {_ap_gap:.0f}m ago, min={_soft_min_gap}m)")
-            except Exception as _e:
-                logger.debug("suppressed: %s", _e)
+
+            if _time_left() > 30:
+                _ap_gap_ok = True
+            else:
+                # Мало времени — проверяем gap от последней доставки
+                logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot gap check — _time_left={_time_left():.0f}s <= 30")
+                try:
+                    _last_ap_delivered = session.query(Anchor.delivered_at).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type.in_(list(REVIEW_SILENT_TYPES)),
+                        Anchor.delivered_at.isnot(None),
+                    ).order_by(Anchor.delivered_at.desc()).first()
+                    if _last_ap_delivered:
+                        _ap_time = _last_ap_delivered[0]
+                        if _ap_time.tzinfo is None:
+                            _ap_time = _ap_time.replace(tzinfo=timezone.utc)
+                        _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
+                        _soft_min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 2)
+                        if _ap_gap < _soft_min_gap:
+                            _ap_gap_ok = False
+                            logger.info(f"[ANCHOR] User {user_id}: ⛔ review deferred (last delivered {_ap_gap:.0f}m ago, min={_soft_min_gap}m)")
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             if _ap_gap_ok:
                 _today_start_ap = self._user_day_start_utc(user)
