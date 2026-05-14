@@ -6023,11 +6023,18 @@ class AnchorEngine:
         # Если пользователь не отправил ни одного сообщения (только /start) —
         # не генерировать и не доставлять проактивные. Welcome-сообщение от /start достаточно,
         # дальнейшие проактивные сообщения воспринимаются как спам и ведут к удалению аккаунта.
+        # ИСКЛЮЧЕНИЕ: пользователи с включённым автопилотом целей (goal_autopilot_enabled)
+        # всегда проходят сканирование — автопилот не является спамом, это фоновая AI-работа.
         if not last_user_msg:
-            logger.info(f"[ANCHOR] User {user_id}: ⛔ silent user (0 messages ever) — skip proactive scan & delivery")
-            return
+            # Проверяем включён ли автопилот целей
+            _profile_autopilot = session.query(UserProfile.goal_autopilot_enabled).filter_by(user_id=user.id).scalar()
+            if not _profile_autopilot:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ silent user (0 messages ever) — skip proactive scan & delivery")
+                return
+            logger.info(f"[ANCHOR] User {user_id}: silent user but autopilot ENABLED — proceeding with scan (autopilot anchors only)")
 
         # 1. SCAN — обнаружить новые якоря
+        logger.info(f"[DIAG-SCAN] User {user_id}: BEFORE _scan_anchors — last_user_msg={'found' if last_user_msg else 'None'}, is_night={is_night}")
         new_anchors = await self._scan_anchors(user, session)
         if new_anchors:
             # Dedup-фильтр: не создаём якорь если уже есть pending с тем же type+source

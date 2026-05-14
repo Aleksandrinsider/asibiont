@@ -1,0 +1,30 @@
+[2026-05-14T20:49:23.661512754Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
+[2026-05-14T20:49:23.661517458Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
+[2026-05-14T20:49:23.661521892Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=10, profile=found
+[2026-05-14T20:49:23.661527199Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
+[2026-05-14T20:49:23.661532240Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
+[2026-05-14T20:49:23.661538415Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=11
+[2026-05-14T20:49:36.867576318Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
+[2026-05-14T20:54:21.081548545Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
+[2026-05-14T20:54:21.081554796Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
+[2026-05-14T20:54:21.081561256Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=10, profile=found
+[2026-05-14T20:54:21.081569657Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
+[2026-05-14T20:54:21.081578302Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
+[2026-05-14T20:54:21.081617143Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=11
+[2026-05-14T20:54:24.176558831Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
+[2026-05-14T20:59:25.518663435Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
+[2026-05-14T20:59:25.518670625Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
+[2026-05-14T20:59:25.518676622Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=10, profile=found
+[2026-05-14T20:59:25.518682664Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
+[2026-05-14T20:59:25.518690440Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
+[2026-05-14T20:59:25.518705827Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=11
+[2026-05-14T20:59:25.518716296Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
+[2026-05-14T21:04:26.950114581Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
+[2026-05-14T21:04:26.950123978Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
+[2026-05-14T21:04:26.950140482Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=11, profile=found
+[2026-05-14T21:04:26.950148255Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
+[2026-05-14T21:04:26.950156820Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
+[2026-05-14T21:04:26.950165029Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=12
+[2026-05-14T21:04:26.950208859Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 11 singleton types in DB)
+
+--- Found 28 matching lines ---

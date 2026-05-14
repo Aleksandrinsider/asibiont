@@ -1985,7 +1985,7 @@ class OfficeEngine:
             _agent_id, _agent_name_db, _agent_spec, _agent_desc, _agent_gender, _agent_python, _agent_keys, _agent_tools = _agent_match
 
             # Приоритет под urgency
-            _anchor_priority = AnchorPriority.HIGH if _urgency == 'high' else AnchorPriority.LOW
+            _anchor_priority = _AP.HIGH if _urgency == 'high' else _AP.LOW
 
             # ── Quality guard: отфильтровываем пустышки до передачи агенту ──
             _OFFICE_TOOL_NAMES = (
