@@ -5131,6 +5131,30 @@ class AnchorEngine:
         except Exception as _rec_err:
             logger.debug("[ANCHOR] Recovery error: %s", _rec_err)
 
+        # ── Stale autopilot anchor cleanup: помечаем как expired все goal_autopilot_review
+        # якоря, которые висят не delivered >35 мин (остались после рестарта/флапа).
+        # Иначе singleton-dedup блокирует создание свежих якорей на ~1-2 цикла.
+        try:
+            from models import Session as _StaleSess, Anchor as _StaleAnchor
+            _s_stale = _StaleSess()
+            try:
+                _stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=35)
+                _stale_ap = _s_stale.query(_StaleAnchor).filter(
+                    _StaleAnchor.anchor_type.in_(['goal_autopilot_review', 'chat_ai_review']),
+                    _StaleAnchor.delivered_at.is_(None),
+                    _StaleAnchor.triggered_at.isnot(None),
+                    _StaleAnchor.triggered_at < _stale_cutoff,
+                ).all()
+                if _stale_ap:
+                    for _sa in _stale_ap:
+                        _sa.delivered_at = _sa.created_at or datetime.now(timezone.utc)
+                    _s_stale.commit()
+                    logger.info("[ANCHOR] Recovery: expired %d stale autopilot anchors (>35min pending)", len(_stale_ap))
+            finally:
+                _s_stale.close()
+        except Exception as _stale_err:
+            logger.debug("[ANCHOR] Recovery: stale autopilot cleanup error: %s", _stale_err)
+
         while self.running:
             try:
                 import time as _time
