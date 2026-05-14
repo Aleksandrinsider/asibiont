@@ -6115,7 +6115,20 @@ class AnchorEngine:
         ).order_by(
             Anchor.priority.asc(),  # CRITICAL first (enum order)
             Anchor.created_at.asc()
-        ).limit(20).all()
+        ).limit(50).all()
+
+        # ── SUPPLEMENT: гарантированно подхватываем autopilot-якоря (могли не войти в limit) ──
+        _deliverable_ids = {a.id for a in deliverable}
+        _autopilot_supplement = session.query(Anchor).filter(
+            Anchor.user_id == user.id,
+            Anchor.delivered_at.is_(None),
+            Anchor.triggered_at.isnot(None),
+            Anchor.anchor_type.in_(REVIEW_SILENT_TYPES),
+            ~Anchor.id.in_(_deliverable_ids),
+        ).order_by(Anchor.created_at.asc()).limit(5).all()
+        if _autopilot_supplement:
+            logger.info(f"[ANCHOR] User {user_id}: 🔄 autopilot supplement — added {len(_autopilot_supplement)} anchors excluded by limit")
+            deliverable.extend(_autopilot_supplement)
 
         # ── STUCK ANCHOR RECOVERY: если autopilot-якорь висит >35 мин без delivered_at ──
         _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=35)
@@ -6185,6 +6198,10 @@ class AnchorEngine:
 
         # Фильтруем: не истёкшие + cooldown
         ready = [a for a in deliverable if a.is_deliverable()]
+        _removed_cnt = len(deliverable) - len(ready)
+        if _removed_cnt:
+            _removed_types = [a.anchor_type for a in deliverable if a not in ready]
+            logger.info(f"[DIAG-DELIVERABLE] User {user_id}: is_deliverable removed {_removed_cnt} anchors: {_removed_types}")
         if not ready:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
             return
@@ -6352,6 +6369,7 @@ class AnchorEngine:
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
         autopilot_anchors = [a for a in ready if a.anchor_type in AUTOPILOT_SILENT_TYPES]
+        logger.info(f"[DIAG-READY] User {user_id}: autopilot_types={[a.anchor_type for a in autopilot_anchors]}, all_ready_types={[a.anchor_type for a in ready]}")
         custom_agent_anchors = [a for a in ready if a.anchor_type in CUSTOM_AGENT_TYPES]
         regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors and a not in autopilot_anchors and a not in custom_agent_anchors]
 
