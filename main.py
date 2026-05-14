@@ -6426,6 +6426,12 @@ async def get_feed_handler(request):
             
             # Get user's profile with favorites
             user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+
+            # [DIAG] Check total posts for this user in DB
+            _total_user_posts = session_db.query(Post).filter(Post.user_id == user.id).count()
+            _total_progress_posts = session_db.query(Post).filter(Post.user_id == user.id, Post.post_type == 'progress').count()
+            _total_any_posts = session_db.query(Post).count()
+            logger.info(f"[DIAG-FEED] User {user.id}: total_posts={_total_user_posts}, progress_posts={_total_progress_posts}, total_any_posts={_total_any_posts}")
             
             # Parse favorite contacts from JSON
             favorite_user_ids = []
@@ -6481,11 +6487,11 @@ async def get_feed_handler(request):
             
             logger.info(f"Feed: all_user_ids for feed (favorites + self - blocked): {all_user_ids}")
 
-            # Get posts from favorites and self (exclude campaign/marketing posts)
+            # Get posts from favorites and self (all types except campaign/marketing)
             if all_user_ids:
                 posts = session_db.query(Post).filter(
                     Post.user_id.in_(all_user_ids),
-                    Post.post_type == 'progress'
+                    Post.post_type != 'campaign'
                 ).order_by(Post.created_at.desc()).limit(20).all()
                 logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
                 logger.info(f"Feed: found {len(posts)} posts from user_ids={[p.user_id for p in posts]}")
@@ -8079,8 +8085,14 @@ async def api_interactions_handler(request):
                 _iq = _iq.filter(Interaction.id > _after_id)
             interactions = _iq.order_by(Interaction.created_at.desc()).limit(_limit).all()
         interactions.reverse()  # Back to chronological order
-        
         logger.info(f"Loaded last {len(interactions)} interactions for user {user.id}")
+
+        # [DIAG] Check max interaction ID and total for diagnostics
+        if len(interactions) == 0 and (_after_id is not None or _before_id is not None):
+            _max_id_row = session_db.query(func.max(Interaction.id)).filter(Interaction.user_id == user.id).scalar()
+            _total_interactions_user = session_db.query(Interaction).filter(Interaction.user_id == user.id).count()
+            logger.info(f"[DIAG-INTERACTIONS] User {user.id}: after_id={_after_id}, before_id={_before_id}, max_id_in_db={_max_id_row}, total_interactions={_total_interactions_user}")
+
 
         # Get history cleared timestamp from DB
         history_cleared_timestamp = 0

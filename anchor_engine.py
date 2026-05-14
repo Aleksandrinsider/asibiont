@@ -6433,10 +6433,14 @@ class AnchorEngine:
         # Автопилот — наиболее ценный pipeline: работает 24/7 автономно,
         # не должен блокироваться медленными AI-вызовами для dialog-якорей.
         # Перемещён ПЕРЕД _deliver_batch чтобы гарантировать своевременный dispatch.
+        if autopilot_anchors:
+            logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot_anchors={len(autopilot_anchors)}, _time_left={_time_left():.0f}s")
         if autopilot_anchors and _time_left() > 30:
             _goal_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'goal_autopilot_review']
             _chat_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'chat_ai_review']
             _ap_gap_ok = True
+        elif autopilot_anchors:
+            logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot skipped — _time_left={_time_left():.0f}s <= 30")
             try:
                 _last_ap_delivered = session.query(Anchor.delivered_at).filter(
                     Anchor.user_id == user.id,
@@ -21714,6 +21718,7 @@ class AnchorEngine:
         ).order_by(Interaction.created_at.desc()).first()
 
         if not last_chat_msg:
+            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — no last chat message")
             return anchors
 
         lc_time = last_chat_msg.created_at
@@ -21733,6 +21738,7 @@ class AnchorEngine:
 
         _min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 3) if _is_user_question else MIN_AUTOPILOT_GAP_MINUTES
         if minutes_since < _min_gap or minutes_since > 12 * 60:
+            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — minutes_since={minutes_since:.1f}, min_gap={_min_gap}, max_gap={12*60}")
             return anchors
 
         try:
@@ -21745,13 +21751,16 @@ class AnchorEngine:
                 _rv_time = _last_review[0]
                 if _rv_time.tzinfo is None:
                     _rv_time = _rv_time.replace(tzinfo=timezone.utc)
-                if (now_utc - _rv_time).total_seconds() / 60 < MIN_AUTOPILOT_GAP_MINUTES:
+                _rv_gap = (now_utc - _rv_time).total_seconds() / 60
+                if _rv_gap < MIN_AUTOPILOT_GAP_MINUTES:
+                    logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — review gap ({_rv_gap:.1f}m < {MIN_AUTOPILOT_GAP_MINUTES}m)")
                     return anchors
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
 
         _slot = int(minutes_since // MIN_AUTOPILOT_GAP_MINUTES)
         if _slot <= 0:
+            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — slot={_slot}, minutes_since={minutes_since:.1f}")
             return anchors
 
         # Topic-based dedup: если последний chat_ai_review был о той же теме — пропускаем
@@ -22192,10 +22201,12 @@ class AnchorEngine:
     def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
         """Автопилот целей: AI анализирует цели с ПОЛНЫМ контекстом и действует."""
         if not profile:
+            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — no profile")
             return []
         # Перечитываем профиль из БД — profile мог быть загружен давно (stale cache)
         session.expire(profile)
         if not getattr(profile, 'goal_autopilot_enabled', False):
+            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — goal_autopilot_enabled=False")
             return []
 
         active_goals = session.query(Goal).filter(
@@ -22203,6 +22214,7 @@ class AnchorEngine:
             Goal.status == 'active',
         ).order_by(Goal.updated_at.asc().nullsfirst()).all()
         if not active_goals:
+            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — no active goals (goal_autopilot_enabled=True)")
             return []
 
         # ── ЖЁСТКИЙ GUARD: не создавать якорь если последний autopilot-якорь доставлен меньше MIN_AUTOPILOT_GAP_MINUTES назад ──
@@ -22220,6 +22232,7 @@ class AnchorEngine:
                 _gap = (now_utc - _ap_time).total_seconds() / 60
                 _soft_min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 2)
                 if _gap < _soft_min_gap:
+                    logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — gap guard ({_gap:.1f}m < {_soft_min_gap}m)")
                     return []
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
@@ -24284,6 +24297,7 @@ class AnchorEngine:
             signals.append(f'seeking_help:{",".join(t.title for t in collab_tasks[:3])}')
 
         # 6. Контент из последнего диалога (интересные темы)
+        # Сначала ищем сообщения от пользователя (приоритет), затем любые сообщения
         recent_interactions = session.query(Interaction).filter(
             Interaction.user_id == user.id,
             Interaction.message_type == 'user',
@@ -24293,6 +24307,16 @@ class AnchorEngine:
             topics = [i.content[:80] for i in recent_interactions if i.content]
             if topics:
                 signals.append(f'recent_topics:{"||".join(topics[:3])}')
+        else:
+            # Fallback: ищем любые недавние диалоги (включая AI) для контекста
+            recent_any = session.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.created_at >= now_utc - timedelta(hours=24)
+            ).order_by(Interaction.created_at.desc()).limit(5).all()
+            if recent_any:
+                topics = [i.content[:80] for i in recent_any if i.content]
+                if topics:
+                    signals.append(f'recent_context:{"||".join(topics[:3])}')
 
         # 7. Профиль: навыки/интересы (AI может сделать экспертный пост)
         if profile:
@@ -24323,9 +24347,17 @@ class AnchorEngine:
             if active_goals:
                 signals.append(f'active_goals:{",".join(g.title for g in active_goals)}')
 
-        # Нет сигналов — нет якоря
+        # 10. Финальный fallback: используем имя/username пользователя как минимальный сигнал
         if not signals:
-            return anchors
+            _user_display = user.first_name or user.username or 'User'
+            _min_signal = f'user_intro:{_user_display}'
+            if profile:
+                if profile.position:
+                    _min_signal += f',{profile.position[:80]}'
+                if profile.city:
+                    _min_signal += f',{profile.city[:50]}'
+            signals.append(_min_signal)
+            logger.info(f"[ANCHOR] User {user.id}: minimal signal from user intro (no other data available)")
 
         # Создаём один общий якорь — AI решит что с этим делать
         source_key = f'post:{user_now.strftime("%Y-%m-%d")}'
