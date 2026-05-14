@@ -20792,10 +20792,12 @@ class AnchorEngine:
         
         Не создаёт дубликаты — проверяет наличие необработанного якоря того же типа+source.
         """
+        logger.info(f"[DIAG-SCAN] User {user.id}: _scan_anchors START")
         anchors = []
 
         # Получаем профиль
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        logger.info(f"[DIAG-SCAN] User {user.id}: profile={'found' if profile else 'None'}, len(anchors)=0")
 
         user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
         user_now = datetime.now(user_tz)
@@ -20894,9 +20896,11 @@ class AnchorEngine:
 
         # --- FOLLOW-UP РЕЗУЛЬТАТОВ АГЕНТОВ (проверка незакрытых dispatch-задач) ---
         anchors.extend(self._scan_agent_followup(user, session, now_utc))
+        logger.info(f"[DIAG-SCAN] User {user.id}: before _scan_goal_autopilot, anchors={len(anchors)}, profile={'found' if profile else 'None'}")
 
         # --- АВТОПИЛОТ ЦЕЛЕЙ (AI автономно продвигает цели) ---
         anchors.extend(self._scan_goal_autopilot(user, profile, session, now_utc))
+        logger.info(f"[DIAG-SCAN] User {user.id}: after _scan_goal_autopilot, anchors={len(anchors)}")
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         # Пропускаем если DDG сервис известен как недоступный (service_degraded:ddg pending)
