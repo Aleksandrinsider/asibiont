@@ -10324,16 +10324,10 @@ async def api_set_language_handler(request):
         lang = data.get('lang', 'ru')
         if lang not in ('ru', 'en'):
             lang = 'ru'
-        session_db = Session()
-        try:
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
-            if user:
-                user.language = lang
-                session_db.commit()
-                logger.info(f"[SET_LANG] User {user_id} language set to {lang}")
-            return web.json_response({'success': True, 'lang': lang})
-        finally:
-            session_db.close()
+        from i18n import set_user_lang as _set_lang
+        _set_lang(user_id, lang)
+        logger.info(f"[SET_LANG] User {user_id} language set to {lang}")
+        return web.json_response({'success': True, 'lang': lang})
     except Exception as e:
         logger.error(f"[SET_LANG] Error: {e}")
         return web.json_response({'error': str(e)}, status=500)

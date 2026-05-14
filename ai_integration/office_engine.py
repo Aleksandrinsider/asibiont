@@ -939,6 +939,7 @@ class OfficeEngine:
                             agent.specialization or 'агент',
                             stdout,
                             user.id,
+                            agent.gender or '',
                         )
                     if report:
                         loop = asyncio.get_running_loop()
@@ -1218,7 +1219,7 @@ class OfficeEngine:
                 break
 
     async def _format_agent_report(self, agent_name: str, agent_spec: str, stdout: str,
-                                      user_db_id: int = 0) -> str:
+                                      user_db_id: int = 0, agent_gender: str = '') -> str:
         """Превращает сырой stdout скрипта в человеческую живую реплику агента.
         Как в арене: code_output → AI → чистое сообщение без логов и трейсбэков.
         """
@@ -1232,6 +1233,20 @@ class OfficeEngine:
         clean = '\n'.join(lines).strip()
         if not clean:
             return ""
+
+        # ── Определяем род агента ──
+        try:
+            from ai_integration.autonomous_agent import _detect_agent_is_female
+            _is_female = _detect_agent_is_female(agent_name, agent_gender)
+        except Exception:
+            _is_female = False
+        _did_word = 'выполнила' if _is_female else 'выполнил'
+        _pol_word = 'получила' if _is_female else 'получил'
+        _gender_hint = (
+            "ВАЖНО: Ты — женщина. Используй женские окончания (сделала, написала, нашла и т.д.)."
+            if _is_female else
+            "ВАЖНО: Ты — мужчина. Используй мужские окончания (сделал, написал, нашёл и т.д.)."
+        )
 
         # Контекст профиля пользователя — чтобы агент говорил релевантно его бизнесу
         _user_ctx = ''
@@ -1258,10 +1273,12 @@ class OfficeEngine:
             _clean_budget = clean[:4000]
 
         prompt = (
-            f"Ты — {agent_name}, {agent_spec}. Ты только что выполнил мониторинг и получил следующие данные:\n\n"
+            f"Ты — {agent_name}, {agent_spec}. Ты только что {_did_word} мониторинг "
+            f"и {_pol_word} следующие данные:\n\n"
             f"{_clean_budget}\n\n"
+            f"{_gender_hint}\n"
             "Напиши одно короткое сообщение (2-3 предложения) в чат пользователю — как живой человек в мессенджере.\n"
-            "Что нашёл, что важного, если нужно — одно действие. Без технических деталей, без логов, без списков.\n"
+            "Что интересного нашёл/нашла, что важно, если нужно — одно действие. Без технических деталей, без логов, без списков.\n"
             f"Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом.{_ctx_block}"
         )
         try:

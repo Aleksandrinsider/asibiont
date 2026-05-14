@@ -1679,6 +1679,13 @@
   window.applyLang = apply;
   window.switchLang = function(lang) {
     localStorage.setItem('asibiont_lang', lang);
+    // Синхронизируем язык с БД (User.language) — чтобы агенты говорили на выбранном языке
+    fetch('/api/set_language', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lang: lang})
+    }).catch(function(){});
     var path = window.location.pathname.replace(/^\/en\/?/, '/');
     if (path === '/') path = '';
         var base = (lang === 'en' ? '/en' + (path || '/') : (path || '/'));

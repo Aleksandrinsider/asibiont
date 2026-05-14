@@ -8574,7 +8574,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         from i18n import get_user_lang as _gul_exec, detect_lang_from_text as _dlt_exec
         _user_lang = _gul_exec(user_id)
         # Если задача/поручение содержит кириллицу — отвечаем по-русски
-        _task_detected = _dlt_exec((task or '') + ' ' + (dialog_context or '')[:200])
+        _task_detected = _dlt_exec((task or '') + ' ' + (dialog_context or '')[:2000])
         if _task_detected == 'ru':
             _user_lang = 'ru'
     except Exception:
@@ -13291,8 +13291,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "ВАЖНО: Пользователь ВИДИТ director_message. Пиши для человека, не для API. Добавь естественности.\n"
         + _dir_lang_line +
         "САМОПРОВЕРКА перед генерацией JSON: 1) director_message объясняет ПОЧЕМУ этот агент? 2) Назван инструмент из карточки агента? 3) Есть ожидаемый результат? 4) Текст живой, как в чате? Если нет — переписать.\n\n"
-        "❗ agent_task и director_message пиши НА ТОМ ЖЕ ЯЗЫКЕ что и весь этот промпт. НЕ переключайся на английский.\n\n"
-        "JSON без ```:\n"
+        + (
+            "❗ agent_task and director_message MUST be in English. Do NOT switch to Russian.\n\n"
+            if _dir_lang == 'en' else
+            "❗ agent_task и director_message пиши НА РУССКОМ языке. НЕ переключайся на английский.\n\n"
+        )
+        + "JSON без ```:\n"
         '{"action":"self"}\n'
         "или\n"
         '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи на русском",'
