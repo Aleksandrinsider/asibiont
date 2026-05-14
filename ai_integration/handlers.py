@@ -448,15 +448,21 @@ def _ensure_travelpayouts_links(content: str, user_id: int) -> str:
     return _result
 
 
-def _is_fem_agent(name: str) -> bool:
-    """Определяет женский ли род агента по имени."""
+def _is_fem_agent(name: str = '', explicit_gender: str = '') -> bool:
+    """Определяет женский ли род агента.
+    Приоритет: явное поле gender из БД → имя.
+    """
+    # Если есть явный пол из БД — используем его (самый надёжный способ)
+    if explicit_gender:
+        from .autonomous_agent import _detect_agent_is_female
+        return _detect_agent_is_female(name, explicit_gender)
+    # Fallback по окончанию имени (только если gender не задан)
     name = (name or '').strip().lower()
     if not name:
         return False
     first = name.split()[0]
     if first in _FEMALE_AGENT_NAMES:
         return True
-    # Fallback: check if ends with 'а' or 'я'
     if first[-1:] in 'ая':
         return True
     return False
@@ -3217,10 +3223,10 @@ async def delegate_task(
                 )
                 return _sanitized if _sanitized and len(_sanitized.strip()) >= 8 else _generic
 
-            def _live_result_text(_agent_name: str, _result_text: str) -> str:
+            def _live_result_text(_agent_name: str, _result_text: str, _agent_gender: str = '') -> str:
                 _txt = (_result_text or '').strip()
                 if not _txt:
-                    _is_fem = _is_fem_agent(_agent_name)
+                    _is_fem = _is_fem_agent(_agent_name, explicit_gender=_agent_gender)
                     _fallback = 'Вот что я нашла: пока данных мало, продолжаю проверку.' if _is_fem else 'Вот что я нашел: пока данных мало, продолжаю проверку.'
                     return sanitize_live_team_chat_text(_fallback, anchor_type='agent_delegation', speaker_name=_agent_name)
                 # Сохраняем характер и стиль агента — убираем только явный мусор
@@ -3420,6 +3426,7 @@ async def delegate_task(
                         'search_scope': _agent_recipient.search_scope or '',
                         'avatar_url': _agent_recipient.avatar_url or '',
                         'tools': _tools_parsed,
+                        'gender': _agent_recipient.gender or '',
                     }
 
                     # Логируем передачу задачи агенту
@@ -3641,7 +3648,7 @@ async def delegate_task(
                     # Очищаем чрезмерное форматирование (bullet-списки, лишние пробелы)
                     _result = _ren.sub(r'\n{3,}', '\n\n', _result)  # не более 2 переносов подряд
                     _result = _ren.sub(r'^\s*[•\-\*]\s*', '', _result, flags=_ren.MULTILINE)  # убираем маркеры списков
-                    _result = _live_result_text(_agent_name, _result)
+                    _result = _live_result_text(_agent_name, _result, _agent_gender=_agent_recipient.gender or '')
 
                     # Записываем ответ агента в чат (видно на дашборде с аватаркой)
                     try:

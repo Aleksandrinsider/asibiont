@@ -8508,9 +8508,9 @@ def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
     """
     if explicit_gender:
         g = explicit_gender.strip().lower()
-        if g in ('female', 'женский', 'жен'):
+        if g in ('female', 'женский', 'жен', 'f', 'woman', 'ж', '♀', 'feminine', 'girl'):
             return True
-        if g in ('male', 'мужской', 'муж'):
+        if g in ('male', 'мужской', 'муж', 'm', 'man', '♂', 'masculine', 'boy'):
             return False
     return False
 
@@ -8541,11 +8541,20 @@ def _normalize_agent_gender_grammar(text: str, agent_name: str, is_female: bool 
         _src = _m if _is_fem else _f
         _dst = _f if _is_fem else _m
         t = _re_g.sub(r'\b' + _re_g.escape(_src) + r'\b', _dst, t, flags=_re_g.IGNORECASE)
-    # Широкая подстраховка для мужского рода: глаголы прош.вр. ж.р. → м.р.
+    # Широкая подстраховка: глаголы прош.вр. несоответствующего рода → корректный род
     if not _is_fem:
+        # ж.р. → м.р.: убираем последнюю 'а' (сделала → сделал, нашла → нашёл через пары выше)
         t = _re_g.sub(
             r'\b([а-яёА-ЯЁ]{4,}(?:ала|ила|ела|ыла|яла|ула))\b',
             lambda m: m.group(0)[:-1],
+            t,
+        )
+    else:
+        # м.р. → ж.р.: добавляем 'а' (сделал → сделала, проверил → проверила и т.д.)
+        # Не трогаем если слово уже кончается на 'а' (уже женский род)
+        t = _re_g.sub(
+            r'\b([а-яёА-ЯЁ]{3,}(?:ал|ил|ел|ыл|ял|ул))\b(?!а)',
+            lambda m: m.group(0) + 'а',
             t,
         )
     return t

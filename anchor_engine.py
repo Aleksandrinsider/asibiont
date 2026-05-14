@@ -7634,6 +7634,7 @@ class AnchorEngine:
                     'avatar_url': _safe_avatar(getattr(chosen, 'avatar_url', ''), chosen.id),
                     'search_scope': getattr(chosen, 'search_scope', '') or '',
                     'knowledge_base': getattr(chosen, 'knowledge_base', '') or '',
+                    'gender': getattr(chosen, 'gender', '') or '',
                 }
                 agent_name = chosen.name
 
@@ -7696,6 +7697,7 @@ class AnchorEngine:
                                 'avatar_url': _safe_avatar(getattr(chosen, 'avatar_url', ''), chosen.id),
                                 'search_scope': getattr(chosen, 'search_scope', '') or '',
                                 'knowledge_base': getattr(chosen, 'knowledge_base', '') or '',
+                                'gender': getattr(chosen, 'gender', '') or '',
                             }
                             agent_name = chosen.name
                         else:
@@ -11707,6 +11709,7 @@ class AnchorEngine:
                         'search_scope': chosen.search_scope or '',
                         'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                         'tools': _jd.loads(chosen.tools_allowed or '[]'),
+                        'gender': getattr(chosen, 'gender', '') or '',
                     }
 
                     # ── Биллинг кастомного агента (роялти автору) ──
@@ -28911,6 +28914,7 @@ class AnchorEngine:
                     'user_api_keys': agent.user_api_keys or '',
                     'tools_allowed': agent.tools_allowed or '',
                     'avatar_url': agent.avatar_url or '',
+                    'gender': agent.gender or '',
                 }
 
                 task = (
