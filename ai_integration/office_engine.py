@@ -2023,7 +2023,7 @@ class OfficeEngine:
                     'tools_allowed': _agent_tools,
                 }
                 _exec_result = await _exec_agent_for_director(
-                    _agent_dict, _atask, user_db_id,
+                    _agent_dict, _atask, user.telegram_id,
                 )
                 if _exec_result:
                     # ── Сохраняем отчёт агента как видимое сообщение в чате ──
@@ -2039,7 +2039,7 @@ class OfficeEngine:
                                 '__agent': {'name': _agent_name_db, 'id': _agent_id},
                                 'text': _agent_report_text.strip(),
                             }, ensure_ascii=False)
-                            _save_interaction_for_director(user_db_id, _agent_report_json)
+                            _save_interaction_for_director(user.telegram_id, _agent_report_json)
                     except Exception as _save_err:
                         logger.warning("[OFFICE-L2] save report error: %s", _save_err)
                     _result_summary = (
