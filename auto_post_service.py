@@ -226,7 +226,7 @@ async def _publish_post_to_channel(user_id: int, content: str, image_url: str, s
 
 
 async def generate_progress_post(user_id, session):
-    """Generate daily progress post using AI"""
+    """Generate daily progress digest post using AI based on completed tasks."""
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
@@ -236,17 +236,12 @@ async def generate_progress_post(user_id, session):
         if not profile:
             return None
 
-        # Проверяем и списываем токены перед вызовом DeepSeek
-        from config import FREE_ACCESS_MODE
-        from token_service import has_enough_tokens, spend_tokens
-        if not FREE_ACCESS_MODE:
-            if not has_enough_tokens(user_id, 'auto_post'):
-                logger.info(f"[AUTO_POST] skip user {user_id}: insufficient tokens")
-                return None
-            spend_tokens(user_id, 'auto_post', description='Автопост дня')
-
-        # Timezone & time-of-day
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
+        # Timezone — prefer profile.timezone, fallback to user.timezone
+        _tz = profile.timezone or user.timezone or 'Europe/Moscow'
+        try:
+            user_tz = pytz.timezone(_tz)
+        except Exception:
+            user_tz = pytz.timezone('Europe/Moscow')
         now_utc = datetime.now(pytz.UTC)
         user_now = now_utc.astimezone(user_tz)
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
@@ -274,6 +269,20 @@ async def generate_progress_post(user_id, session):
                 Task.status.in_(['completed', 'done']),
                 Task.created_at >= today_start
             ).all()
+
+        # ── КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: если нет выполненных задач — не тратим токены ──
+        if not completed_today:
+            logger.info(f"[AUTO_POST] skip user {user_id}: no completed tasks today, no post needed")
+            return None
+
+        # Проверяем и списываем токены ТОЛЬКО если есть что писать
+        from config import FREE_ACCESS_MODE
+        from token_service import has_enough_tokens, spend_tokens
+        if not FREE_ACCESS_MODE:
+            if not has_enough_tokens(user_id, 'auto_post'):
+                logger.info(f"[AUTO_POST] skip user {user_id}: insufficient tokens")
+                return None
+            spend_tokens(user_id, 'auto_post', description='Автопост дня')
 
         # Active tasks (created any time, still open)
         active_tasks = session.query(Task).filter(
@@ -306,8 +315,6 @@ async def generate_progress_post(user_id, session):
         user_gender = (profile.gender if profile and profile.gender in ('male', 'female')
                        else _detect_gender(user.first_name or ''))
         user_city = profile.city or ''
-        user_interests = profile.interests or ''
-        user_skills = profile.skills or ''
         user_goals = profile.goals or ''
 
         def _extract_post_preferences_from_memory(_user_obj) -> dict:
@@ -350,55 +357,51 @@ async def generate_progress_post(user_id, session):
         elif _post_prefs.get('format') == 'normal' and 0 < _recent_avg_len < 260:
             _post_prefs['format'] = 'short'
 
-        # Random tone variation to keep posts diverse
-        tone = random.choice([
-            "без прикрас, честно — как в чате другу",
-            "немного устал, но доволен — рефлексивно",
-            "энергично, с лёгким юмором",
-            "спокойно и по-деловому",
-            "с конкретикой и чуть личным",
-            "ироничный, с самоиронией",
-            "мечтательно, с взглядом в будущее",
-            "философски, про простые вещи",
-        ])
-
-        # Topic rotation — pick a fresh angle that hasn't been covered
+        # --- НОВЫЕ: темы для дайджеста задач, а не личного блога ---
         topic_angles = [
-            "мысли о текущем дне, погоде, настроении",
-            "наблюдение из обычной жизни — что заметил сегодня",
-            "маленькая привычка или ритуал, который помогает",
-            "что-то новое, что попробовал или узнал",
-            "размышление о балансе работы и жизни",
-            "про мотивацию или её отсутствие сегодня",
-            "простая радость или мелочь, которая порадовала",
-            "про общение с людьми — разговор, встреча, переписка",
-            "про усталость, паузу или перезагрузку",
-            "про планы или ожидания на ближайшее время",
+            "итоги дня по закрытым задачам — что успел и какой результат",
+            "самая сложная задача, которую закрыл сегодня — как решил",
+            "неожиданный результат или инсайт из выполненной задачи",
+            "какая задача принесла больше всего пользы сегодня",
+            "что планировал сделать и что из этого вышло на самом деле",
+            "связь между выполненными задачами — общий прогресс за день",
+            "что узнал нового в процессе выполнения задач",
+            "как продвинулся к большой цели через мелкие задачи",
         ]
         topic_hint = random.choice(topic_angles)
+
+        # Tone for digest — focused on achievements
+        tone = random.choice([
+            "по-деловому, с цифрами и фактами",
+            "спокойно, с чувством выполненного долга",
+            "энергично, с фокусом на результат",
+            "без прикрас, честно — что получилось, а что нет",
+            "с лёгкой гордостью за сделанное",
+            "коротко и по существу",
+        ])
 
         # Build prompt
         city_part = f", {user_city}" if user_city else ""
 
-        context = f"""Пишешь пост для личного блога от лица реального человека. Стиль: {tone}.
+        context = f"""Ты пишешь ежедневный дайджест выполненных задач от первого лица. Стиль: {tone}.
 
 О человеке:
 - Имя: {user_name}{city_part}
 - Сейчас: {time_of_day}
-- Направление: {topic_hint}
+- Фокус: {topic_hint}
 """
 
-        if completed_today:
-            context += f"\nЗакрыто сегодня ({len(completed_today)}):\n"
-            for t in completed_today[:5]:
-                desc = decrypt_data(t.description) if t.description else t.title
-                notes = f" — {t.completion_notes[:60]}" if t.completion_notes else ""
-                context += f"- {desc}{notes}\n"
-        else:
-            context += "\nЗакрытых задач сегодня нет.\n"
+        # Completed tasks — ОБЯЗАТЕЛЬНЫ (мы уже проверили что они есть)
+        context += f"\nВыполнено сегодня ({len(completed_today)} шт.):\n"
+        for t in completed_today[:7]:
+            desc = decrypt_data(t.description) if t.description else t.title
+            notes = f" — {t.completion_notes[:80]}" if t.completion_notes else ""
+            context += f"- «{desc}»{notes}\n"
+        if len(completed_today) > 7:
+            context += f"  ...и ещё {len(completed_today) - 7} задач\n"
 
         if active_tasks:
-            context += f"\nВ работе сейчас:\n"
+            context += f"\nВ работе:\n"
             for t in active_tasks[:3]:
                 desc = decrypt_data(t.description) if t.description else t.title
                 context += f"- {desc}\n"
@@ -411,48 +414,50 @@ async def generate_progress_post(user_id, session):
 
         if week_completed_count > 0:
             context += f"\nЗа неделю закрыто задач: {week_completed_count}\n"
+        if user_goals:
+            context += f"\nЦели: {user_goals[:200]}\n"
 
         if recent_texts:
-            context += f"\nПРЕДЫДУЩИЕ ПОСТЫ — старайся найти свежую тему:\n"
+            context += f"\nПредыдущие дайджесты (чтобы не повторяться):\n"
             for i, s in enumerate(recent_texts, 1):
-                context += f"---\nПост {i}: {s}\n"
-            context += "---\nНапиши про СОВЕРШЕННО ДРУГУЮ тему. Если предыдущие посты про работу — напиши про жизнь. Если про тренды — напиши про личное. Если про цели — напиши про настроение.\n"
+                context += f"---\nПост {i}: {s[:150]}\n"
+            context += "---\n"
 
         if _post_prefs['rules_preview']:
-            context += "\nПравила пользователя по стилю/формату постов (в приоритете):\n"
+            context += "\nПравила пользователя по стилю/формату:\n"
             for _r in _post_prefs['rules_preview']:
                 context += f"- {_r}\n"
 
-        _format_rule = "— от первого лица, 2-4 предложения, максимум 400 символов"
+        _format_rule = "— 2-4 предложения, максимум 400 символов"
         if _post_prefs['format'] == 'long':
-            _format_rule = "— от первого лица, развернутый формат 6-10 предложений (ориентир: 900-1700 символов), как цельная мини-статья"
+            _format_rule = "— развернутый формат 5-8 предложений (ориентир: 700-1200 символов)"
         elif _post_prefs['format'] == 'normal':
-            _format_rule = "— от первого лица, 3-6 предложений, содержательно и без воды"
+            _format_rule = "— 3-5 предложений, содержательно"
 
         context += f"""
-Напиши пост. СТРОГИЕ правила:
+Напиши дайджест задач за сегодня. СТРОГИЕ правила:
 {_format_rule}
-— живой разговорный текст, как запись в личном блоге — не пресс-релиз
-— БЕЗ буллетов, нумерации, хештегов, CTA
-— {'женский род: «выбрала», «сделала», «заметила», «решила»' if user_gender == 'female' else 'мужской род: «выбрал», «сделал», «заметил», «решил»'}
-— {"основывайся ТОЛЬКО на реально закрытых задачах выше" if completed_today else "задач не было — напиши что-то личное: настроение, наблюдение, мысль дня"}
-— НЕ пиши про профессиональные навыки и сферу деятельности (это уже было в предыдущих постах)
-— НЕ начинай со слов «Сегодня», «Только что», «Интересно»
-— НЕ заканчивай вопросом к аудитории или моралью
-— направление для темы: {topic_hint}
+— живой разговорный текст, как заметка в ежедневнике
+— {user_gender == 'female' and 'женский род' or 'мужской род'}
+— ОБЯЗАТЕЛЬНО упомяни хотя бы 2-3 выполненные задачи из списка выше
+— если есть просроченные задачи — отметь это честно
+— НЕ используй буллеты, нумерацию, хештеги, CTA, заголовки
+— НЕ начинай со слов «Сегодня», «Только что», «За день»
+— НЕ заканчивай вопросом к аудитории
+— НЕ пиши про погоду, настроение или личные переживания — ТОЛЬКО про задачи и прогресс
 
-Только текст поста:"""
+Только текст дайджеста:"""
 
         # Call AI
         try:
-            _sys = "Ты — ghostwriter. Пиши от первого лица живо и естественно, строго следуя пользовательским правилам формата из запроса."
-            _max_tokens = 900 if _post_prefs['format'] == 'long' else (550 if _post_prefs['format'] == 'normal' else 400)
+            _sys = "Ты — ассистент для ежедневного дайджеста. Пиши кратко, по делу, с фокусом на выполненные задачи."
+            _max_tokens = 700 if _post_prefs['format'] == 'long' else (450 if _post_prefs['format'] == 'normal' else 350)
             response = await _generate_text_with_ai(context, system_prompt=_sys, max_tokens=_max_tokens)
 
             if response and len(response) > 20:
                 post_content = response.strip().strip('"').strip("'")
                 logger.info(
-                    f"[AUTO POST] Generated post for {user_id} (tone={tone}, len={len(post_content)}): {post_content[:100]}"
+                    f"[AUTO POST] Generated digest for {user_id} ({len(completed_today)} tasks, len={len(post_content)}): {post_content[:120]}"
                 )
                 return post_content
             else:
@@ -921,7 +926,12 @@ async def check_and_create_posts():
                 if not profile:
                     continue
                 
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
+                # Используем profile.timezone (приоритет), затем user.timezone
+                _tz_str = profile.timezone or user.timezone or 'Europe/Moscow'
+                try:
+                    user_tz = pytz.timezone(_tz_str)
+                except Exception:
+                    user_tz = pytz.timezone('Europe/Moscow')
                 user_now = datetime.now(pytz.UTC).astimezone(user_tz)
                 
                 current_hour = user_now.hour

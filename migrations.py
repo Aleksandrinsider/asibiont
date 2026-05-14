@@ -897,6 +897,7 @@ def run_migrations():
         _migrate_activity_log_updated_at_index(session, inspector)
         _migrate_agent_activity_log_title_default(session, inspector)
         _cleanup_junk_agent_tasks(session)
+        _migrate_fix_profile_timezone(session)
         _migrate_intelligence_tables(session, inspector)
         _migrate_optimization_tables(session, inspector)
         _cleanup_backfill_blog_duplicates(session, inspector)
@@ -907,6 +908,34 @@ def run_migrations():
         raise
     finally:
         session.close()
+
+
+def _migrate_fix_profile_timezone(session):
+    """Синхронизирует profile.timezone с user.timezone для пользователей,
+    у которых profile.timezone='UTC' (или NULL), но user.timezone задан явно.
+    Это фикс для авто-постов, которые определяют часовой пояс по profile.timezone."""
+    from models import User, UserProfile
+    try:
+        fixed = 0
+        users = session.query(User).filter(
+            User.timezone.isnot(None),
+            User.timezone != 'UTC'
+        ).all()
+        for u in users:
+            prof = session.query(UserProfile).filter_by(user_id=u.id).first()
+            if not prof:
+                continue
+            p_tz = prof.timezone or 'UTC'
+            if p_tz == 'UTC' and u.timezone != 'UTC':
+                prof.timezone = u.timezone
+                fixed += 1
+                logger.info(f"[MIGRATION] Fixed profile timezone for user {u.id}: UTC → {u.timezone}")
+        if fixed:
+            session.commit()
+            logger.info(f"[MIGRATION] Fixed {fixed} profile timezones")
+    except Exception as e:
+        logger.warning(f"[MIGRATION] Profile timezone fix failed (non-fatal): {e}")
+        session.rollback()
 
 
 def _migrate_intelligence_tables(session, inspector):
