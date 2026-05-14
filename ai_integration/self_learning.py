@@ -354,6 +354,19 @@ class SelfLearner:
             m['tool_success'][tool_name] += 1
         else:
             m['tool_fail'][tool_name] += 1
+            # ── Circuit Breaker: фиксируем неудачу инструмента ──
+            try:
+                from ai_integration.channel_optimizer import AdaptiveCircuitBreaker
+                import asyncio
+                _cb_self = AdaptiveCircuitBreaker(user_id)
+                try:
+                    asyncio.get_event_loop().create_task(
+                        _cb_self.record_failure(f'tool:{tool_name}', context=result_str[:200])
+                    )
+                except RuntimeError:
+                    pass  # нет event loop (синхронный контекст)
+            except Exception as _cbs_e:
+                logger.debug('[CB] record_tool_result skip: %s', _cbs_e)
             # Извлекаем причину ошибки
             if result_str:
                 reason = result_str[:120].strip()

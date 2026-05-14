@@ -142,6 +142,11 @@ class Interaction(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Индекс для поиска взаимодействий пользователя
     message_type = Column(String(50), index=True)  # Индекс для фильтрации по типу сообщения
     content = Column(Text)
+    # Новые колонки для полного логирования (добавлены по результатам аудита)
+    tool_calls = Column(Text, nullable=True)  # JSON: какие инструменты и с какими параметрами вызваны
+    channel = Column(String(50), nullable=True, index=True)  # email/telegram/blog/github/discord и т.д.
+    cost_tokens = Column(Integer, default=0)  # Сколько токенов стоило взаимодействие
+    effectiveness_score = Column(Float, nullable=True)  # 0.0-1.0: оценка результата
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по времени
 
     user = relationship("User", backref="interactions")
@@ -1166,6 +1171,80 @@ class ArenaComment(Base):
     agent_text = Column(Text)
     ts = Column(String(50))
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+# ═══════════════════════════════════════════════════════
+# CHANNEL OPTIMIZER: Таблицы для самооптимизации автопилота
+# ═══════════════════════════════════════════════════════
+
+
+class CircuitBreakerState(Base):
+    """Состояние circuit breaker для агентов и инструментов.
+    Блокирует повторяющиеся бесперспективные действия после N неудач."""
+    __tablename__ = 'circuit_breaker_state'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    key = Column(String(255), nullable=False, index=True)  # 'agent:Beatrice:email_campaign' | 'tool:web_search'
+    fail_count = Column(Integer, default=0)
+    first_fail_at = Column(DateTime, nullable=True)
+    cooldown_until = Column(DateTime, nullable=True)
+    last_fail_context = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="circuit_breaker_states")
+
+    __table_args__ = (
+        Index('ix_circuit_breaker_user_key', 'user_id', 'key', unique=True),
+    )
+
+
+class ChannelEffectiveness(Base):
+    """Ежедневная статистика эффективности каналов/интеграций.
+    Позволяет системе перераспределять бюджет между каналами на основе score."""
+    __tablename__ = 'channel_effectiveness'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    channel = Column(String(100), nullable=False)  # 'email', 'telegram', 'github', 'blog', 'discord' и т.д.
+    date = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    actions_taken = Column(Integer, default=0)
+    outcomes = Column(Integer, default=0)
+    tokens_spent = Column(Integer, default=0)
+    score = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="channel_effectiveness")
+
+    __table_args__ = (
+        Index('ix_channel_effectiveness_user_date', 'user_id', 'date'),
+        Index('ix_channel_effectiveness_user_channel', 'user_id', 'channel'),
+    )
+
+
+class AdaptiveMonitorState(Base):
+    """Состояние адаптивного мониторинга для каждого источника данных.
+    Автоматически увеличивает интервал проверки, если данные не меняются."""
+    __tablename__ = 'adaptive_monitor_state'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    source = Column(String(255), nullable=False)  # 'rss_openinsider', 'email_inbox', 'github_issues' и т.д.
+    empty_count = Column(Integer, default=0)
+    base_interval = Column(Integer, default=60)  # минут
+    next_check_at = Column(DateTime, nullable=True)
+    last_result = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
+                        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="adaptive_monitor_states")
+
+    __table_args__ = (
+        Index('ix_adaptive_monitor_user_source', 'user_id', 'source', unique=True),
+    )
 
 
 # Fix DATABASE_URL for psycopg2 compatibility

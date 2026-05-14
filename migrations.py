@@ -898,6 +898,7 @@ def run_migrations():
         _migrate_agent_activity_log_title_default(session, inspector)
         _cleanup_junk_agent_tasks(session)
         _migrate_intelligence_tables(session, inspector)
+        _migrate_optimization_tables(session, inspector)
         _cleanup_backfill_blog_duplicates(session, inspector)
         _backfill_blog_note_images(session, inspector)
         logger.info("✅ Database migrations completed")
@@ -918,6 +919,39 @@ def _migrate_intelligence_tables(session, inspector):
                 logger.info(f"[MIGRATION] Created intelligence table: {tbl}")
             except Exception as e:
                 logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
+
+
+def _migrate_optimization_tables(session, inspector):
+    """Создаёт таблицы и колонки для U1-U8 оптимизации работы агентов."""
+    from models import Base, engine as _opt_engine
+
+    # ── 1. Новые таблицы ──────────────────────────────────────────────────────
+    for tbl in ('circuit_breaker_state', 'channel_effectiveness', 'adaptive_monitor_state'):
+        if not inspector.has_table(tbl):
+            try:
+                Base.metadata.tables[tbl].create(bind=_opt_engine, checkfirst=True)
+                logger.info(f"[MIGRATION] Created optimization table: {tbl}")
+            except Exception as e:
+                logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
+
+    # ── 2. Новые колонки в interactions ──────────────────────────────────────
+    if inspector.has_table('interactions'):
+        icols = [c['name'] for c in inspector.get_columns('interactions')]
+        _add_columns(session, 'interactions', icols, {
+            'tool_calls': 'ALTER TABLE interactions ADD COLUMN tool_calls TEXT',
+            'channel': 'ALTER TABLE interactions ADD COLUMN channel VARCHAR(50)',
+            'cost_tokens': 'ALTER TABLE interactions ADD COLUMN cost_tokens INTEGER DEFAULT 0',
+            'effectiveness_score': 'ALTER TABLE interactions ADD COLUMN effectiveness_score FLOAT',
+        })
+        # Индекс на channel для быстрой фильтрации
+        try:
+            session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_interactions_channel ON interactions(channel)"
+            ))
+            session.commit()
+            logger.info("[MIGRATION] Created index ix_interactions_channel")
+        except Exception:
+            session.rollback()
 
 
 def _cleanup_backfill_blog_duplicates(session, inspector):

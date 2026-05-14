@@ -252,7 +252,7 @@ class DynamicToolDiscovery:
         
         logger.info(f"[TOOL LEARNING] Learned from success: {func_name} for user {user_id}")
     
-    def learn_from_failure(self, func_name: str, error: str):
+    def learn_from_failure(self, func_name: str, error: str, user_id: int | None = None):
         """Обучается на ошибках"""
         if func_name not in self.tool_usage_stats:
             self.tool_usage_stats[func_name] = {
@@ -265,6 +265,21 @@ class DynamicToolDiscovery:
         stats = self.tool_usage_stats[func_name]
         stats["total_calls"] += 1
         stats["failed_calls"] += 1
+        
+        # ── Circuit Breaker: фиксируем неудачу инструмента (если известен user_id) ──
+        if user_id is not None:
+            try:
+                from ai_integration.channel_optimizer import AdaptiveCircuitBreaker
+                import asyncio
+                _cb_dyn = AdaptiveCircuitBreaker(user_id)
+                try:
+                    asyncio.get_event_loop().create_task(
+                        _cb_dyn.record_failure(f'tool:{func_name}', context=error[:200])
+                    )
+                except RuntimeError:
+                    pass
+            except Exception as _cbd_e:
+                logger.debug('[CB] learn_from_failure skip: %s', _cbd_e)
         
         logger.warning(f"[TOOL LEARNING] Learned from failure: {func_name} - {error}")
     

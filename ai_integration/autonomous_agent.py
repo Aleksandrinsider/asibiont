@@ -3532,6 +3532,23 @@ class HybridAutonomousAgent:
                     })
                     continue
 
+                # ── Adaptive Circuit Breaker: блокируем инструмент если слишком много ошибок ──
+                try:
+                    from .channel_optimizer import AdaptiveCircuitBreaker
+                    _cb_inst = AdaptiveCircuitBreaker()
+                    _cb_blocked, _cb_reason = _cb_inst.should_block(f'tool:{tool_name}', user_id)
+                    if _cb_blocked:
+                        logger.warning('[EXEC] %s BLOCKED by circuit breaker: %s', tool_name, _cb_reason)
+                        results.append({
+                            'tool': tool_name,
+                            'success': False,
+                            'error': _cb_reason,
+                            'reason': reason,
+                        })
+                        continue
+                except Exception as _cb_e:
+                    logger.debug('[EXEC] circuit breaker skip: %s', _cb_e)
+
                 # Специальный обработчик: запуск скрипта агента с параметрами действия
                 if tool_name == 'run_agent_action':
                     result = await self._run_external_action(raw_params, user_id)
@@ -3697,6 +3714,13 @@ class HybridAutonomousAgent:
                     if tool_name in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
                         self._pending_image_url.pop(user_id, None)
 
+                    # ── Circuit Breaker: успешный вызов → сбрасываем счётчик ошибок ──
+                    try:
+                        from .channel_optimizer import AdaptiveCircuitBreaker
+                        AdaptiveCircuitBreaker().record_success(f'tool:{tool_name}', user_id)
+                    except Exception as _cbs_e:
+                        logger.debug('[CB] record_success skip: %s', _cbs_e)
+
                     self.tool_discovery.learn_from_success(
                         func_name=tool_name, user_id=user_id,
                         context=reason, result=result)
@@ -3779,6 +3803,14 @@ class HybridAutonomousAgent:
 
                 except Exception as e:
                     logger.error(f"[EXEC] {tool_name} ✗ — {e}\n{traceback.format_exc()}")
+
+                    # ── Circuit Breaker: ошибка → увеличиваем счётчик ──
+                    try:
+                        from .channel_optimizer import AdaptiveCircuitBreaker
+                        AdaptiveCircuitBreaker().record_failure(f'tool:{tool_name}', user_id, str(e)[:200])
+                    except Exception as _cbf_e:
+                        logger.debug('[CB] record_failure skip: %s', _cbf_e)
+
                     try:
                         self.tool_discovery.learn_from_failure(
                             func_name=tool_name, error=str(e))
@@ -6382,6 +6414,51 @@ class HybridAutonomousAgent:
         except Exception as e:
             logger.warning(f"[MEMORY] Save failed: {e}")
 
+        # === Insight Action Router: авто-действия по паттернам инсайтов ===
+        try:
+            from .channel_optimizer import InsightActionRouter
+            _insight_text = (
+                f"Пользователь: {user_message}\n"
+                f"Ответ: {response[:300]}\n"
+                f"Инструменты: {', '.join(tools_used)}"
+            )
+            _iar = InsightActionRouter()
+            _iar.process_insight(user_id, 'execution_result', _insight_text)
+        except Exception as _iar_e:
+            logger.debug('[INSIGHT] router skip: %s', _iar_e)
+
+        # === Оценка эффективности (effectiveness_score) ===
+        try:
+            _all_success = all(r.get('success', False) for r in execution_results) if execution_results else True
+            _has_tools = bool(tools_used)
+            if _all_success and _has_tools:
+                _eff_score = min(1.0, 0.5 + 0.1 * len(tools_used))
+            elif _all_success and not _has_tools:
+                _eff_score = 0.7
+            else:
+                _eff_score = max(0.1, 0.3 * (sum(1 for r in execution_results if r.get('success', False)) / max(len(execution_results), 1)))
+            # Сохраняем в CoordinatorInsight для аналитики
+            try:
+                from models import Session as _EffSess, CoordinatorInsight as _CI
+                _es = _EffSess()
+                try:
+                    from models import User as _UEff
+                    _u_eff = _es.query(_UEff).filter_by(telegram_id=user_id).first()
+                    if _u_eff:
+                        _es.add(_CI(
+                            user_id=_u_eff.id,
+                            insight_type='effectiveness',
+                            content=f"effectiveness_score={_eff_score:.2f}, tools={tools_used}",
+                            source='autonomous_agent',
+                        ))
+                        _es.commit()
+                finally:
+                    _es.close()
+            except Exception as _eff_db_e:
+                logger.debug('[EFFECTIVENESS] db save skip: %s', _eff_db_e)
+        except Exception as _eff_e:
+            logger.debug('[EFFECTIVENESS] calc skip: %s', _eff_e)
+
     # ===== ЕДИНЫЙ МОЗГ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ =====
 
     async def generate_system_message(self, user_id, mode, instruction,
@@ -8571,6 +8648,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     """
     if _depth >= 2:
         return f"Агент {agent.get('name', '?')}: превышена глубина делегирования, задача принята.", []
+
+    # ── Adaptive Circuit Breaker: проверяем не заблокирован ли агент ──
+    try:
+        from .channel_optimizer import AdaptiveCircuitBreaker
+        _cb_exec = AdaptiveCircuitBreaker(user_id)
+        _cb_blocked_exec, _cb_reason_exec = _cb_exec.should_block(f'agent:{agent.get("name", "?")}:exec')
+        if _cb_blocked_exec:
+            logger.warning('[DIRECTOR] agent %s BLOCKED by circuit breaker: %s', agent.get('name', '?'), _cb_reason_exec)
+            return f"Агент {agent.get('name', '?')} временно недоступен ({_cb_reason_exec}). Попробуйте позже или другого агента.", []
+    except Exception as _cb_exec_e:
+        logger.debug('[DIRECTOR] circuit breaker skip: %s', _cb_exec_e)
 
     # Определяем род агента по имени (приоритет — явный пол из БД)
     _aname_fb = (agent.get('name') or '').strip()
@@ -13097,6 +13185,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             # Для задач: тоже None → тихий пропуск (лучше молчание чем "Задачу выполнила" без фактов).
             return None
 
+        # ── Circuit Breaker: успешное завершение агента → сбрасываем счётчик ──
+        try:
+            from .channel_optimizer import AdaptiveCircuitBreaker
+            AdaptiveCircuitBreaker(user_id).record_success(f'agent:{ag.get("name", "?")}:exec')
+        except Exception as _cbr_e:
+            logger.debug('[DIRECTOR] circuit breaker success skip: %s', _cbr_e)
+
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
         resp = _strip_agent_html(str(resp))
         try:
@@ -13186,6 +13281,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     # ── Начальное решение ASI ──────────────────────────────────────────────────
     # Урезаем до 400 символов — для решения о делегировании достаточно имени, должности, целей
     _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:700]}" if _user_full_ctx else ''
+
+    # ── Optimization Context: эффективность каналов, токены, самовосстановление ──
+    try:
+        from .channel_optimizer import build_optimization_context as _boc
+        _opt_ctx = _boc(user_db_id)
+        if _opt_ctx:
+            _ctx_hint += f"\n\nОПТИМИЗАЦИЯ:\n{_opt_ctx[:700]}"
+    except Exception as _boc_e:
+        logger.debug('[DIRECTOR] optimization context skip: %s', _boc_e)
 
     # Строим компактный список агентов: имя | должность | специализация | умеет
     _agent_caps_lines = []
