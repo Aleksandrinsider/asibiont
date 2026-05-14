@@ -13766,17 +13766,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         _director_response = None
         _skip_director = False
         if _is_question_message(message or '') and not _has_explicit_mention(message or ''):
-            # Имена агентов — русские, с заглавной буквы, ≥3 символа
-            _words = re.findall(r'[А-ЯЁ][а-яё]{2,}', message or '')
-            # Исключаем вопросительные слова — "Почему", "Что", "Как", "Где" и т.д.
-            # Они начинаются с заглавной и ≥3 символов, но это НЕ имена агентов.
-            _question_words = {'Почему', 'Что', 'Как', 'Где', 'Когда', 'Зачем', 'Кто', 'Сколько',
-                               'Откуда', 'Зачем', 'Какой', 'Какая', 'Какие', 'Какое', 'Который', 'Чей'}
-            _words = [w for w in _words if w not in _question_words]
-            # Если нет слов похожих на имена — вопрос без обращения к агенту
-            if not _words:
-                _skip_director = True
-                logger.debug("[AGENT] question without agent name, skipping director")
+            # Вопрос без явного обращения к агенту — ASI ответит сам
+            _skip_director = True
+            logger.debug("[AGENT] question without agent name, skipping director")
         if not _skip_director and not _has_explicit_mention(message or ''):
             try:
                 _director_response = await _office_director_chat(message, user_id, progress_callback=progress_callback)
