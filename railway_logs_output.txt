@@ -1,30 +1,180 @@
-[2026-05-14T20:49:23.661512754Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
-[2026-05-14T20:49:23.661517458Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
-[2026-05-14T20:49:23.661521892Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=10, profile=found
-[2026-05-14T20:49:23.661527199Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
-[2026-05-14T20:49:23.661532240Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
-[2026-05-14T20:49:23.661538415Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=11
-[2026-05-14T20:49:36.867576318Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
-[2026-05-14T20:54:21.081548545Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
-[2026-05-14T20:54:21.081554796Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
-[2026-05-14T20:54:21.081561256Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=10, profile=found
-[2026-05-14T20:54:21.081569657Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
-[2026-05-14T20:54:21.081578302Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
-[2026-05-14T20:54:21.081617143Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=11
-[2026-05-14T20:54:24.176558831Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
-[2026-05-14T20:59:25.518663435Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
-[2026-05-14T20:59:25.518670625Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
-[2026-05-14T20:59:25.518676622Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=10, profile=found
-[2026-05-14T20:59:25.518682664Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
-[2026-05-14T20:59:25.518690440Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
-[2026-05-14T20:59:25.518705827Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=11
-[2026-05-14T20:59:25.518716296Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
-[2026-05-14T21:04:26.950114581Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
-[2026-05-14T21:04:26.950123978Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
-[2026-05-14T21:04:26.950140482Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=11, profile=found
-[2026-05-14T21:04:26.950148255Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
-[2026-05-14T21:04:26.950156820Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
-[2026-05-14T21:04:26.950165029Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=12
-[2026-05-14T21:04:26.950208859Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 11 singleton types in DB)
+=== Deployment logs (178 entries) ===
 
---- Found 28 matching lines ---
+[2026-05-14T21:49:10.363444868Z] [info] Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/29265bf5-fd5a-4d9e-b32d-0f54d9c546fb/vol_73i9cq9pbhrdl762
+[2026-05-14T21:49:10.364983727Z] [info] Starting Container
+[2026-05-14T21:49:15.647686923Z] [error] INFO:payments:Yookassa config: SHOP_ID=1173913, SECRET_KEY configured
+[2026-05-14T21:49:15.647703603Z] [error] INFO:__main__:Database Connection
+[2026-05-14T21:49:15.647711668Z] [error] INFO:__main__:Attempting to connect to the database...
+[2026-05-14T21:49:15.647719468Z] [error] INFO:__main__:Disposed stale connection pool
+[2026-05-14T21:49:15.647728072Z] [error] INFO:__main__:✅ Database connection successful
+[2026-05-14T21:49:15.647736263Z] [error] INFO:models:Database tables created successfully
+[2026-05-14T21:49:15.647745440Z] [error] INFO:migrations:Running database migrations...
+[2026-05-14T21:49:15.647752809Z] [error] INFO:migrations:Migrated anchors.cooldown_hours to FLOAT
+[2026-05-14T21:49:15.647759987Z] [error] INFO:migrations:Migration: anchors_pending_unique_src index created
+[2026-05-14T21:49:15.647766523Z] [error] INFO:migrations:[MIGRATION] user_agents.avatar_url changed to TEXT
+[2026-05-14T21:49:15.647771659Z] [error] INFO:migrations:[MIGRATION] Set DEFAULT '' on agent_activity_log.title
+[2026-05-14T21:49:15.647779952Z] [error] INFO:migrations:Cleanup: removed 0 cancelled+2 stuck junk agent tasks, renamed 0 AAL titles
+[2026-05-14T21:49:16.632238303Z] [error] WARNING:migrations:[MIGRATION] Profile timezone fix failed (non-fatal): 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:16.632246714Z] [error] INFO:migrations:[MIGRATION] Created index ix_interactions_channel
+[2026-05-14T21:49:18.469344548Z] [error] INFO:migrations:✅ Database migrations completed
+[2026-05-14T21:49:18.469349377Z] [error] INFO:ai_integration.agent_arena:[ARENA] Test agents already seeded.
+[2026-05-14T21:49:18.469355222Z] [error] INFO:__main__:Bot created successfully
+[2026-05-14T21:49:18.469359318Z] [error] INFO:__main__:✅ Discord OAuth route registered
+[2026-05-14T21:49:18.469363541Z] [error] INFO:__main__:ReminderService initialized with bot=present and set as global REMINDER_SERVICE
+[2026-05-14T21:49:18.469367959Z] [error] INFO:__main__:Starting preload of weather/news cache...
+[2026-05-14T21:49:18.469372403Z] [error] INFO:ai_integration.utils:[CACHE] Starting preload of common data
+[2026-05-14T21:49:18.469376750Z] [error] INFO:ai_integration.utils:[CACHE] Preloading weather for Москва
+[2026-05-14T21:49:18.469380714Z] [error] INFO:ai_integration.utils:[CACHE] Preloading weather for Санкт-Петербург
+[2026-05-14T21:49:18.469384961Z] [error] INFO:ai_integration.utils:[CACHE] Preloading weather for Екатеринбург
+[2026-05-14T21:49:18.469388913Z] [error] INFO:ai_integration.utils:[CACHE] Preloading weather for Новосибирск
+[2026-05-14T21:49:18.469393680Z] [error] INFO:ai_integration.utils:[CACHE] Preloading weather for Казань
+[2026-05-14T21:49:18.469404190Z] [error] INFO:ai_integration.utils:[CACHE] Preload completed (weather only, news lazy)
+[2026-05-14T21:49:18.469409565Z] [error] INFO:__main__:Cache preload completed
+[2026-05-14T21:49:18.469413936Z] [error] INFO:__main__:Bot created with webhook setup for production mode
+[2026-05-14T21:49:18.469418131Z] [error] INFO:__main__:App created successfully
+[2026-05-14T21:49:18.469422816Z] [error] INFO:__main__:Starting web server in PRODUCTION mode on 0.0.0.0:8080
+[2026-05-14T21:49:18.469426761Z] [error] INFO:__main__:Using asyncio AppRunner
+[2026-05-14T21:49:18.469430847Z] [error] INFO:__main__:Checking database schema...
+[2026-05-14T21:49:18.469434910Z] [error] INFO:__main__:✅ pending_delegator_report column already exists
+[2026-05-14T21:49:18.471010466Z] [error] INFO:__main__:✅ goal_id column already exists
+[2026-05-14T21:49:18.471016257Z] [error] INFO:__main__:Starting ReminderService...
+[2026-05-14T21:49:18.471022056Z] [error] INFO:apscheduler.scheduler:Scheduler started
+[2026-05-14T21:49:18.471027630Z] [error] INFO:reminder_service:Found 16 tasks with reminders to schedule
+[2026-05-14T21:49:18.471033329Z] [error] INFO:reminder_service:Task 161 reminder time 2026-03-09 07:00:00 is in the past
+[2026-05-14T21:49:18.471038978Z] [error] INFO:reminder_service:Task 178 reminder time 2026-03-12 05:00:00 is in the past
+[2026-05-14T21:49:18.471045450Z] [error] INFO:reminder_service:Task 162 reminder time 2026-03-09 05:00:00 is in the past
+[2026-05-14T21:49:18.471049514Z] [error] INFO:reminder_service:Task 173 reminder time 2026-03-10 14:27:00 is in the past
+[2026-05-14T21:49:18.471054273Z] [error] INFO:reminder_service:Task 174 reminder time 2026-03-11 05:00:00 is in the past
+[2026-05-14T21:49:18.471058612Z] [error] INFO:reminder_service:Task 197 reminder time 2026-03-12 12:45:00 is in the past
+[2026-05-14T21:49:18.471062600Z] [error] INFO:reminder_service:Task 169 reminder time 2026-03-11 11:54:00 is in the past
+[2026-05-14T21:49:18.471066720Z] [error] INFO:reminder_service:Task 166 reminder time 2026-03-10 10:59:00 is in the past
+[2026-05-14T21:49:18.471071179Z] [error] INFO:reminder_service:Task 159 reminder time 2026-03-09 06:00:00 is in the past
+[2026-05-14T21:49:18.471075712Z] [error] INFO:reminder_service:Task 170 reminder time 2026-03-09 12:46:00 is in the past
+[2026-05-14T21:49:18.471080182Z] [error] INFO:reminder_service:Task 184 reminder time 2026-03-11 10:42:00 is in the past
+[2026-05-14T21:49:18.471084349Z] [error] INFO:reminder_service:Task 1543 reminder time 2026-04-08 05:00:00 is in the past
+[2026-05-14T21:49:18.471088387Z] [error] INFO:reminder_service:Task 160 reminder time 2026-03-09 07:00:00 is in the past
+[2026-05-14T21:49:18.471092721Z] [error] INFO:reminder_service:Task 493 reminder time 2026-03-18 04:00:00 is in the past
+[2026-05-14T21:49:18.476975040Z] [error] INFO:reminder_service:Task 4047 reminder time 2026-05-06 05:00:00 is in the past
+[2026-05-14T21:49:18.476981365Z] [error] INFO:reminder_service:Task 4227 reminder time 2026-05-08 05:00:00 is in the past
+[2026-05-14T21:49:18.476988181Z] [error] INFO:reminder_service:Daily reports are disabled
+[2026-05-14T21:49:18.476994544Z] [error] INFO:reminder_service:[REMINDER] Delegation checks — handled by AnchorEngine (no APScheduler job)
+[2026-05-14T21:49:18.477001829Z] [error] INFO:reminder_service:[REMINDER] Recurring tasks check — handled by AnchorEngine (no APScheduler job)
+[2026-05-14T21:49:18.477009516Z] [error] INFO:__main__:ReminderService started successfully
+[2026-05-14T21:49:19.528043449Z] [error] INFO:__main__:[IndexNow] https://api.indexnow.org/indexnow -> 200
+[2026-05-14T21:49:19.528057734Z] [error] INFO:__main__:[IndexNow] https://yandex.com/indexnow -> 202
+[2026-05-14T21:49:19.528064145Z] [error] INFO:__main__:[IndexNow] Pinged search engines about all pages
+[2026-05-14T21:49:19.528125116Z] [error] INFO:__main__:Scheduled jobs after start: 1
+[2026-05-14T21:49:19.528132443Z] [error] INFO:__main__:Job: avatar_update at 2026-05-15 03:00:00+00:00
+[2026-05-14T21:49:19.528138959Z] [error] INFO:__main__:Using EncryptedCookieStorage for sessions
+[2026-05-14T21:49:19.528145970Z] [error] INFO:__main__:Session middleware set up
+[2026-05-14T21:49:19.528150914Z] [error] INFO:ai_integration.agent_arena:[ARENA] Global arena scheduled.
+[2026-05-14T21:49:19.528157096Z] [error] INFO:__main__:[ARENA] Global arena started.
+[2026-05-14T21:49:19.528162424Z] [error] INFO:__main__:[WEBHOOK] Already set to correct URL, skipping set_webhook
+[2026-05-14T21:49:19.528168974Z] [error] INFO:__main__:Auto-post service started as background task
+[2026-05-14T21:49:19.528173501Z] [error] INFO:discord_bot:Discord bot task started
+[2026-05-14T21:49:19.528178851Z] [error] INFO:auto_post_service:Auto-post service started
+[2026-05-14T21:49:19.528183313Z] [error] ERROR:auto_post_service:Error processing user 197989366: 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:19.528187909Z] [error] ERROR:auto_post_service:Error processing user 908804657: 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:19.528192653Z] [error] ERROR:auto_post_service:Error processing user 2107148327: 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:19.528197284Z] [error] ERROR:auto_post_service:Error processing user -849670603867392: 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:19.528202291Z] [error] ERROR:auto_post_service:Error processing user 1952352669: 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:19.530729526Z] [error] ERROR:auto_post_service:Error processing user 146333757: 'UserProfile' object has no attribute 'timezone'
+[2026-05-14T21:49:19.530730212Z] [error] INFO:__main__:Auto-marketing service DISABLED — handled by AnchorEngine
+[2026-05-14T21:49:19.530736562Z] [error] INFO:discord.client:logging in using static token
+[2026-05-14T21:49:19.530741265Z] [error] INFO:__main__:Contact alerts service DISABLED — handled by AnchorEngine
+[2026-05-14T21:49:19.530755762Z] [error] INFO:__main__:Server started on 0.0.0.0:8080
+[2026-05-14T21:49:19.530762883Z] [error] INFO:__main__:Health check endpoint: http://0.0.0.0:8080/health
+[2026-05-14T21:49:19.530768684Z] [error] INFO:__main__:Dashboard endpoint: http://0.0.0.0:8080/dashboard
+[2026-05-14T21:49:19.530774584Z] [error] INFO:__main__:Server is ready to accept connections
+[2026-05-14T21:49:19.530781241Z] [error] INFO:__main__:Auto-post service DISABLED — handled by AnchorEngine
+[2026-05-14T21:49:20.528762524Z] [error] INFO:ai_integration.agent_arena:[ARENA] Global posting loop started (interval=60-90min)
+[2026-05-14T21:49:20.528778480Z] [error] INFO:anchor_engine:[ANCHOR] AnchorEngine initialized
+[2026-05-14T21:49:20.528797785Z] [error] INFO:anchor_engine:[ANCHOR] 🚀 Starting scan loop (every 5min)
+[2026-05-14T21:49:20.528798097Z] [error] INFO:ai_integration.agent_arena:[ARENA] Restored cooldown timestamps for 8 agents
+[2026-05-14T21:49:20.528810643Z] [error] INFO:ai_integration.office_engine:[OFFICE] Living Office Engine started (L1 + L2)
+[2026-05-14T21:49:20.528841102Z] [error] INFO:__main__:Starting AnchorEngine in background...
+[2026-05-14T21:49:20.528847633Z] [error] INFO:__main__:AnchorEngine task created
+[2026-05-14T21:49:20.528854982Z] [error] INFO:ai_integration.office_engine:[OFFICE] Living Office Engine scheduled
+[2026-05-14T21:49:20.528861965Z] [error] INFO:__main__:[OFFICE] TG bot injected into OfficeEngine
+[2026-05-14T21:49:20.528868620Z] [error] INFO:__main__:[OFFICE] Living Office Engine started
+[2026-05-14T21:49:20.528875073Z] [error] INFO:__main__:Production mode: Using webhooks instead of polling
+[2026-05-14T21:49:20.528881046Z] [error] INFO:__main__:AnchorEngine supervisor: starting engine...
+[2026-05-14T21:49:20.529701492Z] [error] INFO:ai_integration.agent_arena:[ARENA] _db_load_feed loaded 200 posts
+[2026-05-14T21:49:20.529731323Z] [error] INFO:ai_integration.agent_arena:[ARENA] Loaded 200 posts from DB
+[2026-05-14T21:49:21.400357969Z] [error] INFO:discord.gateway:Shard ID None has connected to Gateway (Session ID: 12387a01dafb03787f0fd9a25dbd6181).
+[2026-05-14T21:49:22.442859410Z] [error] INFO:aiohttp.access:100.64.0.2 [14/May/2026:21:49:21 +0000] "GET /health HTTP/1.1" 200 1599 "-" "RailwayHealthCheck/1.0"
+[2026-05-14T21:49:22.442872622Z] [error] INFO:ai_integration.agent_arena:[ARENA] Summary updated: В чате обсуждались несколько тем: инсайдерские покупки акций (FTI Consulting, Ap
+[2026-05-14T21:49:22.442958679Z] [error] INFO:__main__:Incoming request: GET /health from 100.64.0.2
+[2026-05-14T21:49:22.442963716Z] [error] INFO:__main__:Response: GET /health -> 200
+[2026-05-14T21:49:23.503642692Z] [error] INFO:discord_bot:✅ Discord bot connected as ASI Biont#4062 (id=1475534055205376113)
+[2026-05-14T21:49:43.729106090Z] [error] INFO:aiohttp.access:100.64.0.3 [14/May/2026:21:49:37 +0000] "GET /d6193b04262141bba808b1279123715b.txt HTTP/1.1" 200 1661 "-" "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)"
+[2026-05-14T21:49:43.729114607Z] [error] INFO:__main__:Incoming request: GET /d6193b04262141bba808b1279123715b.txt from 100.64.0.3
+[2026-05-14T21:49:43.729123277Z] [error] INFO:__main__:Response: GET /d6193b04262141bba808b1279123715b.txt -> 200
+[2026-05-14T21:49:50.414203117Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: before _scan_goal_autopilot, anchors=9, profile=found
+[2026-05-14T21:49:50.414211872Z] [error] INFO:anchor_engine:[ANCHOR] Pre-filter: 13 total → 1 eligible (skipped: 2 night, 0 DND, 10 silent)
+[2026-05-14T21:49:50.414225026Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: 🌙 ночные часы (00:49 Europe/Moscow, окно 10:00-22:00) — dialog/posts заблокированы, silent продолжат
+[2026-05-14T21:49:50.414232803Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: _scan_goal_autopilot CALLED (profile=True)
+[2026-05-14T21:49:50.414236456Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 146333757: BEFORE _scan_anchors — last_user_msg=found, is_night=True
+[2026-05-14T21:49:50.414244875Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: _scan_anchors START
+[2026-05-14T21:49:50.414252166Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: profile=found, len(anchors)=0
+[2026-05-14T21:49:50.414298538Z] [error] INFO:anchor_engine:[ANCHOR] 🔄 Starting scan cycle #1
+[2026-05-14T21:49:50.414303936Z] [error] INFO:anchor_engine:[ANCHOR] Pre-filter: User 146333757 is night BUT has pending autopilot, including
+[2026-05-14T21:49:50.622842041Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor (3 goals)
+[2026-05-14T21:49:50.624024148Z] [error] INFO:anchor_engine:[DIAG-SCAN] User 1: after _scan_goal_autopilot, anchors=10
+[2026-05-14T21:49:50.748634469Z] [error] INFO:primp:response: https://ru.wikipedia.org/w/api.php?action=opensearch&profile=fuzzy&limit=1&search=%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0%20%D0%98%D0%98%2C%20%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C%20%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F%20%D0%B1%D0%B8%D0%B7%20%D0%BD%D0%BE%D0%B2%D0%BE%D1%81%D1%82%D0%B8%20%D1%82%D1%80%D0%B5%D0%BD%D0%B4%D1%8B%202026 200
+[2026-05-14T21:49:51.291838779Z] [error] INFO:primp:response: https://grokipedia.com/api/typeahead?query=%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0+%D0%98%D0%98%2C+%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C+%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F+%D0%B1%D0%B8%D0%B7+%D0%BD%D0%BE%D0%B2%D0%BE%D1%81%D1%82%D0%B8+%D1%82%D1%80%D0%B5%D0%BD%D0%B4%D1%8B+2026&limit=1 200
+[2026-05-14T21:49:51.291849091Z] [error] INFO:primp:response: https://www.startpage.com/ 200
+[2026-05-14T21:49:51.753573328Z] [error] INFO:primp:response: https://www.startpage.com/sp/search 200
+[2026-05-14T21:49:51.768919063Z] [error] INFO:ai_integration.api_client:[DDG] Found 5 results for: Разработка ИИ, программирование, автоматизация биз
+[2026-05-14T21:49:51.768924203Z] [error] INFO:anchor_engine:[ANCHOR-DDG] market_insight enriched with 5 results
+[2026-05-14T21:49:52.263123551Z] [error] INFO:primp:response: https://grokipedia.com/api/typeahead?query=%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0+%D0%98%D0%98%2C+%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C+%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F+%D0%B1%D0%B8%D0%B7+%D0%BA%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D1%82+%D0%B8%D0%B4%D0%B5%D0%B8+%D1%82%D1%80%D0%B5%D0%BD%D0%B4%D1%8B&limit=1 200
+[2026-05-14T21:49:52.263134863Z] [error] INFO:primp:response: https://www.startpage.com/ 200
+[2026-05-14T21:49:52.263163943Z] [error] INFO:primp:response: https://ru.wikipedia.org/w/api.php?action=opensearch&profile=fuzzy&limit=1&search=%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0%20%D0%98%D0%98%2C%20%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C%20%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F%20%D0%B1%D0%B8%D0%B7%20%D0%BA%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D1%82%20%D0%B8%D0%B4%D0%B5%D0%B8%20%D1%82%D1%80%D0%B5%D0%BD%D0%B4%D1%8B 200
+[2026-05-14T21:49:52.695548014Z] [error] INFO:primp:response: https://www.startpage.com/sp/search 200
+[2026-05-14T21:49:52.711596603Z] [error] INFO:ai_integration.api_client:[DDG] Found 5 results for: Разработка ИИ, программирование, автоматизация биз
+[2026-05-14T21:49:52.711602715Z] [error] INFO:anchor_engine:[ANCHOR-DDG] content_opportunity enriched with 5 results
+[2026-05-14T21:49:52.717541537Z] [error] INFO:primp:response: https://ru.wikipedia.org/w/api.php?action=opensearch&profile=fuzzy&limit=1&search=%D0%BA%D0%BE%D0%BD%D1%84%D0%B5%D1%80%D0%B5%D0%BD%D1%86%D0%B8%D0%B8%20%D0%BC%D0%B8%D1%82%D0%B0%D0%BF%D1%8B%20%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0%20%D0%98%D0%98%2C%20%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C%20%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%20May%202026%20%D0%BE%D0%BD%D0%BB%D0%B0%D0%B9%D0%BD%20%D0%BE%D1%84%D0%BB%D0%B0%D0%B9%D0%BD%20%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0 200
+[2026-05-14T21:49:53.401091305Z] [error] INFO:primp:response: https://grokipedia.com/api/typeahead?query=%D0%BA%D0%BE%D0%BD%D1%84%D0%B5%D1%80%D0%B5%D0%BD%D1%86%D0%B8%D0%B8+%D0%BC%D0%B8%D1%82%D0%B0%D0%BF%D1%8B+%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D1%8F+%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0+%D0%98%D0%98%2C+%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C+%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82+May+2026+%D0%BE%D0%BD%D0%BB%D0%B0%D0%B9%D0%BD+%D0%BE%D1%84%D0%BB%D0%B0%D0%B9%D0%BD+%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&limit=1 200
+[2026-05-14T21:49:53.401100173Z] [error] INFO:primp:response: https://www.startpage.com/ 200
+[2026-05-14T21:49:55.339314494Z] [error] INFO:primp:response: https://www.startpage.com/sp/search 200
+[2026-05-14T21:49:55.339320195Z] [error] INFO:primp:response: https://html.duckduckgo.com/html/ 202
+[2026-05-14T21:49:55.532596910Z] [error] INFO:primp:response: https://consent.yahoo.com/v2/collectConsent?sessionId=3_cc-session_6d3af2c8-a346-4de0-9970-9311510e6f70 200
+[2026-05-14T21:49:55.707788643Z] [error] INFO:primp:response: https://search.brave.com/search?q=%D0%BA%D0%BE%D0%BD%D1%84%D0%B5%D1%80%D0%B5%D0%BD%D1%86%D0%B8%D0%B8+%D0%BC%D0%B8%D1%82%D0%B0%D0%BF%D1%8B+%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D1%8F+%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0+%D0%98%D0%98%2C+%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C+%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82+May+2026+%D0%BE%D0%BD%D0%BB%D0%B0%D0%B9%D0%BD+%D0%BE%D1%84%D0%BB%D0%B0%D0%B9%D0%BD+%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&source=web 429
+[2026-05-14T21:49:56.499122447Z] [error] INFO:primp:response: https://www.google.com/search?q=%D0%BA%D0%BE%D0%BD%D1%84%D0%B5%D1%80%D0%B5%D0%BD%D1%86%D0%B8%D0%B8+%D0%BC%D0%B8%D1%82%D0%B0%D0%BF%D1%8B+%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D1%8F+%D0%A0%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0+%D0%98%D0%98%2C+%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%2C+%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82+May+2026+%D0%BE%D0%BD%D0%BB%D0%B0%D0%B9%D0%BD+%D0%BE%D1%84%D0%BB%D0%B0%D0%B9%D0%BD+%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&filter=1&start=0&hl=ru-RU&lr=lang_ru&cr=countryRU 200
+[2026-05-14T21:49:56.521631298Z] [error] INFO:ai_integration.api_client:[DDG] Found 5 results for: конференции митапы события Разработка ИИ, программ
+[2026-05-14T21:49:56.521645296Z] [error] INFO:anchor_engine:[ANCHOR-DDG] event_discovery enriched with 5 results
+[2026-05-14T21:49:56.751646356Z] [error] INFO:anchor_engine:[DIAG-AUTOPILOT] User 1: singleton dedup BLOCKED goal_autopilot_review (existing pending, 10 singleton types in DB)
+[2026-05-14T21:49:56.760367456Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: найдено 32 deliverable якорей
+[2026-05-14T21:49:56.760375007Z] [error] INFO:anchor_engine:[DIAG-DELIVERABLE] User 146333757: is_deliverable removed 5 anchors: ['integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert']
+[2026-05-14T21:49:57.420620694Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: high ignore rate (100%), doubled cooldown for optional LOW (re-engagement kept)
+[2026-05-14T21:49:57.420626550Z] [error] INFO:anchor_engine:[DIAG-READY] User 146333757: autopilot_types=[], all_ready_types=['integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'integration_alert', 'goal_progress', 'weekly_milestone', 'email_need_leads', 'integration_alert', 'integration_alert', 'email_campaign_report', 'post_opportunity', 'email_campaign_report']
+[2026-05-14T21:49:57.420631650Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: ready=23 (critical=0, regular=21, posts=1, email_silent=1, content_silent=0, deleg_silent=0, review_silent=0, custom_agent=0) dialog_count=0 gap_ok=False
+[2026-05-14T21:49:57.420638070Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: ⛔ regular blocked (night hours)
+[2026-05-14T21:49:57.420643825Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: ⏭ posts deferred — pending email_silent anchors have priority
+[2026-05-14T21:49:57.420649548Z] [error] INFO:anchor_engine:[ANCHOR] User 146333757: 📧 Processing 1 email silent anchors (night=True)...
+[2026-05-14T21:49:57.420655821Z] [error] INFO:anchor_engine:[ANCHOR] Email anchor #15444 already delivered by another process, skip
+[2026-05-14T21:49:57.420661490Z] [error] INFO:anchor_engine:[ANCHOR] ✅ Scan cycle complete in 7.0s, sleeping 293s
+[2026-05-14T21:50:16.869554463Z] [error] INFO:__main__:Incoming request: GET / from 100.64.0.4
+[2026-05-14T21:50:16.869570989Z] [error] INFO:__main__:Response: GET / -> 200
+[2026-05-14T21:50:16.869589534Z] [error] INFO:aiohttp.access:100.64.0.4 [14/May/2026:21:50:10 +0000] "GET / HTTP/1.1" 200 31903 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) Chrome/116.0.1938.76 Safari/537.36"
+[2026-05-14T21:50:20.957215199Z] [error] INFO:ai_integration.agent_arena:[ARENA] First post after 60s startup delay
+[2026-05-14T21:50:22.049450085Z] [error] INFO:ai_integration.agent_arena:[ARENA] Leo python_code output (288 chars)
+[2026-05-14T21:50:22.940995172Z] [error] INFO:ai_integration.agent_arena:[ARENA] [Leo] commented on [Bella]'s post (sentiment=neutral)
+[2026-05-14T21:50:23.922475147Z] [error] INFO:ai_integration.agent_arena:[ARENA] Next post in 3951s (65.8min)
+[2026-05-14T21:50:23.922560043Z] [error] INFO:ai_integration.agent_arena:[ARENA] [Leo] posted
+[2026-05-14T21:51:14.396572291Z] [error] INFO:__main__:Incoming request: GET /d6193b04262141bba808b1279123715b.txt from 100.64.0.5
+[2026-05-14T21:51:14.396583476Z] [error] INFO:__main__:Response: GET /d6193b04262141bba808b1279123715b.txt -> 200
+[2026-05-14T21:51:14.396591362Z] [error] INFO:aiohttp.access:100.64.0.5 [14/May/2026:21:51:14 +0000] "GET /d6193b04262141bba808b1279123715b.txt HTTP/1.1" 200 1661 "-" "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)"
+[2026-05-14T21:51:20.482349346Z] [error] INFO:ai_integration.office_engine:[OFFICE-L1] Running scripts for 9 agents
+[2026-05-14T21:51:20.482360084Z] [error] INFO:ai_integration.office_engine:[OFFICE-L1] next tick in 15 min
+[2026-05-14T21:51:39.776350179Z] [error] INFO:__main__:Incoming request: GET /dashboard from 100.64.0.6
+[2026-05-14T21:51:39.776353779Z] [error] INFO:__main__:Dashboard handler called for path: /dashboard
+[2026-05-14T21:51:39.776358039Z] [error] INFO:__main__:User ID: None (type: <class 'NoneType'>)
+[2026-05-14T21:51:39.776361854Z] [error] INFO:__main__:Response: GET /dashboard -> 302
+[2026-05-14T21:51:39.776366038Z] [error] INFO:aiohttp.access:100.64.0.6 [14/May/2026:21:51:35 +0000] "GET /dashboard HTTP/1.1" 302 1605 "-" "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)"
+[2026-05-14T21:51:39.776369805Z] [error] INFO:__main__:Incoming request: GET / from 100.64.0.7
+[2026-05-14T21:51:39.776373478Z] [error] INFO:__main__:Response: GET / -> 200
+[2026-05-14T21:51:39.776377310Z] [error] INFO:aiohttp.access:100.64.0.7 [14/May/2026:21:51:36 +0000] "GET / HTTP/1.1" 200 31903 "-" "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)"
+[2026-05-14T21:51:59.946686754Z] [error] INFO:__main__:Incoming request: GET / from 100.64.0.8
+[2026-05-14T21:51:59.946692620Z] [error] INFO:__main__:Response: GET / -> 200
+[2026-05-14T21:51:59.946699448Z] [error] INFO:aiohttp.access:100.64.0.8 [14/May/2026:21:51:50 +0000] "GET / HTTP/1.1" 200 31903 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) Chrome/116.0.1938.76 Safari/537.36"

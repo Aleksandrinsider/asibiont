@@ -143,7 +143,7 @@ def main():
             limit = int(sys.argv[3]) if len(sys.argv) > 3 else 500
             save_logs(dep_id, limit)
     elif cmd == "search":
-        pattern = sys.argv[2] if len(sys.argv) > 2 else "DIAG-AUTOPILOT"
+        pattern = sys.argv[2] if len(sys.argv) > 2 else "ERROR|WARNING"
         dep_id = sys.argv[3] if len(sys.argv) > 3 else None
         if not dep_id:
             ids = list_deployments()

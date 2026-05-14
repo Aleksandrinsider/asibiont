@@ -6426,12 +6426,6 @@ async def get_feed_handler(request):
             
             # Get user's profile with favorites
             user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
-
-            # [DIAG] Check total posts for this user in DB
-            _total_user_posts = session_db.query(Post).filter(Post.user_id == user.id).count()
-            _total_progress_posts = session_db.query(Post).filter(Post.user_id == user.id, Post.post_type == 'progress').count()
-            _total_any_posts = session_db.query(Post).count()
-            logger.info(f"[DIAG-FEED] User {user.id}: total_posts={_total_user_posts}, progress_posts={_total_progress_posts}, total_any_posts={_total_any_posts}")
             
             # Parse favorite contacts from JSON
             favorite_user_ids = []

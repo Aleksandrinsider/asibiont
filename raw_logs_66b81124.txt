@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "c:\Users\Home\Desktop\Task\railway_logs.py", line 159, in <module>
+    main()
+    ~~~~^^
+  File "c:\Users\Home\Desktop\Task\railway_logs.py", line 144, in main
+    save_logs(dep_id, limit)
+    ~~~~~~~~~^^^^^^^^^^^^^^^
+  File "c:\Users\Home\Desktop\Task\railway_logs.py", line 40, in save_logs
+    logs = r.get("data", {}).get("deploymentLogs", [])
+           ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'get'

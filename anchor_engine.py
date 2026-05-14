@@ -6034,7 +6034,6 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user_id}: silent user but autopilot ENABLED — proceeding with scan (autopilot anchors only)")
 
         # 1. SCAN — обнаружить новые якоря
-        logger.info(f"[DIAG-SCAN] User {user_id}: BEFORE _scan_anchors — last_user_msg={'found' if last_user_msg else 'None'}, is_night={is_night}")
         new_anchors = await self._scan_anchors(user, session)
         if new_anchors:
             # Dedup-фильтр: не создаём якорь если уже есть pending с тем же type+source
@@ -6198,10 +6197,6 @@ class AnchorEngine:
 
         # Фильтруем: не истёкшие + cooldown
         ready = [a for a in deliverable if a.is_deliverable()]
-        _removed_cnt = len(deliverable) - len(ready)
-        if _removed_cnt:
-            _removed_types = [a.anchor_type for a in deliverable if a not in ready]
-            logger.info(f"[DIAG-DELIVERABLE] User {user_id}: is_deliverable removed {_removed_cnt} anchors: {_removed_types}")
         if not ready:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ после is_deliverable() — 0 ready (expired/suppressed)")
             return
@@ -6369,7 +6364,6 @@ class AnchorEngine:
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
         autopilot_anchors = [a for a in ready if a.anchor_type in AUTOPILOT_SILENT_TYPES]
-        logger.info(f"[DIAG-READY] User {user_id}: autopilot_types={[a.anchor_type for a in autopilot_anchors]}, all_ready_types={[a.anchor_type for a in ready]}")
         custom_agent_anchors = [a for a in ready if a.anchor_type in CUSTOM_AGENT_TYPES]
         regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors and a not in autopilot_anchors and a not in custom_agent_anchors]
 
@@ -6483,7 +6477,6 @@ class AnchorEngine:
         # не должен блокироваться медленными AI-вызовами для dialog-якорей.
         # Перемещён ПЕРЕД _deliver_batch чтобы гарантировать своевременный dispatch.
         if autopilot_anchors:
-            logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot_anchors={len(autopilot_anchors)}, _time_left={_time_left():.0f}s")
             # Сначала вычисляем списки якорей независимо от _time_left
             _goal_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'goal_autopilot_review']
             _chat_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'chat_ai_review']
@@ -6492,7 +6485,6 @@ class AnchorEngine:
                 _ap_gap_ok = True
             else:
                 # Мало времени — проверяем gap от последней доставки
-                logger.info(f"[DIAG-AUTOPILOT] User {user_id}: autopilot gap check — _time_left={_time_left():.0f}s <= 30")
                 try:
                     _last_ap_delivered = session.query(Anchor.delivered_at).filter(
                         Anchor.user_id == user.id,
@@ -20817,12 +20809,10 @@ class AnchorEngine:
         
         Не создаёт дубликаты — проверяет наличие необработанного якоря того же типа+source.
         """
-        logger.info(f"[DIAG-SCAN] User {user.id}: _scan_anchors START")
         anchors = []
 
         # Получаем профиль
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        logger.info(f"[DIAG-SCAN] User {user.id}: profile={'found' if profile else 'None'}, len(anchors)=0")
 
         user_tz = pytz.timezone(user.timezone or 'Europe/Moscow')
         user_now = datetime.now(user_tz)
@@ -20921,11 +20911,9 @@ class AnchorEngine:
 
         # --- FOLLOW-UP РЕЗУЛЬТАТОВ АГЕНТОВ (проверка незакрытых dispatch-задач) ---
         anchors.extend(self._scan_agent_followup(user, session, now_utc))
-        logger.info(f"[DIAG-SCAN] User {user.id}: before _scan_goal_autopilot, anchors={len(anchors)}, profile={'found' if profile else 'None'}")
 
         # --- АВТОПИЛОТ ЦЕЛЕЙ (AI автономно продвигает цели) ---
         anchors.extend(self._scan_goal_autopilot(user, profile, session, now_utc))
-        logger.info(f"[DIAG-SCAN] User {user.id}: after _scan_goal_autopilot, anchors={len(anchors)}")
 
         # --- DDG WEB ENRICHMENT: обогащаем якоря реальными данными из интернета ---
         # Пропускаем если DDG сервис известен как недоступный (service_degraded:ddg pending)
@@ -21077,8 +21065,6 @@ class AnchorEngine:
         for a in anchors:
             if a.anchor_type in _SINGLETON_TYPES:
                 if a.anchor_type in existing_types:
-                    if a.anchor_type == 'goal_autopilot_review':
-                        logger.info(f"[DIAG-AUTOPILOT] User {user.id}: singleton dedup BLOCKED goal_autopilot_review (existing pending, {len(existing_types)} singleton types in DB)")
                     continue
                 existing_types.add(a.anchor_type)
                 unique_anchors.append(a)
@@ -21776,7 +21762,6 @@ class AnchorEngine:
         ).order_by(Interaction.created_at.desc()).first()
 
         if not last_chat_msg:
-            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — no last chat message")
             return anchors
 
         lc_time = last_chat_msg.created_at
@@ -21796,7 +21781,6 @@ class AnchorEngine:
 
         _min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 3) if _is_user_question else MIN_AUTOPILOT_GAP_MINUTES
         if minutes_since < _min_gap or minutes_since > 12 * 60:
-            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — minutes_since={minutes_since:.1f}, min_gap={_min_gap}, max_gap={12*60}")
             return anchors
 
         try:
@@ -21811,14 +21795,12 @@ class AnchorEngine:
                     _rv_time = _rv_time.replace(tzinfo=timezone.utc)
                 _rv_gap = (now_utc - _rv_time).total_seconds() / 60
                 if _rv_gap < MIN_AUTOPILOT_GAP_MINUTES:
-                    logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — review gap ({_rv_gap:.1f}m < {MIN_AUTOPILOT_GAP_MINUTES}m)")
                     return anchors
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
 
         _slot = int(minutes_since // MIN_AUTOPILOT_GAP_MINUTES)
         if _slot <= 0:
-            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_chat_ai_review blocked — slot={_slot}, minutes_since={minutes_since:.1f}")
             return anchors
 
         # Topic-based dedup: если последний chat_ai_review был о той же теме — пропускаем
@@ -22258,14 +22240,11 @@ class AnchorEngine:
 
     def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
         """Автопилот целей: AI анализирует цели с ПОЛНЫМ контекстом и действует."""
-        logger.info(f"[DIAG-AUTOPILOT] User {user.id}: _scan_goal_autopilot CALLED (profile={profile is not None})")
         if not profile:
-            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — no profile")
             return []
         # Перечитываем профиль из БД — profile мог быть загружен давно (stale cache)
         session.expire(profile)
         if not getattr(profile, 'goal_autopilot_enabled', False):
-            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — goal_autopilot_enabled=False")
             return []
 
         active_goals = session.query(Goal).filter(
@@ -22273,7 +22252,6 @@ class AnchorEngine:
             Goal.status == 'active',
         ).order_by(Goal.updated_at.asc().nullsfirst()).all()
         if not active_goals:
-            logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — no active goals (goal_autopilot_enabled=True)")
             return []
 
         # ── ЖЁСТКИЙ GUARD: не создавать якорь если последний autopilot-якорь доставлен меньше MIN_AUTOPILOT_GAP_MINUTES назад ──
@@ -22291,7 +22269,6 @@ class AnchorEngine:
                 _gap = (now_utc - _ap_time).total_seconds() / 60
                 _soft_min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 2)
                 if _gap < _soft_min_gap:
-                    logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — gap guard ({_gap:.1f}m < {_soft_min_gap}m)")
                     return []
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
@@ -23357,7 +23334,6 @@ class AnchorEngine:
             'integration_snapshots': _integration_data,
         }
 
-        logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor ({len(goals_summary)} goals)")
         return [Anchor(
             user_id=user.id,
             anchor_type='goal_autopilot_review',
