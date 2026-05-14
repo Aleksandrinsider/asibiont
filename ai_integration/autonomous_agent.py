@@ -13285,7 +13285,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     # ── Optimization Context: эффективность каналов, токены, самовосстановление ──
     try:
         from .channel_optimizer import build_optimization_context as _boc
-        _opt_ctx = _boc(user_db_id)
+        _opt_ctx = await _boc(user_db_id)
         if _opt_ctx:
             _ctx_hint += f"\n\nОПТИМИЗАЦИЯ:\n{_opt_ctx[:700]}"
     except Exception as _boc_e:
