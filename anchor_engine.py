@@ -21048,6 +21048,8 @@ class AnchorEngine:
         for a in anchors:
             if a.anchor_type in _SINGLETON_TYPES:
                 if a.anchor_type in existing_types:
+                    if a.anchor_type == 'goal_autopilot_review':
+                        logger.info(f"[DIAG-AUTOPILOT] User {user.id}: singleton dedup BLOCKED goal_autopilot_review (existing pending, {len(existing_types)} singleton types in DB)")
                     continue
                 existing_types.add(a.anchor_type)
                 unique_anchors.append(a)
@@ -22227,6 +22229,7 @@ class AnchorEngine:
 
     def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
         """Автопилот целей: AI анализирует цели с ПОЛНЫМ контекстом и действует."""
+        logger.info(f"[DIAG-AUTOPILOT] User {user.id}: _scan_goal_autopilot CALLED (profile={profile is not None})")
         if not profile:
             logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot blocked — no profile")
             return []
@@ -23325,6 +23328,7 @@ class AnchorEngine:
             'integration_snapshots': _integration_data,
         }
 
+        logger.info(f"[DIAG-AUTOPILOT] User {user.id}: scan_goal_autopilot SUCCESS — returning goal_autopilot_review anchor ({len(goals_summary)} goals)")
         return [Anchor(
             user_id=user.id,
             anchor_type='goal_autopilot_review',
