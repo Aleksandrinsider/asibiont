@@ -16679,55 +16679,15 @@ except Exception as e:
             }).catch(function(e){ console.error('Autopilot toggle error:', e); });
         }
 
-        function toggleChatVoice() {
-            var btn = document.getElementById('chat-tts-btn');
-            if (!btn) return;
-            var isActive = btn.dataset.active === 'true';
-            var newVal = !isActive;
-            if (newVal) {
-                btn.dataset.active = 'true';
-                btn.style.background = '#068487';
-                btn.style.borderColor = '#068487';
-                var svg = btn.querySelector('svg');
-                if (svg) svg.setAttribute('fill', '#FFFFFF');
-                btn.onmouseover = null;
-                btn.onmouseout = null;
-                window._chatVoiceEnabled = true;
-                localStorage.setItem('chatVoiceEnabled', 'true');
-                // Прогрев speechSynthesis (Chrome требует первый speak() в обработчике клика)
-                try {
-                    if (window.speechSynthesis) {
-                        // Загружаем голоса (Chrome загружает их лениво)
-                        if (!_ttsVoice) _initTTS();
-                        // Прогревочный speak с правильным lang
-                        var _wu = new SpeechSynthesisUtterance('');
-                        _wu.lang = 'ru-RU';
-                        if (_ttsVoice) _wu.voice = _ttsVoice;
-                        window.speechSynthesis.speak(_wu);
-                        window.speechSynthesis.cancel();
-                    }
-                } catch(_e) {}
-                showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
-            } else {
-                btn.dataset.active = '';
-                btn.style.background = '#FFFFFF';
-                btn.style.borderColor = '#D1D9E0';
-                var svg = btn.querySelector('svg');
-                if (svg) svg.setAttribute('fill', '#374151');
-                btn.onmouseover = function(){ if(!this.dataset.active){ this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';} };
-                btn.onmouseout = function(){ if(!this.dataset.active){ this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';} };
-                window._chatVoiceEnabled = false;
-                localStorage.setItem('chatVoiceEnabled', 'false');
-                if (window.speechSynthesis) window.speechSynthesis.cancel();
-                showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
-            }
-        }
+        var _currentAudio = null; // текущий Audio элемент
 
-        // ===== TTS — облачный синтезатор (без привязки к системному голосу) =====
         function _speakText(text) {
             if (!window._chatVoiceEnabled) return;
-            if (!window.speechSynthesis) return;
-            window.speechSynthesis.cancel();
+            // Останавливаем предыдущее воспроизведение
+            if (_currentAudio) {
+                _currentAudio.pause();
+                _currentAudio = null;
+            }
             var cleanText = text
                 .replace(/\*\*(.+?)\*\*/g, '$1')
                 .replace(/\*(.+?)\*/g, '$1')
@@ -16739,17 +16699,38 @@ except Exception as e:
                 .replace(/\n/g, ' ')
                 .trim();
             if (!cleanText) return;
-            var utterance = new SpeechSynthesisUtterance(cleanText);
-            utterance.lang = 'ru-RU';
-            // НЕ указываем voice — браузер (Chrome/Edge) сам выберет
-            // облачный синтезатор Google, который:
-            //  - читает русский текст естественным голосом
-            //  - автоматически переключается на английский для англ. слов
-            //  - звучит намного лучше системных SAPI5-голосов Windows
-            utterance.rate = 0.9;
-            utterance.pitch = 1.05;
-            utterance.volume = 1.0;
-            window.speechSynthesis.speak(utterance);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/tts', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.responseType = 'blob';
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    var blob = xhr.response;
+                    var url = URL.createObjectURL(blob);
+                    var audio = new Audio(url);
+                    _currentAudio = audio;
+                    audio.onended = function() {
+                        URL.revokeObjectURL(url);
+                        _currentAudio = null;
+                    };
+                    audio.onerror = function() {
+                        URL.revokeObjectURL(url);
+                        _currentAudio = null;
+                    };
+                    audio.play().catch(function(err) {
+                        console.error('[TTS] play error:', err);
+                        URL.revokeObjectURL(url);
+                        _currentAudio = null;
+                    });
+                } else {
+                    console.error('[TTS] server error:', xhr.status);
+                }
+            };
+            xhr.onerror = function() {
+                console.error('[TTS] network error');
+            };
+            xhr.send(JSON.stringify({text: cleanText}));
         }
 
         function toggleChatVoice() {
@@ -16767,15 +16748,6 @@ except Exception as e:
                 btn.onmouseout = null;
                 window._chatVoiceEnabled = true;
                 localStorage.setItem('chatVoiceEnabled', 'true');
-                // Прогрев speechSynthesis (Chrome требует первый speak() в обработчике клика)
-                try {
-                    if (window.speechSynthesis) {
-                        var _wu = new SpeechSynthesisUtterance('');
-                        _wu.lang = 'ru-RU';
-                        window.speechSynthesis.speak(_wu);
-                        window.speechSynthesis.cancel();
-                    }
-                } catch(_e) {}
                 showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
             } else {
                 btn.dataset.active = '';
@@ -16787,7 +16759,11 @@ except Exception as e:
                 btn.onmouseout = function(){ if(!this.dataset.active){ this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';} };
                 window._chatVoiceEnabled = false;
                 localStorage.setItem('chatVoiceEnabled', 'false');
-                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                // Останавливаем воспроизведение
+                if (_currentAudio) {
+                    _currentAudio.pause();
+                    _currentAudio = null;
+                }
                 showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
             }
         }

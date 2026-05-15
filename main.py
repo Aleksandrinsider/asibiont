@@ -2661,6 +2661,48 @@ async def transcribe_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def tts_handler(request):
+    """POST /api/tts — озвучивание текста через Google TTS (gTTS).
+
+    Принимает JSON: {"text": "..."}. Возвращает audio/mpeg.
+    """
+    try:
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+
+        data = await request.json()
+        text = (data.get('text') or '').strip()
+        if not text:
+            return web.json_response({'error': 'text required'}, status=400)
+
+        import io
+        from gtts import gTTS
+
+        def _synthesize(text):
+            buf = io.BytesIO()
+            tts = gTTS(text, lang='ru', slow=False)
+            tts.write_to_fp(buf)
+            buf.seek(0)
+            return buf
+
+        loop = asyncio.get_event_loop()
+        mp3_buf = await loop.run_in_executor(None, _synthesize, text)
+
+        return web.Response(
+            body=mp3_buf.read(),
+            content_type='audio/mpeg',
+            headers={
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        )
+    except Exception as e:
+        logger.error(f"[TTS] Error: {e}", exc_info=True)
+        return web.json_response({'error': 'TTS failed'}, status=500)
+
+
 async def api_send_message_handler(request):
     """API endpoint for sending messages from frontend (delegation, task actions)"""
     try:
@@ -13782,6 +13824,7 @@ app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
 app.router.add_get('/chat/progress', chat_progress_handler)
 app.router.add_post('/api/transcribe', transcribe_handler)
+app.router.add_post('/api/tts', tts_handler)
 app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_post('/api/rollback_checkpoint', rollback_checkpoint_handler)
