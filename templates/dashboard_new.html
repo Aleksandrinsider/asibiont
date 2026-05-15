@@ -16408,27 +16408,27 @@ except Exception as e:
                 }
                 const data = await response.json();
                 
-                // Feed now returns AgentActivityLog entries (activities), not Post objects
-                if (data.activities && data.activities.length > 0) {
-                    const latestActivityId = data.activities[0].id;
+                // Feed returns Post objects in data.posts
+                if (data.posts && data.posts.length > 0) {
+                    const latestPostId = data.posts[0].id;
                     const indicator = document.getElementById('new-posts-indicator');
                     
-                    // Check if there are new activities since last seen
-                    const hasNewActivities = lastSeenPostId !== null && latestActivityId > lastSeenPostId;
+                    // Check if there are new posts since last seen
+                    const hasNewPosts = lastSeenPostId !== null && latestPostId > lastSeenPostId;
                     
-                    if (hasNewActivities && currentView !== 'feed') {
+                    if (hasNewPosts && currentView !== 'feed') {
                         if (indicator) {
                             indicator.style.display = 'inline-block';
                         }
                     } else if (currentView === 'feed') {
                         // When switching to feed, update lastSeenPostId and hide indicator
-                        lastSeenPostId = latestActivityId;
+                        lastSeenPostId = latestPostId;
                         if (indicator) indicator.style.display = 'none';
                     }
                     
                     // Initialize lastSeenPostId on first load
                     if (lastSeenPostId === null) {
-                        lastSeenPostId = latestActivityId;
+                        lastSeenPostId = latestPostId;
                     }
                 }
             } catch (error) {
@@ -16723,6 +16723,22 @@ except Exception as e:
 
         function _speakText(text) {
             if (!window._chatVoiceEnabled) return;
+            // Guard: если _ttsAudio не создан (например, при восстановлении состояния после перезагрузки
+            // без полного цикла toggle), отключаем голос и выходим
+            if (!_ttsAudio) {
+                console.warn('[TTS] _ttsAudio not initialized, disabling voice');
+                window._chatVoiceEnabled = false;
+                var _btn = document.getElementById('chat-tts-btn');
+                if (_btn) {
+                    _btn.dataset.active = '';
+                    _btn.style.background = '#FFFFFF';
+                    _btn.style.borderColor = '#D1D9E0';
+                    var _svg = _btn.querySelector('svg');
+                    if (_svg) _svg.setAttribute('fill', '#374151');
+                }
+                localStorage.setItem('chatVoiceEnabled', 'false');
+                return;
+            }
             // Останавливаем предыдущее воспроизведение
             if (_currentAudio) {
                 _currentAudio.pause();
@@ -16863,6 +16879,10 @@ except Exception as e:
             var saved = localStorage.getItem('chatVoiceEnabled');
             if (saved === 'true') {
                 window._chatVoiceEnabled = true;
+                // Создаём Audio ЭЛЕМЕНТ заранее (вне user gesture он не сможет play(),
+                // но для XHR-колбэков нам нужен существующий объект _ttsAudio)
+                _ttsAudio = new Audio();
+                _ttsAudio.volume = 1.0;
                 var btn = document.getElementById('chat-tts-btn');
                 if (btn) {
                     btn.dataset.active = 'true';
