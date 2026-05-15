@@ -6409,7 +6409,7 @@ async def setup_advisor_handler(request):
 
 
 async def get_feed_handler(request):
-    """API endpoint to get posts from favorite contacts"""
+    """API endpoint to get agent activity reports for the feed (replaces old Post-based feed)"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id')
@@ -6423,168 +6423,28 @@ async def get_feed_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
-            
-            # Get user's profile with favorites
-            user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
-            
-            # Parse favorite contacts from JSON
-            favorite_user_ids = []
-            if user_profile and user_profile.favorite_contacts:
-                try:
-                    import json
-                    favorite_data = json.loads(user_profile.favorite_contacts)
-                    logger.info(f"Feed: favorite_data from profile: {favorite_data}")
-                    # favorite_contacts может содержать как ID, так и usernames
-                    _fav_usernames = []
-                    for item in favorite_data:
-                        if isinstance(item, int):
-                            favorite_user_ids.append(item)
-                        elif isinstance(item, str):
-                            _fav_usernames.append(item.replace('@', ''))
-                    # Batch-resolve usernames to IDs
-                    if _fav_usernames:
-                        _fav_users = session_db.query(User).filter(
-                            func.lower(User.username).in_([u.lower() for u in _fav_usernames])
-                        ).all()
-                        for fu in _fav_users:
-                            favorite_user_ids.append(fu.id)
-                except Exception as e:
-                    logger.error(f"Error parsing favorite_contacts: {e}")
-                    favorite_user_ids = []
-            
-            logger.info(f"Feed: final favorite_user_ids: {favorite_user_ids}")
 
-            # Get users who blocked current user (exclude their posts)
-            # Only check profiles that actually have blocked_contacts with our user
-            blocked_by_users = set()
-            try:
-                from sqlalchemy import text
-                # Use SQL LIKE to pre-filter, avoiding loading all profiles
-                blocking_profiles = session_db.query(UserProfile.user_id, UserProfile.blocked_contacts).filter(
-                    UserProfile.blocked_contacts.isnot(None),
-                    UserProfile.blocked_contacts.contains(str(user.id))
-                ).all()
-                for profile_uid, blocked_json in blocking_profiles:
-                    try:
-                        blocked_list = json.loads(blocked_json)
-                        if user.id in blocked_list:
-                            blocked_by_users.add(profile_uid)
-                    except Exception as e:
-                        logger.debug(f"Failed to parse blocked_contacts for user {profile_uid}: {e}")
-            except Exception as e:
-                logger.warning(f"[FEED] Failed to check blocked_contacts: {e}")
+            # Типы событий для ленты (все что есть в хронологии, кроме постов)
+            _feed_report_types = _TIMELINE_VISIBLE_TYPES - {
+                'post_newsfeed', 'post_telegram', 'post_discord',
+            }
 
-            logger.info(f"Feed: blocked_by_users: {blocked_by_users}")
+            # Get agent activity log entries (reports, not posts)
+            activities = session_db.query(AgentActivityLog).filter(
+                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.activity_type.in_(_feed_report_types),
+            ).order_by(AgentActivityLog.created_at.desc()).limit(50).all()
 
-            # Include own posts too, but exclude users who blocked current user
-            all_user_ids = [uid for uid in (favorite_user_ids + [user.id]) if uid not in blocked_by_users]
-            
-            logger.info(f"Feed: all_user_ids for feed (favorites + self - blocked): {all_user_ids}")
+            logger.info(f"Feed: found {len(activities)} activities for user {user.id}")
 
-            # Get posts from favorites and self (progress + manual, not campaign)
-            if all_user_ids:
-                posts = session_db.query(Post).filter(
-                    Post.user_id.in_(all_user_ids),
-                    Post.post_type.in_(['progress', 'manual'])
-                ).order_by(Post.created_at.desc()).limit(20).all()
-                logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
-                logger.info(f"Feed: found {len(posts)} posts from user_ids={[p.user_id for p in posts]}")
-            else:
-                posts = []
-                logger.info("No favorite contacts found, returning empty feed")
-
-            # Get user profiles for author info
-            user_ids = list(set([p.user_id for p in posts]))
-            users_data = session_db.query(User, UserProfile).join(
-                UserProfile, User.id == UserProfile.user_id, isouter=True
-            ).filter(User.id.in_(user_ids)).all()
-
-            users_map = {}
-            for u, profile in users_data:
-                users_map[u.id] = {
-                    'telegram_id': u.telegram_id,
-                    'username': u.username,
-                    'first_name': u.first_name,
-                    'photo_url': avatar_url_if_photo(u),
-                    'company': profile.company if profile else None,
-                    'position': profile.position if profile else None,
-                    'subscription_tier': u.subscription_tier.value if u.subscription_tier else 'LIGHT'
-                }
-
-            # Build feed response
-            feed = []
-            for post in posts:
-                try:
-                    author = users_map.get(post.user_id, {})
-                    
-                    # Get likes count and check if current user liked
-                    likes_count = session_db.query(PostLike).filter_by(post_id=post.id).count()
-                    user_liked = session_db.query(PostLike).filter_by(
-                        post_id=post.id, 
-                        user_id=user.id
-                    ).first() is not None
-                    
-                    # Ensure created_at has UTC timezone info for proper browser conversion
-                    created_at_str = None
-                    if post.created_at:
-                        if post.created_at.tzinfo is None:
-                            # Assume UTC if no timezone
-                            created_at_str = post.created_at.replace(tzinfo=dt_timezone.utc).isoformat()
-                        else:
-                            created_at_str = post.created_at.isoformat()
-                    feed.append({
-                        'id': post.id,
-                        'content': post.content,
-                        'image_url': f'/feed/image/{post.id}' if post.image_data else post.image_url,
-                        'created_at': created_at_str,
-                        'likes_count': likes_count,
-                        'user_liked': user_liked,
-                        'author': {
-                            'telegram_id': author.get('telegram_id'),
-                            'username': author.get('username'),
-                            'first_name': author.get('first_name'),
-                            'photo_url': author.get('photo_url'),
-                            'company': author.get('company'),
-                            'position': author.get('position'),
-                            'subscription_tier': author.get('subscription_tier', 'LIGHT'),
-                            'is_current_user': post.user_id == user.id
-                        }
-                    })
-                except Exception as post_error:
-                    logger.error(f"Error processing post {post.id}: {post_error}")
-                    continue
-
-            # Проерить, есть ли прочитаые посты
-            has_unread_posts = False
-            if posts:
-                # Получить ID сех посто
-                post_ids = [p.id for p in posts]
-                # Проверить, сколько из них пользователь уже видел
-                viewed_count = session_db.query(PostView).filter(
-                    PostView.user_id == user.id,
-                    PostView.post_id.in_(post_ids)
-                ).count()
-                has_unread_posts = viewed_count < len(post_ids)
-
-            # Background avatar refresh for feed authors missing cached bytes
-            if user_ids and 'bot' in request.app and request.app['bot']:
-                try:
-                    _feed_need = session_db.query(User.telegram_id).filter(
-                        User.id.in_(user_ids),
-                        User.telegram_id > 0,
-                        User.tg_avatar_data.is_(None),
-                        User.custom_avatar.is_(None)
-                    ).all()
-                    _feed_tg_ids = [u[0] for u in _feed_need]
-                    if _feed_tg_ids:
-                        asyncio.create_task(_refresh_avatars_background(request.app['bot'], _feed_tg_ids))
-                except Exception:
-                    pass
+            data = []
+            for a in activities:
+                data.append(_aal_to_dict(a))
 
             return web.json_response({
-                'success': True, 
-                'posts': feed,
-                'has_unread_posts': has_unread_posts
+                'success': True,
+                'activities': data,
+                'count': len(data),
             })
 
         finally:
