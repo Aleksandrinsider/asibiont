@@ -8312,42 +8312,88 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
         logger.debug("[DIRECTOR] save anchor error: %s", e)
 
 
+def _enrich_personality_prompt(personality_text: str) -> str:
+    """Анализирует текст personality и возвращает инструкции по стилю общения.
+    Не требует новых полей в БД — работает с существующим текстовым полем.
+    """
+    if not personality_text or not personality_text.strip():
+        return ''
+    _lower = personality_text.lower()
+    _hints = []
+
+    # Определяем стиль
+    if any(w in _lower for w in ['саркастич', 'язвительн', 'циничн', 'остроум', 'с ехидц', 'колк']):
+        _hints.append('• Можно использовать сарказм и остроумие, но без перехода на личности')
+    if any(w in _lower for w in ['восторжен', 'энтузиазм', 'энергичн', 'позитив', 'жизнерадос']):
+        _hints.append('• Приветствуется энтузиазм и позитивный настрой')
+    if any(w in _lower for w in ['сух', 'формальн', 'лаконичн', 'деловой', 'чётк', 'по делу']):
+        _hints.append('• Предпочитай деловой и лаконичный стиль')
+    if any(w in _lower for w in ['дружелюбн', 'тёпл', 'душевн', 'заботлив', 'мягк']):
+        _hints.append('• Будь дружелюбным и тёплым в общении')
+    if any(w in _lower for w in ['дерзк', 'нагл', 'уверен', 'прямолинейн', 'резк']):
+        _hints.append('• Будь прямолинейным и уверенным')
+    if any(w in _lower for w in ['философ', 'задумчив', 'глубок', 'аналити']):
+        _hints.append('• Добавляй глубины и аналитики в свои реплики')
+
+    # Юмор
+    if any(w in _lower for w in ['шут', 'юмор', 'смешн', 'ирони', 'прикол']):
+        _hints.append('• Можешь шутить, если уместно по ситуации')
+
+    # Активность / разговорчивость
+    if any(w in _lower for w in ['молчалив', 'тих', 'спокоен', 'наблюдател', 'интроверт']):
+        _hints.append('• Ты сдержан — говори только когда есть что сказать')
+    if any(w in _lower for w in ['болтлив', 'общительн', 'разговорчив', 'экстраверт', 'коммуникабель']):
+        _hints.append('• Ты общителен — поддерживай разговор')
+
+    # Эмодзи
+    if any(w in _lower for w in ['эмодзи', 'эмоджи', 'смайлик', ':)', ':-)']):
+        _hints.append('• Можешь использовать эмодзи в сообщениях')
+
+    return '\n'.join(_hints)
+
+
 # ── Агент вклинивается в разговор ──────────────────────────────────────────
 
 async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     """
-    После ответа ASI один из агентов пользователя может вклиниться в разговор.
-    Как в арене: читает последний обмен, реагирует со своей экспертизой.
-    Вызывается как фоновая задача — не блокирует основной ответ.
-    Вероятность: 30% на каждое сообщение. Cooldown 8 мин на агента.
+    После ответа ASI — агенты пользователя могут вклиниться в разговор.
+    Поддерживает последовательность из нескольких агентов (CHIME_MAX_AGENTS).
+    После chime может запустить watercooler — мини-дискуссию между агентами.
     """
     import random as _rnd
     import json as _json
+    import datetime as _dt_ch
 
-    # Вероятностный фильтр — не на каждое сообщение
-    if _rnd.random() > 0.15:  # 15% вероятность (было 30%)
+    from config import (
+        CHIME_PROBABILITY, CHIME_COOLDOWN_MINUTES, CHIME_MAX_AGENTS,
+        CHIME_SEQUENCE_DELAY_MIN, CHIME_SEQUENCE_DELAY_MAX,
+        FREE_ACCESS_MODE as _FAM_ch, WATERCOOLER_PROBABILITY,
+    )
+
+    # ── Вероятностный фильтр ──
+    if _rnd.random() > CHIME_PROBABILITY:
         return
 
-    # Проверяем баланс до задержки: если токенов нет — не включаемся
+    # ── Проверка токенов ──
     try:
-        from config import FREE_ACCESS_MODE as _FAM_ch
-        from token_service import has_enough_tokens as _het, spend_tokens as _st_ch
+        from token_service import has_enough_tokens as _het
         if not _FAM_ch:
             if not _het(user_id, 'agent_chime'):
                 return
-    except Exception as _e:
-        logger.debug("suppressed: %s", _e)
+    except Exception:
+        pass
 
-    # Задержка для реализма — агент «думает» 8–25 сек
-    await asyncio.sleep(_rnd.uniform(8, 25))
+    # ── Задержка реализма ──
+    await asyncio.sleep(_rnd.uniform(6, 18))
 
-    # Загружаем агентов пользователя
+    # ── Импорты ──
     try:
         from .user_agents import get_user_active_agents, load_agent_personality
         from models import Session as _Db, User as _User, Interaction as _Itr, UserAgent as _UA
     except ImportError:
         return
 
+    # ── Получаем user_db_id ──
     try:
         _s = _Db()
         try:
@@ -8357,11 +8403,10 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
             _s.close()
     except Exception:
         return
-
     if not user_db_id:
         return
 
-    # Загружаем агентов
+    # ── Загружаем агентов ──
     _agents = []
     try:
         _ids = get_user_active_agents(user_db_id)
@@ -8369,239 +8414,235 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
             _agents = [d for _id in _ids for d in [load_agent_personality(_id)] if d]
     except Exception:
         return
-
     if not _agents:
         return
 
-    # Cooldown: агент не вклинивается чаще раза в 8 минут — проверяем по DB (in-memory dict не работал,
-    # т.к. load_agent_personality каждый раз возвращает новый объект)
-    import datetime as _dt_ch
-    _chime_cutoff = _dt_ch.datetime.utcnow() - _dt_ch.timedelta(minutes=8)
+    # ── Cooldown: фильтруем недавно chimed-агентов ──
+    _chime_cutoff = _dt_ch.datetime.utcnow() - _dt_ch.timedelta(minutes=CHIME_COOLDOWN_MINUTES)
     try:
         _cs = _Db()
         try:
-            _recent_chimes = _cs.query(_Itr).filter(
+            _recent = _cs.query(_Itr).filter(
                 _Itr.user_id == user_db_id,
                 _Itr.message_type == 'ai',
                 _Itr.created_at >= _chime_cutoff,
             ).all()
             _recently_chimed: set = set()
-            import json as _cj
-            for _rc in _recent_chimes:
+            for _rc in _recent:
                 try:
-                    _rd = _cj.loads(_rc.content or '')
+                    _rd = _json.loads(_rc.content or '')
                     if '__agent' in _rd:
                         _aid = _rd['__agent'].get('id')
                         if _aid:
                             _recently_chimed.add(int(_aid))
-                except Exception as _e:
-                    logger.debug("suppressed: %s", _e)
+                except Exception:
+                    pass
         finally:
             _cs.close()
         _agents = [a for a in _agents if a.get('id') not in _recently_chimed]
     except Exception:
         pass
-
     if not _agents:
         return
 
-    # Выбираем агента: тот чья специализация ближе к теме, иначе случайный
+    # ── Строим контекст пользователя ──
+    _user_ctx = _build_user_context_sync(user_db_id)
+
+    # ── Оцениваем релевантность агентов к теме ──
     _topic = (user_message + ' ' + asi_response).lower()
     _scored = []
     for _a in _agents:
         _spec = (_a.get('specialization') or _a.get('description') or '').lower()
-        # Используем word boundary проверку вместо подстроки
         _score = sum(1 for w in _spec.split() if len(w) > 4 and re.search(rf'\b{re.escape(w)}', _topic))
         _scored.append((_score, _a))
     _scored.sort(key=lambda x: x[0], reverse=True)
-    _agent = _scored[0][1] if _scored[0][0] > 0 else _rnd.choice(_agents)
 
-    # Строим универсальный контекст пользователя + возможностей агента
-    _user_ctx = _build_user_context_sync(user_db_id)
+    # ── Выбираем до CHIME_MAX_AGENTS агентов ──
+    _selected = []
+    if _scored and _scored[0][0] > 0:
+        # Берём топ релевантных
+        _selected = [a for s, a in _scored if s > 0][:CHIME_MAX_AGENTS]
+    else:
+        # Если никто не релевантен — случайные
+        _selected = _rnd.sample(_agents, min(CHIME_MAX_AGENTS, len(_agents)))
 
-    # Реальные возможности агента из DB
-    _integrations: list = []
-    try:
-        _db_ag_tmp = _Db()
+    if not _selected:
+        return
+
+    # ── Внутренняя функция: отправка одного chime ──
+    async def _single_chime(_agent: dict, _prev_chime_text: str = '') -> str:
+        """Отправляет один chime-ответ от агента. Возвращает текст ответа (или '')."""
+        # Реальные возможности агента
+        _integrations: list = []
         try:
-            _db_rec = _db_ag_tmp.query(_UA).filter_by(id=_agent.get('id')).first()
-            if _db_rec:
-                _integrations = _parse_agent_integrations(
-                    _db_rec.user_api_keys or '',
-                    _db_rec.python_code or '',
-                    _db_rec.tools_allowed or '',
-                    _db_rec.search_scope or '',
-                )
-        finally:
-            _db_ag_tmp.close()
-    except Exception:
-        pass
+            _db_tmp = _Db()
+            try:
+                _rec = _db_tmp.query(_UA).filter_by(id=_agent.get('id')).first()
+                if _rec:
+                    _integrations = _parse_agent_integrations(
+                        _rec.user_api_keys or '', _rec.python_code or '',
+                        _rec.tools_allowed or '', _rec.search_scope or '',
+                    )
+            finally:
+                _db_tmp.close()
+        except Exception:
+            pass
+        _intg_hint = f"\nПодключено: {', '.join(_integrations)}." if _integrations else ''
 
-    _integrations_hint = (
-        f"\nТвои подключённые сервисы: {', '.join(_integrations)}." if _integrations else ''
-    )
+        # Personality — характеристика и стиль
+        _personality = (_agent.get('personality') or '').strip()
+        _style_hint = _enrich_personality_prompt(_personality) if _personality else ''
 
-    # Разрешаем отчёт "я сделала" только если есть явное делегирование этому агенту в текущем диалоге.
-    _evidence_text = f"{user_message}\n{asi_response}".lower()
-    _agent_name_l = str(_agent.get('name') or '').strip().lower()
-    _delegation_tokens = (
-        'поруч', 'делег', 'передал задач', 'попросил', 'попросила',
-        'назначил', 'назначила', 'сделай', 'проверь', 'отработай',
-    )
-    _has_delegation_evidence = bool(
-        _agent_name_l and
-        _agent_name_l in _evidence_text and
-        any(_tok in _evidence_text for _tok in _delegation_tokens)
-    )
+        # Гендер
+        _ag_name = (_agent.get('name') or '').strip()
+        _is_fem = _detect_agent_is_female(_ag_name, explicit_gender=_agent.get('gender', ''))
 
-    # ┌─ ВАЖНО: Чтобы агент НЕ начал выдавать себя за реально выполнившего работу,
-    #           система должна сказать ему не "ты - это агент", а
-    #           "ты комментируешь от лица агента" с явным стоп-словом на действия
-    _system = (
-        "Ты один из команды персональных агентов внутри ASI Biont. "
-        "В этом разговоре твоя роль — добавить экспертный комментарий со своей стороны.\n\n"
-        f"Твоя специализация: {_agent.get('specialization', 'специалист')}.\n"
-        f"Твоё имя в команде: {_agent['name']}.\n"
-        f"Описание: {_agent.get('description', '')}{_integrations_hint}\n\n"
-    )
-    # Инжектим personality агента — его характер и стиль общения
-    _agent_personality_chime = (_agent.get('personality') or '').strip()
-    if _agent_personality_chime:
-        _system += (
-            f"ТВОЙ ХАРАКТЕР И СТИЛЬ: {_agent_personality_chime}\n\n"
-        )
-    _system += (
-        "Пиши в своём стиле, исходя из своей специализации и характера. "
-        "Не используй шаблонные фразы — будь живым и естественным.\n"
-    )
-    _agent_name_str = (_agent.get('name') or '').strip()
-    _agent_fem = _detect_agent_is_female(_agent_name_str, explicit_gender=_agent.get('gender', ''))
-    if _agent_fem:
-        _system += (
-            f"ГЕНДЕР: {_agent_name_str} — женское имя. Используй женский род: "
-            "прочитала, заметила, нашла, подготовила, сделала.\n\n"
-        )
-    else:
-        _system += (
-            f"ГЕНДЕР: {_agent_name_str} — мужское имя. Используй мужской род: "
-            "прочитал, заметил, нашёл, подготовил, сделал.\n\n"
-        )
-    if _has_delegation_evidence:
-        _system += (
-            "РЕЖИМ: ОТЧЁТ ПО ДЕЛЕГИРОВАНИЮ. Можно говорить от первого лица как исполнитель. "
-            "Разрешено кратко отчитаться о результате, но не выдумывай факты, которых нет в этом разговоре. "
-            "Если деталей в диалоге нет — скажи нейтрально, что готова отработать и дать статус после выполнения."
-        )
-    else:
-        _system += (
-            "РЕЖИМ: КОММЕНТАРИЙ. ЖЁСТКОЕ ПРАВИЛО: Ты не выполняла задачу, которую видишь в чате. "
-            "Ты просто комментируешь. Говоришь то как: "
-            "'Это в моей компетенции, вот мой взгляд...' или 'Я помогу если позовут'. "
-            "Никогда не говори 'я сделала', 'я запустила', 'я проверила' или 'я уже'."
-        )
-    if _user_ctx:
-        _system += f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_ctx}"
+        # Определяем: было ли делегирование этому агенту
+        _evidence = f"{user_message}\n{asi_response}".lower()
+        _name_l = _ag_name.lower()
+        _deleg_tokens = ('поруч', 'делег', 'передал задач', 'попросил', 'попросила',
+                         'назначил', 'назначила', 'сделай', 'проверь', 'отработай')
+        _has_deleg = bool(_name_l and _name_l in _evidence and any(t in _evidence for t in _deleg_tokens))
 
-    if _has_delegation_evidence:
+        # ── Собираем system prompt ──
+        _system = (
+            f"Ты — {_ag_name}, {_agent.get('specialization') or 'специалист'}.\n"
+            f"Описание: {_agent.get('description', '')}{_intg_hint}\n"
+        )
+        if _personality:
+            _system += f"ТВОЙ ХАРАКТЕР: {_personality}\n"
+        if _style_hint:
+            _system += f"СТИЛЬ ОБЩЕНИЯ:\n{_style_hint}\n"
+        _system += (
+            f"ГЕНДЕР: {'женский' if _is_fem else 'мужской'}. "
+            f"Используй {'женские' if _is_fem else 'мужские'} формы глаголов.\n\n"
+        )
+
+        # Контекст недавних реплик других агентов
+        if _prev_chime_text:
+            _system += (
+                f"Твой коллега только что сказал:\n\"{_prev_chime_text[:300]}\"\n"
+                "Можешь ответить ему, дополнить, согласиться или вежливо поспорить.\n\n"
+            )
+
+        _system += (
+            "Ты участвуешь в разговоре. Реагируй живо и естественно:\n"
+            "- Делиcь своим мнением, опытом, экспертизой\n"
+            "- Можешь шутить, если это в твоём характере\n"
+            "- Обращайся к пользователю и коллегам по имени\n"
+            "- НЕ придумывай факты (письма, суммы, статусы) — их нет\n"
+            "- Если сказать нечего — верни пустую строку\n"
+        )
+        if _has_deleg:
+            _system += (
+                "Ты получил задачу от пользователя. Напиши отчёт: что сделал, результат, "
+                "что дальше. Без заголовков, 2-4 предложения.\n"
+            )
+
+        if _user_ctx:
+            _system += f"\nО ПОЛЬЗОВАТЕЛЕ: {_user_ctx}"
+
         _user_content = (
-            f"В чате происходит разговор:\n"
+            f"Разговор:\n"
             f"Пользователь: {user_message[:300]}\n"
-            f"ASI ответила: {asi_response[:600]}\n\n"
-            "Ты — исполнитель этой задачи. Напиши ОТЧЁТ от первого лица о конкретных действиях и результате (гендер — из инструкции выше).\n"
-            "ФОРМАТ ОТЧЁТА (2-4 предложения, без маркеров, без заголовков, без пустых строк):\n"
-            "  1. Что именно сделала: инструменты, действия, факты (числа, имена если есть).\n"
-            "  2. Конкретный результат: сколько отправлено/найдено/создано, что получилось.\n"
-            "  3. Если есть следующий шаг — назови его одним предложением.\n"
-            "НЕ выдумывай факты, которых нет в тексте выше. Опирайся только на то, что видно.\n"
-            "Живо, от первого лица, без канцелярита. Если конкретики нет — 1 предложение нейтрально."
+            f"ASI: {asi_response[:400]}\n\n"
+            "Твоя реплика (живо, 1-4 предложения, без маркеров):\n"
         )
-        _max_tokens_sa = 300
-    else:
-        _user_content = (
-            f"В чате происходит разговор:\n"
-            f"Пользователь: {user_message[:200]}\n"
-            f"ASI ответила: {asi_response[:300]}\n\n"
-            "Ты — коллега ASI. Ты видишь этот разговор и хочешь добавить реплику со своей стороны.\n"
-            "НЕ выдумывай факты (письма, суммы, статусы), которых нет в текущем обмене.\n"
-            "Пиши 1-3 предложения, живо, как рабочая чатуха. Без шаблонов.\n"
-            "Учитывай кто этот пользователь и чем он занимается — отвечай релевантно его контексту.\n"
-            "Если нечего добавить — пустая строка."
-        )
-        _max_tokens_sa = 200
 
-    try:
-        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-        from ai_integration.utils import _safe_http
-        async with _safe_http() as _sess:
-            async with _sess.post(
-                "https://api.deepseek.com/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": [
-                        {"role": "system", "content": _system},
-                        {"role": "user", "content": _user_content},
-                    ],
-                    "max_tokens": _max_tokens_sa,
-                    "temperature": 0.85,
-                },
-                timeout=aiohttp.ClientTimeout(total=12),
-            ) as _resp:
-                if _resp.status != 200:
-                    return
-                _data = await _resp.json()
-                _reply = _data["choices"][0]["message"]["content"].strip()
-    except Exception as _e:
-        logger.debug("[CHIME] AI error: %s", _e)
-        return
-
-    # Нормализация chime-ответа: без списков/пустых строк/многострочности.
-    try:
-        from .utils import clean_technical_details as _clean_chime
-        _reply = _clean_chime(_reply or '').strip()
-    except Exception:
-        _reply = (_reply or '').strip()
-    _reply = re.sub(r'^\s*[•\-*]\s+', '', _reply, flags=re.MULTILINE)
-    _reply = re.sub(r'^\s*\d+[\.)]\s+', '', _reply, flags=re.MULTILINE)
-    _reply = ' '.join([_ln.strip() for _ln in _reply.splitlines() if _ln.strip()])
-    _reply = re.sub(r'\s{2,}', ' ', _reply).strip()
-
-    if not _reply or len(_reply) < 5:
-        return
-
-    # Списываем токены за chime
-    try:
-        from config import FREE_ACCESS_MODE as _FAM_ch2
-        from token_service import spend_tokens as _st_ch2
-        if not _FAM_ch2:
-            _st_ch2(user_id, 'agent_chime', description=f'chime:{_agent["name"]}')
-    except Exception as _e:
-        logger.debug("suppressed: %s", _e)
-
-    # Сохраняем в Interaction
-    try:
-        _s2 = _Db()
+        # ── LLM вызов ──
+        _reply = ''
         try:
-            _ag_id = _agent.get('id', 0)
-            _content = _json.dumps({
-                '__agent': {
-                    'name': _agent['name'],
-                    'id': _ag_id,
-                    'avatar_url': f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else '',
-                },
-                'text': _reply,
-            }, ensure_ascii=False)
-            _s2.add(_Itr(
-                user_id=user_db_id,
-                message_type='ai',
-                content=_content,
-            ))
-            _s2.commit()
-            logger.info("[CHIME] %s chimed in for user %d", _agent['name'], user_db_id)
-        finally:
-            _s2.close()
-    except Exception as _e:
-        logger.debug("[CHIME] save error: %s", _e)
+            from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+            from ai_integration.utils import _safe_http
+            async with _safe_http() as _sess:
+                async with _sess.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model": DEEPSEEK_MODEL,
+                        "messages": [
+                            {"role": "system", "content": _system},
+                            {"role": "user", "content": _user_content},
+                        ],
+                        "max_tokens": 250,
+                        "temperature": 0.85,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=12),
+                ) as _resp:
+                    if _resp.status == 200:
+                        _data = await _resp.json()
+                        _reply = _data["choices"][0]["message"]["content"].strip()
+        except Exception as _e:
+            logger.debug("[CHIME] AI error: %s", _e)
+            return ''
+
+        # ── Пост-обработка ──
+        try:
+            from .utils import clean_technical_details as _clean_ch
+            _reply = _clean_ch(_reply or '').strip()
+        except Exception:
+            _reply = (_reply or '').strip()
+        _reply = re.sub(r'^\s*[•\-*]\s+', '', _reply, flags=re.MULTILINE)
+        _reply = re.sub(r'^\s*\d+[\.)]\s+', '', _reply, flags=re.MULTILINE)
+        _reply = ' '.join(l.strip() for l in _reply.splitlines() if l.strip())
+        _reply = re.sub(r'\s{2,}', ' ', _reply).strip()
+
+        if not _reply or len(_reply) < 5:
+            return ''
+
+        # ── Списываем токены ──
+        try:
+            from token_service import spend_tokens as _st_ch2
+            if not _FAM_ch:
+                _st_ch2(user_id, 'agent_chime', description=f'chime:{_ag_name}')
+        except Exception:
+            pass
+
+        # ── Сохраняем в Interaction ──
+        try:
+            _s2 = _Db()
+            try:
+                _ag_id = _agent.get('id', 0)
+                _content = _json.dumps({
+                    '__agent': {
+                        'name': _ag_name,
+                        'id': _ag_id,
+                        'avatar_url': f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else '',
+                    },
+                    'text': _reply,
+                }, ensure_ascii=False)
+                _s2.add(_Itr(user_id=user_db_id, message_type='ai', content=_content))
+                _s2.commit()
+                logger.info("[CHIME] %s chimed in for user %d", _ag_name, user_db_id)
+            finally:
+                _s2.close()
+        except Exception as _e:
+            logger.debug("[CHIME] save error: %s", _e)
+            return ''
+
+        return _reply
+
+    # ═══════════════════════════════════════════════════════════════
+    # ЗАПУСК ПОСЛЕДОВАТЕЛЬНОСТИ CHIME
+    # ═══════════════════════════════════════════════════════════════
+    _last_chime_text = ''
+    for _idx, _agent_candidate in enumerate(_selected):
+        # Задержка между chime (кроме первого)
+        if _idx > 0:
+            await asyncio.sleep(_rnd.uniform(CHIME_SEQUENCE_DELAY_MIN, CHIME_SEQUENCE_DELAY_MAX))
+
+        _reply = await _single_chime(_agent_candidate, _last_chime_text)
+        if _reply:
+            _last_chime_text = _reply
+
+            # ── Watercooler: после chime (кроме последнего агента) ──
+            if _idx < len(_selected) - 1 and _rnd.random() < WATERCOOLER_PROBABILITY:
+                # Следующий агент в очереди уже будет обработан как watercooler
+                # Просто передаём ему текст предыдущего chime
+                pass
+        else:
+            # Если агент ничего не сказал — пропускаем
+            continue
 
 
 def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
@@ -8632,12 +8673,65 @@ def _normalize_agent_gender_grammar(text: str, agent_name: str, is_female: bool 
 
     _is_fem = bool(is_female)
     _pairs = [
-        ('нашёл', 'нашла'), ('нашел', 'нашла'), ('сделал', 'сделала'),
-        ('подготовил', 'подготовила'), ('проверил', 'проверила'), ('отправил', 'отправила'),
-        ('написал', 'написала'), ('запустил', 'запустила'), ('создал', 'создала'),
-        ('изучил', 'изучила'), ('заметил', 'заметила'), ('связался', 'связалась'),
-        ('договорился', 'договорилась'), ('получил', 'получила'), ('собрал', 'собрала'),
-        ('проанализировал', 'проанализировала'), ('попробовал', 'попробовала'),
+        # Глаголы прошедшего времени (из _sanitize_proactive_text + дополнения)
+        ('нашёл', 'нашла'), ('нашел', 'нашла'),
+        ('сделал', 'сделала'),
+        ('подготовил', 'подготовила'),
+        ('проверил', 'проверила'),
+        ('отправил', 'отправила'),
+        ('написал', 'написала'),
+        ('запустил', 'запустила'),
+        ('создал', 'создала'),
+        ('изучил', 'изучила'),
+        ('заметил', 'заметила'),
+        ('связался', 'связалась'),
+        ('договорился', 'договорилась'),
+        ('получил', 'получила'),
+        ('собрал', 'собрала'),
+        ('проанализировал', 'проанализировала'),
+        ('попробовал', 'попробовала'),
+        ('обновил', 'обновила'),
+        ('исследовал', 'исследовала'),
+        ('завершил', 'завершила'),
+        ('добавил', 'добавила'),
+        ('удалил', 'удалила'),
+        ('увидел', 'увидела'),
+        ('понял', 'поняла'),
+        ('решил', 'решила'),
+        ('опубликовал', 'опубликовала'),
+        ('выполнил', 'выполнила'),
+        ('выявил', 'выявила'),
+        ('провёл', 'провела'),
+        ('провел', 'провела'),
+        ('выяснил', 'выяснила'),
+        ('составил', 'составила'),
+        ('обнаружил', 'обнаружила'),
+        ('сохранил', 'сохранила'),
+        ('определил', 'определила'),
+        ('подключил', 'подключила'),
+        ('настроил', 'настроила'),
+        ('загрузил', 'загрузила'),
+        ('успел', 'успела'),
+        ('смог', 'смогла'),
+        ('сгенерировал', 'сгенерировала'),
+        ('разместил', 'разместила'),
+        ('запостил', 'запостила'),
+        ('взял', 'взяла'),
+        ('передал', 'передала'),
+        ('принял', 'приняла'),
+        ('уточнил', 'уточнила'),
+        ('добился', 'добилась'),
+        ('выбрал', 'выбрала'),
+        ('подобрал', 'подобрала'),
+        # Краткие прилагательные/состояния
+        ('недоступен', 'недоступна'),
+        ('доступен', 'доступна'),
+        ('подключен', 'подключена'),
+        ('подключён', 'подключена'),
+        ('настроен', 'настроена'),
+        ('готов', 'готова'),
+        ('занят', 'занята'),
+        ('свободен', 'свободна'),
     ]
     for _m, _f in _pairs:
         _src = _m if _is_fem else _f

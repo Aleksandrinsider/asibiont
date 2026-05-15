@@ -342,3 +342,14 @@ else:
     logger.info("[CONFIG] Redis disabled")
 
 # Redis client will be initialized in utils.py if enabled
+
+# ═══════════════════════════════════════════════════════
+# Агентский chatter / стрим-режим
+# ═══════════════════════════════════════════════════════
+CHIME_PROBABILITY = float(os.getenv("CHIME_PROBABILITY", "0.3"))          # Вероятность chime-In (0.0-1.0), stream: 0.4-0.6
+CHIME_COOLDOWN_MINUTES = int(os.getenv("CHIME_COOLDOWN_MINUTES", "5"))   # Cooldown между chime одного агента (мин)
+CHIME_MAX_AGENTS = int(os.getenv("CHIME_MAX_AGENTS", "2"))               # Макс. агентов в одной chime-последовательности
+CHIME_SEQUENCE_DELAY_MIN = float(os.getenv("CHIME_SEQUENCE_DELAY_MIN", "3"))  # Мин. задержка между chime (сек)
+CHIME_SEQUENCE_DELAY_MAX = float(os.getenv("CHIME_SEQUENCE_DELAY_MAX", "8"))  # Макс. задержка между chime (сек)
+WATERCOOLER_PROBABILITY = float(os.getenv("WATERCOOLER_PROBABILITY", "0.4"))   # Вероятность watercooler после chime
+WATERCOOLER_COOLDOWN_MINUTES = int(os.getenv("WATERCOOLER_COOLDOWN_MINUTES", "3"))  # Cooldown watercooler (мин)

@@ -137,9 +137,22 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
             "сделала, нашла, подготовила, согласна, готова, проанализировала.\n"
         )
 
+    # Обогащение personality: анализ стиля общения
+    try:
+        from ai_integration.autonomous_agent import _enrich_personality_prompt as _enrich_style
+        _style_hint = _enrich_style(personality)
+    except Exception:
+        _style_hint = ''
+
     overlay += f"""
 ЛИЧНОСТЬ И ХАРАКТЕР:
 {personality}
+"""
+
+    if _style_hint:
+        overlay += f"""
+СТИЛЬ ОБЩЕНИЯ:
+{_style_hint}
 """
 
     overlay += """
