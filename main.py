@@ -6490,10 +6490,10 @@ async def get_feed_handler(request):
                     pass
 
             # Получаем посты из Post таблицы — свои + избранных контактов
-            # Фильтруем по post_type, чтобы исключить посты блога/другие нерелевантные типы
+            # Показываем только автоматические отчёты о работе пользователя (progress)
             posts = session_db.query(Post).filter(
                 Post.user_id.in_(_target_user_ids),
-                Post.post_type.in_(['progress', 'manual', 'campaign']),
+                Post.post_type.in_(['progress', 'campaign']),
             ).order_by(Post.created_at.desc()).limit(50).all()
 
             import base64
