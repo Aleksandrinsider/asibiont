@@ -187,6 +187,30 @@ async def _send_daily_report_job(user_id: int):
     else:
         logger.error("REMINDER_SERVICE not initialized; cannot send daily report")
 
+async def _send_daily_reports_job():
+    """Отправляет ежедневные отчёты всем активным пользователям каждый час.
+    Результат сохраняется в AgentActivityLog (activity_type='daily_report')
+    и отображается в ленте дашборда.
+    """
+    if not REMINDER_SERVICE:
+        logger.error("REMINDER_SERVICE not initialized; cannot send daily reports")
+        return
+    db = Session()
+    try:
+        from models import User as _RUser
+        users = db.query(_RUser).filter(
+            _RUser.telegram_id.isnot(None),
+            _RUser.is_active == True
+        ).all()
+        for user in users:
+            try:
+                await REMINDER_SERVICE.send_daily_report(user.telegram_id)
+            except Exception as e:
+                logger.warning(f"[DAILY_REPORT] Failed for user {user.telegram_id}: {e}")
+    finally:
+        db.close()
+
+
 async def _check_and_send_proactive_job(user_id: int):
     if REMINDER_SERVICE:
         await REMINDER_SERVICE.check_and_send_proactive(user_id)
@@ -661,9 +685,30 @@ class ReminderService:
 
 
     def schedule_daily_reports(self):
-        """Планирование ежедневных отчетов в 22:00 по времени пользователя - ОТКЛЮЧЕНО"""
-        logger.info("Daily reports are disabled")
-        return
+        """Планирование ежедневных отчетов в 22:00 по местному времени пользователя.
+        Отчёты сохраняются в AgentActivityLog (activity_type='daily_report')
+        и появляются в ленте дашборда.
+        """
+        from apscheduler.triggers.cron import CronTrigger
+        logger = logging.getLogger(__name__)
+
+        job_id = "daily_report"
+
+        # Проверяем, существует ли уже такой джоб
+        if self.scheduler.get_job(job_id):
+            logger.debug(f"Daily report job {job_id} already exists, skipping")
+            return
+
+        # Schedule once per day at 18:00 UTC (покрывает ~21:00-00:00 для часовых поясов UTC+3..UTC+6)
+        # Отчёт генерируется один раз в сутки вечером, попадает в ленту дашборда
+        self.scheduler.add_job(
+            _send_daily_reports_job,
+            trigger=CronTrigger(hour=18, minute=0, timezone=pytz.UTC),
+            id=job_id,
+            name="Send daily reports to all users (daily at 18:00 UTC)",
+            replace_existing=True
+        )
+        logger.info("Scheduled daily reports at 18:00 UTC")
 
     async def send_daily_report(self, user_id: int):
         """Отправка ежедневного отчета пользователю"""
