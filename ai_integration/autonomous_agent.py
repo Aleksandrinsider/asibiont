@@ -1778,6 +1778,7 @@ class HybridAutonomousAgent:
         self._initialize_tools()
         self.active_sessions = 0
         self._active_agent_data: dict = {}  # per-user: {user_id: agent_data} — защита от race condition
+        self._last_routed_agent: dict[int, int] = {}  # user_id -> agent_id последнего обработанного запроса (для определения продолжения диалога)
 
         # === Адаптивные фичи (из 73dc138) ===
         self.context_memory = []          # Краткосрочная память контекста
@@ -4855,29 +4856,39 @@ class HybridAutonomousAgent:
                     load_agent_personality, build_agent_system_prompt,
                     set_user_focused_agent, remove_user_active_agent,
                 )
-                # Роутинг по имени агента: "@Алиса текст" или просто "Алиса текст"
+                # ── НОВАЯ УНИВЕРСАЛЬНАЯ МАРШРУТИЗАЦИЯ АГЕНТОВ ──
+                # 1. @Name в любом месте текста → точное совпадение с агентом
+                # 2. Имя агента как слово (\bword\b) в любом месте текста (без @)
+                # 3. Focused-агент продолжает диалог ТОЛЬКО если предыдущий запрос был к нему же
+                # 4. Удаляем ВСЕ @Name из сообщения перед отправкой AI
                 _msg_stripped = (user_message or '').strip()
-                _mention_match = _re_agent.match(r'@(\w+)\b', _msg_stripped)
                 _active_agent_id = None
                 _mention_not_found = False  # флаг: явное @упоминание было, но агент не найден
-                _stripped_prefix_end = None  # позиция конца @имя/имя для обрезки
                 _all_active_ids = get_user_active_agents(user_id)
 
-                if _mention_match:
-                    # Явный @mention — ищем среди активных агентов
-                    _mention_name = _mention_match.group(1).lower()
-                    for _cid in _all_active_ids:
-                        _cdata = load_agent_personality(_cid)
-                        if _cdata and _cdata['name'].lower() == _mention_name:
-                            _active_agent_id = _cid
-                            _stripped_prefix_end = _mention_match.end()
-                            try:
-                                set_user_focused_agent(user_id, _cid)
-                            except Exception as _e:
-                                logger.debug("suppressed: %s", _e)
-                            logger.info(f"[AGENT] @mention routed to '{_cdata['name']}' (id={_cid})")
-                            break
-                    # Fallback: ищем среди собственных офисных агентов пользователя (status active/paused)
+                # Собираем map {имя_агента_нижний_регистр: id} для быстрого O(1) поиска
+                _agent_name_map: dict[str, int] = {}
+                for _cid in _all_active_ids:
+                    _cdata = load_agent_personality(_cid)
+                    if _cdata and _cdata.get('name'):
+                        _agent_name_map[_cdata['name'].lower()] = _cid
+
+                # Все слова в сообщении для word-boundary matching (используется в шагах 2 и 3)
+                _all_words_lower = set(_re_agent.findall(r'\b(\w+)\b', _msg_stripped.lower()))
+
+                # ─── ШАГ 1: @Name в ЛЮБОМ месте текста ────────────────────────────────
+                _at_mentions = _re_agent.findall(r'(?<!\w)@(\w+)\b', _msg_stripped)
+                for _mn_raw in _at_mentions:
+                    _mn = _mn_raw.lower()
+                    if _mn in _agent_name_map:
+                        _active_agent_id = _agent_name_map[_mn]
+                        try:
+                            set_user_focused_agent(user_id, _active_agent_id)
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                        logger.info(f"[AGENT] @mention routed to '{_mn}' (id={_active_agent_id})")
+                        break
+                    # Fallback: ищем среди собственных офисных агентов пользователя
                     if _active_agent_id is None:
                         try:
                             from models import UserAgent as _UA_m, User as _U_m, Session as _S_m
@@ -4890,83 +4901,93 @@ class HybridAutonomousAgent:
                                         _UA_m.status.in_(['active', 'paused']),
                                     ).all()
                                     for _oa in _own:
-                                        if _oa.name and _oa.name.lower() == _mention_name:
+                                        if _oa.name and _oa.name.lower() == _mn:
                                             _active_agent_id = _oa.id
-                                            _stripped_prefix_end = _mention_match.end()
-                                            # Добавляем в активные чтобы следующий раз нашёлся сразу
                                             try:
                                                 set_user_focused_agent(user_id, _oa.id)
                                             except Exception as _e:
                                                 logger.debug("suppressed: %s", _e)
                                             logger.info(f"[AGENT] @mention own-agent '{_oa.name}' (id={_oa.id})")
+                                            _agent_name_map[_oa.name.lower()] = _oa.id  # кешируем
                                             break
                             finally:
                                 _s_fb.close()
                         except Exception as _fb_e:
                             logger.debug(f"[AGENT] own-agent fallback error: {_fb_e}")
-                    if _active_agent_id is None:
-                        _mention_not_found = True
-                else:
-                    # Имя без @ — ищем совпадение с началом сообщения (тихий роутинг)
-                    _first_word = _re_agent.match(r'(\w+)\b', _msg_stripped)
-                    if _first_word:
-                        _fw = _first_word.group(1).lower()
-                        # Сначала в подписках маркетплейса
-                        for _cid in _all_active_ids:
-                            _cdata = load_agent_personality(_cid)
-                            if _cdata and _cdata['name'].lower() == _fw:
-                                _active_agent_id = _cid
-                                _stripped_prefix_end = _first_word.end()
-                                try:
-                                    set_user_focused_agent(user_id, _cid)
-                                except Exception as _e:
-                                    logger.debug("suppressed: %s", _e)
-                                logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
-                                break
-                        # Fallback: собственные офисные агенты
-                        if _active_agent_id is None:
-                            try:
-                                from models import UserAgent as _UA_np, User as _U_np, Session as _S_np
-                                _s_np = _S_np()
-                                try:
-                                    _u_np = _s_np.query(_U_np).filter_by(telegram_id=user_id).first()
-                                    if _u_np:
-                                        _own_np = _s_np.query(_UA_np).filter(
-                                            _UA_np.author_id == _u_np.id,
-                                            _UA_np.status.in_(['active', 'paused']),
-                                        ).all()
-                                        for _oa_np in _own_np:
-                                            if _oa_np.name and _oa_np.name.lower() == _fw:
-                                                _active_agent_id = _oa_np.id
-                                                _stripped_prefix_end = _first_word.end()
-                                                try:
-                                                    set_user_focused_agent(user_id, _oa_np.id)
-                                                except Exception as _e:
-                                                    logger.debug("suppressed: %s", _e)
-                                                logger.info(f"[AGENT] name-prefix own-agent '{_oa_np.name}' (id={_oa_np.id})")
-                                                break
-                                finally:
-                                    _s_np.close()
-                            except Exception as _np_e:
-                                logger.debug(f"[AGENT] name-prefix own-agent fallback error: {_np_e}")
+                    if _active_agent_id:
+                        break
 
-                # Субагенты встревают ТОЛЬКО при явном вызове:
-                # 1. Пользователь написал @имя или имя-префикс (обработано выше)
-                # 2. ASI сам передаёт управление агенту (через focused_agent set внутри tool-chain)
-                # 3. Если явного упоминания нет — проверяем focused_agent (установлен предыдущим @mention)
-                if not _mention_not_found and _active_agent_id is None:
+                if _at_mentions and _active_agent_id is None:
+                    _mention_not_found = True
+                    _mention_name = _at_mentions[0]  # для сообщения об ошибке (строка 5072)
+
+                # ─── ШАГ 2: Имя агента как слово (\bword\b) в любом месте (без @) ──────
+                if _active_agent_id is None and not _mention_not_found:
+                    for _aname_lower, _aid in _agent_name_map.items():
+                        if _aname_lower in _all_words_lower:
+                            _active_agent_id = _aid
+                            try:
+                                set_user_focused_agent(user_id, _aid)
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
+                            logger.info(f"[AGENT] name-word routed to '{_aname_lower}' (id={_aid})")
+                            break
+                    # Fallback: собственные офисные агенты
+                    if _active_agent_id is None:
+                        try:
+                            from models import UserAgent as _UA_np, User as _U_np, Session as _S_np
+                            _s_np = _S_np()
+                            try:
+                                _u_np = _s_np.query(_U_np).filter_by(telegram_id=user_id).first()
+                                if _u_np:
+                                    _own_np = _s_np.query(_UA_np).filter(
+                                        _UA_np.author_id == _u_np.id,
+                                        _UA_np.status.in_(['active', 'paused']),
+                                    ).all()
+                                    for _oa_np in _own_np:
+                                        if _oa_np.name and _oa_np.name.lower() in _all_words_lower:
+                                            _active_agent_id = _oa_np.id
+                                            try:
+                                                set_user_focused_agent(user_id, _oa_np.id)
+                                            except Exception as _e:
+                                                logger.debug("suppressed: %s", _e)
+                                            logger.info(f"[AGENT] name-word own-agent '{_oa_np.name}' (id={_oa_np.id})")
+                                            _agent_name_map[_oa_np.name.lower()] = _oa_np.id  # кешируем
+                                            break
+                            finally:
+                                _s_np.close()
+                        except Exception as _np_e:
+                            logger.debug(f"[AGENT] name-word own-agent fallback error: {_np_e}")
+
+                # ─── ШАГ 3: Focused-агент (продолжение диалога без упоминания имени) ─
+                #  - срабатывает ТОЛЬКО если предыдущий запрос был направлен тому же агенту
+                #  - если в сообщении найдено имя ДРУГОГО агента — НЕ используем focused
+                if _active_agent_id is None and not _mention_not_found:
                     _focused_id = get_user_active_agent(user_id)
                     if _focused_id:
-                        _active_agent_id = _focused_id
-                        # Не обрезаем сообщение — focused агент подхватывается автоматически
-                        # для контекста, а команда может быть на другую тему
-                        logger.info(f"[AGENT] auto-routed to focused_agent id={_focused_id}")
+                        # Продолжение диалога только если последний запрос был к этому же агенту
+                        _last_id = self._last_routed_agent.get(user_id)
+                        if _last_id == _focused_id:
+                            # Проверяем: не упомянут ли ДРУГОЙ агент в сообщении
+                            _other_agent_mentioned = False
+                            for _aname_lower, _aid in _agent_name_map.items():
+                                if _aid != _focused_id and _aname_lower in _all_words_lower:
+                                    _other_agent_mentioned = True
+                                    logger.info(f"[AGENT] focused={_focused_id} blocked, other agent '{_aname_lower}' mentioned")
+                                    break
+                            if not _other_agent_mentioned:
+                                _active_agent_id = _focused_id
+                                logger.info(f"[AGENT] continuation to focused_agent id={_focused_id}")
 
-                # Убираем @имя / имя-триггер из начала сообщения — AI не должен его видеть
-                if _stripped_prefix_end is not None:
-                    _msg_tail = _msg_stripped[_stripped_prefix_end:].strip()
-                    if _msg_tail:
-                        user_message = _msg_tail
+                # ─── Удаляем ВСЕ @Name из сообщения ─────────────────────────────────
+                if _at_mentions:
+                    _cleaned = _re_agent.sub(r'(?<!\w)@\w+\b', '', _msg_stripped).strip()
+                    if _cleaned:
+                        user_message = _cleaned
+
+                # Сохраняем последнего обработанного агента для определения продолжения диалога
+                if _active_agent_id:
+                    self._last_routed_agent[user_id] = _active_agent_id
 
                 if _active_agent_id:
                     _agent_data = load_agent_personality(_active_agent_id)
