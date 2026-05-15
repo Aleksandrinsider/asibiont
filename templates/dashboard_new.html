@@ -16723,66 +16723,7 @@ except Exception as e:
             }
         }
 
-        // Кеш для выбранного голоса TTS
-        var _ttsVoice = null;
-
-        // Инициализация TTS — загружает голоса и выбирает лучший русский
-        function _initTTS() {
-            if (!window.speechSynthesis) return;
-            var voices = window.speechSynthesis.getVoices();
-            if (!voices || voices.length === 0) return;
-
-            // Приоритет русских голосов (от лучшего к худшему)
-            var preferred = null;
-            var fallback = null;
-            for (var i = 0; i < voices.length; i++) {
-                var v = voices[i];
-                // Сохраняем первый нероботизированный русский голос
-                if (v.lang && (v.lang.startsWith('ru') || v.lang.startsWith('be') || v.lang.startsWith('uk'))) {
-                    if (!preferred || v.name.indexOf('Irina') !== -1 || v.name.indexOf('Pavel') !== -1 || v.name.indexOf('Svetlana') !== -1) {
-                        preferred = v;
-                    }
-                    if (!fallback) fallback = v;
-                }
-                // Запоминаем первый русский голос вообще
-                if (!fallback && v.lang && v.lang.startsWith('ru')) {
-                    fallback = v;
-                }
-            }
-            _ttsVoice = preferred || fallback || null;
-
-            // Если русских голосов нет — берём первый женский голос (обычно звучит естественнее)
-            if (!_ttsVoice) {
-                for (var i = 0; i < voices.length; i++) {
-                    var v = voices[i];
-                    if (v.name.indexOf('female') !== -1 || v.name.indexOf('Zira') !== -1 || v.name.indexOf('Hazel') !== -1) {
-                        _ttsVoice = v;
-                        break;
-                    }
-                }
-            }
-            // Если всё ещё нет — берём любой голос
-            if (!_ttsVoice && voices.length > 0) {
-                _ttsVoice = voices[0];
-            }
-        }
-
-        // Загружаем голоса при загрузке страницы (Chrome загружает голоса асинхронно)
-        if (window.speechSynthesis) {
-            // Немедленная попытка
-            if (window.speechSynthesis.getVoices().length > 0) {
-                _initTTS();
-            }
-            // Chrome загружает голоса асинхронно — ловим событие
-            window.speechSynthesis.onvoiceschanged = function() {
-                _initTTS();
-            };
-            // Дополнительная попытка через 500мс (для надёжности)
-            setTimeout(function() {
-                if (!_ttsVoice) _initTTS();
-            }, 500);
-        }
-
+        // ===== TTS — облачный синтезатор (без привязки к системному голосу) =====
         function _speakText(text) {
             if (!window._chatVoiceEnabled) return;
             if (!window.speechSynthesis) return;
@@ -16800,15 +16741,55 @@ except Exception as e:
             if (!cleanText) return;
             var utterance = new SpeechSynthesisUtterance(cleanText);
             utterance.lang = 'ru-RU';
-            // Если нашли русский голос — используем его, иначе lang определяет синтезатор
-            if (_ttsVoice) {
-                utterance.voice = _ttsVoice;
-            }
-            // Более естественные параметры: чуть медленнее, с лёгкой модуляцией
+            // НЕ указываем voice — браузер (Chrome/Edge) сам выберет
+            // облачный синтезатор Google, который:
+            //  - читает русский текст естественным голосом
+            //  - автоматически переключается на английский для англ. слов
+            //  - звучит намного лучше системных SAPI5-голосов Windows
             utterance.rate = 0.9;
             utterance.pitch = 1.05;
             utterance.volume = 1.0;
             window.speechSynthesis.speak(utterance);
+        }
+
+        function toggleChatVoice() {
+            var btn = document.getElementById('chat-tts-btn');
+            if (!btn) return;
+            var isActive = btn.dataset.active === 'true';
+            var newVal = !isActive;
+            if (newVal) {
+                btn.dataset.active = 'true';
+                btn.style.background = '#068487';
+                btn.style.borderColor = '#068487';
+                var svg = btn.querySelector('svg');
+                if (svg) svg.setAttribute('fill', '#FFFFFF');
+                btn.onmouseover = null;
+                btn.onmouseout = null;
+                window._chatVoiceEnabled = true;
+                localStorage.setItem('chatVoiceEnabled', 'true');
+                // Прогрев speechSynthesis (Chrome требует первый speak() в обработчике клика)
+                try {
+                    if (window.speechSynthesis) {
+                        var _wu = new SpeechSynthesisUtterance('');
+                        _wu.lang = 'ru-RU';
+                        window.speechSynthesis.speak(_wu);
+                        window.speechSynthesis.cancel();
+                    }
+                } catch(_e) {}
+                showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
+            } else {
+                btn.dataset.active = '';
+                btn.style.background = '#FFFFFF';
+                btn.style.borderColor = '#D1D9E0';
+                var svg = btn.querySelector('svg');
+                if (svg) svg.setAttribute('fill', '#374151');
+                btn.onmouseover = function(){ if(!this.dataset.active){ this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';} };
+                btn.onmouseout = function(){ if(!this.dataset.active){ this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';} };
+                window._chatVoiceEnabled = false;
+                localStorage.setItem('chatVoiceEnabled', 'false');
+                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
+            }
         }
 
         // Restore chat voice state on page load
