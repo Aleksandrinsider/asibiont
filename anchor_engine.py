@@ -5091,6 +5091,8 @@ class AnchorEngine:
         self._cycle_cache = CycleCache(ttl_seconds=600)
         # CircuitBreaker: защита внешних сервисов от каскадных ошибок
         self._circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=300)
+        # ── Per-user dispatch lock: предотвращает параллельные dispatch'и для одного пользователя ──
+        self._active_dispatch_users: set[int] = set()
         logger.info("[ANCHOR] AnchorEngine initialized")
 
     # ═══════════════════════════════════════════════════════
@@ -6900,6 +6902,16 @@ class AnchorEngine:
             except Exception as _guard_err:
                 logger.debug("[DISPATCH-GUARD] guard check failed (non-critical): %s", _guard_err)
 
+            # ── Per-user dispatch lock (in-memory): предотвращает параллельные dispatch'и ──
+            if user.id in self._active_dispatch_users:
+                logger.info(
+                    "[DISPATCH-LOCK] Skip dispatch for user %d — already dispatching (in-memory set)",
+                    user.id,
+                )
+                return
+            self._active_dispatch_users.add(user.id)
+            _per_user_locked = True
+
             # ── Throttle: не более 1 dispatch на ту же цель за 30 минут ──
             try:
                 _throttle_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
@@ -7575,6 +7587,25 @@ class AnchorEngine:
                                             _rr_learning_penalty[_ag_rr_id] = _lr_pen
                                     except Exception:
                                         pass
+
+                            # ── Dead-agent penalty: агенты с 0 диспатчей за всё время ──
+                            # 6/8 агентов никогда не запускались как task_executor.
+                            # cnt=0 → min(_rr_key) всегда выбирает их первыми, хотя они
+                            # никогда не выполняли задачи. Штраф +200 понижает приоритет,
+                            # но не исключает полностью (если все мёртвые — ASI возьмёт с min штрафом).
+                            _rr_dead_penalty = {}
+                            for _ag_rr in _rotation_pool:
+                                _ag_rr_id = getattr(_ag_rr, 'id', 0)
+                                if _ag_rr_id == 0:
+                                    continue
+                                _has_any = session.query(_AAL_ap.id).filter(
+                                    _AAL_ap.user_id == user.id,
+                                    _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                                    _AAL_ap.ref_id == _ag_rr_id,
+                                ).first()
+                                if not _has_any:
+                                    _rr_dead_penalty[_ag_rr_id] = 200
+
                         except Exception as _rr_err:
                             logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed: %s", _rr_err)
                             try:
@@ -7583,6 +7614,7 @@ class AnchorEngine:
                                 pass
                             _rr_quality_penalty = {}
                             _rr_learning_penalty = {}
+                            _rr_dead_penalty = {}
 
                         # ── Универсальный скоринг: интеграции агента × потребности цели ──
                         from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_rr
@@ -7633,6 +7665,7 @@ class AnchorEngine:
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 15  # 50→15: таймаут API не выбивает агента из ротации на часы
                             quality_penalty = _rr_quality_penalty.get(aid, 0)
                             learning_penalty = _rr_learning_penalty.get(aid, 0)
+                            dead_penalty = _rr_dead_penalty.get(aid, 0)  # +200 для агентов, ни разу не диспатчившихся
                             cap_bonus = _capability_score(a)  # capability — мягкая подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
                             # Тай-брейк: агент с меньшим числом назначений за 2ч (не по id).
@@ -7649,12 +7682,13 @@ class AnchorEngine:
                             except Exception:
                                 _assigns_2h = 0
                             tie_break = (_assigns_2h, aid if aid != 0 else _asi_tie)
-                            return (cnt + fail_penalty + quality_penalty + learning_penalty - cap_bonus, tie_break)
+                            return (cnt + fail_penalty + quality_penalty + learning_penalty + dead_penalty - cap_bonus, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content
                         _rr_debug = (
                             f'[RR] pool={[(getattr(a,"id",0), getattr(a,"name","?")) for a in _rotation_pool]} '
-                            f'counts={_rr_counts} fails={_rr_recent_fails} quality={_rr_quality_penalty} learning={_rr_learning_penalty} '
+                            f'counts={_rr_counts} fails={_rr_recent_fails} quality={_rr_quality_penalty} '
+                            f'learning={_rr_learning_penalty} dead={_rr_dead_penalty} '
                             f'chosen={chosen.name}({getattr(chosen,"id",0)})'
                         )
                     else:
@@ -7923,49 +7957,87 @@ class AnchorEngine:
 
                 # Log dispatch — используем raw SQL через отдельное соединение
                 # ORM-вставка через shared session ненадёжна (session state после token spend)
+
+                # ── Guard: duplicate dispatch prevention ──
+                # Проверяем, нет ли уже активного dispatch для этого пользователя
+                _existing_dispatch = None
+                try:
+                    _dd_cutoff = datetime.now(timezone.utc) - timedelta(minutes=45)
+                    _existing_dispatch = session.query(_AAL_ap).filter(
+                        _AAL_ap.user_id == user.id,
+                        _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                        _AAL_ap.status == 'in_progress',
+                        _AAL_ap.created_at >= _dd_cutoff,
+                    ).first()
+                except Exception as _dd_err:
+                    logger.debug("[ANCHOR-AUTOPILOT] duplicate dispatch check failed: %s", _dd_err)
+
+                if _existing_dispatch is not None:
+                    logger.warning(
+                        "[ANCHOR-AUTOPILOT] ⛔ duplicate dispatch blocked for user %d: "
+                        "existing dispatch id=%s created=%s (agent=%s) — skipping",
+                        user.id,
+                        _existing_dispatch.id,
+                        _existing_dispatch.created_at,
+                        getattr(_existing_dispatch, 'title', '?')[:60],
+                    )
+                    # Не создаём новый dispatch — существующий ещё не завершён
+                    # Но можем выполнить работу без лога (уже есть активный цикл)
+                    _aal_id = _existing_dispatch.id
+                    # Отмечаем что это skip (не создаём новый AAL)
+                    _dispatch_skipped = True
+                else:
+                    _dispatch_skipped = False
+
                 _goals_brief = ', '.join(g.get('title', '')[:120] for g in goals_info[:3]) if goals_info else ''
                 _log_content = _goals_brief or anchor.topic or ''
-                _aal_id = None
-                try:
-                    from sqlalchemy import text as _aal_text
-                    _aal_ref = chosen.id if chosen.id != 0 else None
-                    _aal_res = session.execute(_aal_text(
-                        "INSERT INTO agent_activity_log (user_id, activity_type, title, content, target, status, ref_id, created_at) "
-                        "VALUES (:uid, 'goal_autopilot_dispatch', :title, :content, :target, 'in_progress', :ref_id, NOW()) "
-                        "RETURNING id"
-                    ), {'uid': user.id, 'title': f'{agent_name} — обзор целей', 'content': _log_content[:500], 'target': anchor.source, 'ref_id': _aal_ref})
-                    _aal_row = _aal_res.fetchone()
-                    _aal_id = _aal_row[0] if _aal_row else None
-                    session.commit()
-                    logger.info("[ANCHOR-AUTOPILOT] AAL created id=%s for user %d", _aal_id, user.id)
-                except Exception as _log_err:
-                    logger.warning("[ANCHOR-AUTOPILOT] AAL creation failed (SQL): %s", _log_err)
+                if not _dispatch_skipped:
+                    _aal_id = None
                     try:
-                        session.rollback()
-                    except Exception:
-                        pass
-                    # Fallback: отдельная сессия
-                    try:
-                        from models import Session as _AAL_Session
-                        _aal_s = _AAL_Session()
-                        _aal_s.add(_AAL_ap(
-                            user_id=user.id,
-                            activity_type='goal_autopilot_dispatch',
-                            title=f'{agent_name} — обзор целей',
-                            content='',
-                            target=anchor.source,
-                            status='in_progress',
-                        ))
-                        _aal_s.commit()
-                        _aal_id = _aal_s.query(_AAL_ap).filter_by(user_id=user.id, activity_type='goal_autopilot_dispatch').order_by(_AAL_ap.id.desc()).first()
-                        _aal_id = _aal_id.id if _aal_id else None
-                        _aal_s.close()
-                    except Exception as _fb_err:
-                        logger.error("[ANCHOR-AUTOPILOT] AAL fallback creation also failed: %s", _fb_err)
+                        from sqlalchemy import text as _aal_text
+                        _aal_ref = chosen.id if chosen.id != 0 else None
+                        _aal_res = session.execute(_aal_text(
+                            "INSERT INTO agent_activity_log (user_id, activity_type, title, content, target, status, ref_id, created_at) "
+                            "VALUES (:uid, 'goal_autopilot_dispatch', :title, :content, :target, 'in_progress', :ref_id, NOW()) "
+                            "RETURNING id"
+                        ), {'uid': user.id, 'title': f'{agent_name} — обзор целей', 'content': _log_content[:500], 'target': anchor.source, 'ref_id': _aal_ref})
+                        _aal_row = _aal_res.fetchone()
+                        _aal_id = _aal_row[0] if _aal_row else None
+                        session.commit()
+                        logger.info("[ANCHOR-AUTOPILOT] AAL created id=%s for user %d", _aal_id, user.id)
+                    except Exception as _log_err:
+                        logger.warning("[ANCHOR-AUTOPILOT] AAL creation failed (SQL): %s", _log_err)
                         try:
-                            _aal_s.close()
+                            session.rollback()
                         except Exception:
                             pass
+                        # Fallback: отдельная сессия
+                        try:
+                            from models import Session as _AAL_Session
+                            _aal_s = _AAL_Session()
+                            _aal_s.add(_AAL_ap(
+                                user_id=user.id,
+                                activity_type='goal_autopilot_dispatch',
+                                title=f'{agent_name} — обзор целей',
+                                content='',
+                                target=anchor.source,
+                                status='in_progress',
+                            ))
+                            _aal_s.commit()
+                            _aal_id = _aal_s.query(_AAL_ap).filter_by(user_id=user.id, activity_type='goal_autopilot_dispatch').order_by(_AAL_ap.id.desc()).first()
+                            _aal_id = _aal_id.id if _aal_id else None
+                            _aal_s.close()
+                        except Exception as _fb_err:
+                            logger.error("[ANCHOR-AUTOPILOT] AAL fallback creation also failed: %s", _fb_err)
+                            try:
+                                _aal_s.close()
+                            except Exception:
+                                pass
+                else:
+                    logger.info(
+                        "[ANCHOR-AUTOPILOT] ⏭️ dispatch skipped for user %d — existing dispatch id=%s still in_progress",
+                        user.id, _aal_id,
+                    )
 
                 # ── Берём id/name/avatar из agent_data (сформирован до любых commit-ов) ──
                 _chosen_id = agent_data.get('id', 0)
@@ -10500,6 +10572,14 @@ class AnchorEngine:
                     if outer_timeout_sec and outer_timeout_sec > 60:
                         # min 100s: даже при малом бюджете Hugo/кастомные агенты успевают сделать 1 шаг
                         _agent_exec_timeout = max(100, min(240, (outer_timeout_sec - 30) // 2))
+                    # Compact timeout mode: если агент стабильно таймаутит — даём меньше времени
+                    # на попытку, чтобы process_restart не сжирал весь бюджет цикла
+                    if locals().get('_compact_timeout_mode'):
+                        _agent_exec_timeout = min(_agent_exec_timeout, 90)
+                        logger.info(
+                            "[ANCHOR-AUTOPILOT] compact timeout mode: reduced agent timeout to %ds",
+                            _agent_exec_timeout,
+                        )
                     if not _loop_breaker_result:
                         for _try_idx in (1, 2):
                             try:
@@ -11626,6 +11706,12 @@ class AnchorEngine:
                     pass
             # delivered_at уже поставлен в начале функции через raw SQL
         finally:
+            # Per-user dispatch lock cleanup
+            try:
+                if _per_user_locked:
+                    self._active_dispatch_users.discard(user.id)
+            except Exception:
+                pass
             if _close_own:
                 try:
                     session.close()
@@ -23865,6 +23951,57 @@ class AnchorEngine:
             if not is_paused:
                 drafts = [o for o in _camp_outreach if o.status == 'draft']
 
+                # ── AUTO-CONVERT: EmailContact.status='new' → EmailOutreach draft ──
+                # Контакты, добавленные через add_email_leads или web_search, сидят в EmailContact
+                # со статусом 'new' и никогда не превращаются в черновики EmailOutreach.
+                # Конвертируем их автоматически если черновиков мало (< 5).
+                # Это даёт приоритет новым контактам перед запросом новых лидов.
+                if len(drafts) < 5:
+                    try:
+                        from models import EmailContact as _EC_conv
+                        # Берём до 10 новых контактов за раз (лимит для одного сканирования)
+                        _new_contacts = session.query(_EC_conv).filter(
+                            _EC_conv.user_id == user.id,
+                            _EC_conv.status == 'new',
+                        ).order_by(_EC_conv.created_at.asc()).limit(10).all()
+                        _converted_count = 0
+                        for _nc in _new_contacts:
+                            # Проверяем, нет ли уже EmailOutreach для этого контакта в этой кампании
+                            _eo_exists = session.query(EmailOutreach).filter(
+                                EmailOutreach.campaign_id == campaign.id,
+                                EmailOutreach.recipient_email == _nc.email,
+                            ).first()
+                            if _eo_exists:
+                                # Уже есть (другая кампания) — просто обновляем статус контакта
+                                _nc.status = 'contacted'
+                                continue
+                            # Создаём черновик EmailOutreach
+                            _draft_eo = EmailOutreach(
+                                campaign_id=campaign.id,
+                                user_id=user.id,
+                                recipient_email=_nc.email,
+                                recipient_name=(_nc.name or ''),
+                                recipient_company=(_nc.company or ''),
+                                recipient_context=(_nc.context or _nc.source or ''),
+                                status='draft',
+                            )
+                            session.add(_draft_eo)
+                            _nc.status = 'contacted'
+                            drafts.append(_draft_eo)
+                            _converted_count += 1
+                        if _converted_count > 0:
+                            session.commit()
+                            logger.info(
+                                '[ANCHOR] Auto-converted %d EmailContact(status=new) → EmailOutreach drafts for campaign #%d «%s»',
+                                _converted_count, campaign.id, campaign.name,
+                            )
+                    except Exception as _e_conv:
+                        logger.warning('[ANCHOR] EmailContact→draft conversion error: %s', _e_conv)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+
             # Дневной лимит — считаем «сегодня» по таймзоне пользователя, не UTC
             def _ts_aware(dt):
                 return dt if dt is not None and dt.tzinfo is not None else (dt.replace(tzinfo=timezone.utc) if dt else None)
@@ -26867,6 +27004,96 @@ class AnchorEngine:
                             )
                 except Exception as _rf_err2:
                     logger.warning("[ANCHOR] email_strategy_reframe AI call failed: %s", _rf_err2)
+
+                # ── AUTO-SWITCH: повторный reframe (уже меняли offer/audience) и всё ещё 0 ответов →
+                #    паузим кампанию, создаём новую с принципиально другим сегментом ──
+                try:
+                    from models import AgentActivityLog as _AAL_rf_sw
+                    _rf_sw_count = session.query(AnchorDeliveryLog).filter(
+                        AnchorDeliveryLog.user_id == user.id,
+                        AnchorDeliveryLog.anchor_types.contains('email_strategy_reframe'),
+                        AnchorDeliveryLog.message_text.contains(f'campaign #{_rf_campaign_id}'),
+                    ).count()
+                    # _rf_sw_count считает ПРЕДЫДУЩИЕ логи (текущий ещё не добавлен)
+                    if _rf_sw_count >= 1 and (_rf_campaign.emails_replied or 0) == 0:
+                        logger.warning(
+                            "[ANCHOR] AutoSwitch: campaign #%d «%s» had %d reframes with %d replies — "
+                            "pausing and creating new segment",
+                            _rf_campaign.id, _rf_campaign.name,
+                            _rf_sw_count + 1, _rf_campaign.emails_replied or 0,
+                        )
+                        _rf_campaign.status = 'paused'
+                        # AI генерирует полностью другой сегмент
+                        _rf_new_camp_prompt = (
+                            f"Email-кампания полностью провалилась: {_rf_campaign.emails_sent or 0} писем, "
+                            f"0 ответов.\n"
+                            f"Цель: «{_rf_campaign.goal or ''}»\n"
+                            f"Последняя аудитория: «{_rf_campaign.target_audience or ''}»\n"
+                            f"Последний оффер: «{_rf_campaign.offer or ''}»\n\n"
+                            f"Нужен ПОЛНОСТЬЮ ДРУГОЙ сегмент. Верни ТОЛЬКО JSON:\n"
+                            f'{{"new_name": "новое название кампании (короткое)",'
+                            f'  "new_audience": "совершенно другая аудитория (другой рынок, регион, ниша)",'
+                            f'  "new_offer": "совершенно другое УТП (другой продукт/услуга/ценность)",'
+                            f'  "new_tone": "professional/friendly/formal"}}'
+                        )
+                        _rf_new_camp_result = await _api_rf2.deepseek_analyze(
+                            prompt=_rf_new_camp_prompt,
+                            system_prompt="Ты эксперт email outreach. Возвращай ТОЛЬКО валидный JSON.",
+                            max_tokens=400,
+                            temperature=0.9,
+                        )
+                        if _rf_new_camp_result:
+                            import re as _re_rfn
+                            _m_rfn = _re_rfn.search(r'\{.*\}', _rf_new_camp_result, _re_rfn.DOTALL)
+                            if _m_rfn:
+                                _rj_new = json.loads(_m_rfn.group())
+                                _rf_new_name = (_rj_new.get('new_name') or f"AutoSwitch: {_rf_campaign.name}")[:300]
+                                _rf_new_audience = (_rj_new.get('new_audience') or '')[:600]
+                                _rf_new_offer = (_rj_new.get('new_offer') or '')[:800]
+                                _rf_new_tone = (_rj_new.get('new_tone') or _rf_campaign.tone or 'professional')[:50]
+                                # Создаём новую кампанию с меньшим лимитом (30 — тест сегмента)
+                                _new_campaign = EmailCampaign(
+                                    user_id=user.id,
+                                    name=_rf_new_name,
+                                    goal=_rf_campaign.goal,
+                                    target_audience=_rf_new_audience,
+                                    offer=_rf_new_offer,
+                                    tone=_rf_new_tone,
+                                    sender_name=_rf_campaign.sender_name,
+                                    sender_email=_rf_campaign.sender_email,
+                                    landing_url=_rf_campaign.landing_url,
+                                    max_emails=30,
+                                    daily_limit=_rf_campaign.daily_limit or 50,
+                                    max_follow_ups=_rf_campaign.max_follow_ups or 2,
+                                    status='active',
+                                )
+                                session.add(_new_campaign)
+                                session.flush()
+                                logger.info(
+                                    "[ANCHOR] AutoSwitch: created new campaign #%d «%s» for user %d",
+                                    _new_campaign.id, _rf_new_name, user.id,
+                                )
+                                # Логируем в AgentActivityLog
+                                session.add(_AAL_rf_sw(
+                                    user_id=user.id,
+                                    activity_type='email_auto_switch',
+                                    title=f'Смена сегмента: {_rf_campaign.name} → {_rf_new_name}',
+                                    content=(
+                                        f"Кампания #{_rf_campaign.id}: {_rf_campaign.emails_sent} писем, "
+                                        f"0 ответов после {_rf_sw_count + 1} рефреймов.\n"
+                                        f"Аудитория: {_rf_campaign.target_audience or '?'} → {_rf_new_audience or '?'}\n"
+                                        f"Оффер: {_rf_campaign.offer or '?'} → {_rf_new_offer or '?'}"
+                                    )[:2000],
+                                    target='email',
+                                    status='completed',
+                                ))
+                except Exception as _rf_switch_err:
+                    logger.warning("[ANCHOR] AutoSwitch error: %s", _rf_switch_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
                 anchor.delivered_at = datetime.now(timezone.utc)
                 log = AnchorDeliveryLog(
                     user_id=user.id,

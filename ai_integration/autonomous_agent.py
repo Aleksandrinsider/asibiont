@@ -3684,10 +3684,14 @@ class HybridAutonomousAgent:
                                 del params[_uk]
 
                     # Списываем токены за инструмент (если стоимость > 0)
+                    # send_outreach_email / save_email_contact / add_email_leads управляют
+                    # списанием токенов ВНУТРИ функции (после всех проверок, перед реальной отправкой).
+                    # Это предотвращает сгорание токенов когда гарды отклоняют письмо.
                     from token_service import spend_tokens, ACTION_COSTS, DEFAULT_TOOL_COST
                     from config import FREE_ACCESS_MODE
                     tool_cost = ACTION_COSTS.get(tool_name, DEFAULT_TOOL_COST)
-                    if not FREE_ACCESS_MODE and tool_cost > 0:
+                    _SELF_MANAGED_TOOLS = {'send_outreach_email', 'save_email_contact', 'add_email_leads'}
+                    if not FREE_ACCESS_MODE and tool_cost > 0 and tool_name not in _SELF_MANAGED_TOOLS:
                         token_result = spend_tokens(user_id, tool_name, description=reason)
                         if not token_result['success']:
                             results.append({"tool": tool_name, "success": False,
@@ -12797,6 +12801,36 @@ async def _agent_bus_push_message(recipient_name: str, message: str, sender_name
             _entry['received_messages'] = _entry['received_messages'][-10:]
     return True
 
+def _validate_tool_match(agent_name: str, task: str, caps_cache: dict) -> bool:
+    """Универсальная проверка: есть ли у агента инструмент для задачи.
+    Анализирует реальные инструменты КОНКРЕТНОГО агента из _agent_caps_cache.
+    Возвращает True если инструмент найден или данных нет (не блокируем).
+    """
+    caps = caps_cache.get(agent_name, [])
+    if not caps:
+        return True  # нет данных — не блокируем
+    caps_str = ' '.join(caps).lower()
+    task_lower = task.lower()
+
+    _REQUIRED_TOOLS = {
+        'поиск': ['web_search', 'research_topic', 'search'],
+        'email': ['send_email', 'send_outreach_email', 'save_email_contact'],
+        'почт': ['send_email', 'send_outreach_email', 'save_email_contact'],
+        'контакт': ['save_email_contact', 'find_relevant_contacts'],
+        'пост': ['create_post', 'publish_to'],
+        'публик': ['publish_to', 'create_post'],
+        'анализ': ['research_topic', 'analyze'],
+        'исслед': ['research_topic', 'web_search'],
+        'отчёт': ['research_topic', 'analyze'],
+        'рассылк': ['send_outreach_email', 'send_email'],
+    }
+    for keyword, needed in _REQUIRED_TOOLS.items():
+        if keyword in task_lower:
+            if not any(t in caps_str for t in needed):
+                return False
+    return True
+
+
 async def _office_director_chat(user_message: str, user_id: int, progress_callback=None) -> str | dict | None:
     """
     ASI — директор офиса с якорной памятью:
@@ -13385,7 +13419,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "СОВЕТ: 'Инструменты (явные)' — агент настроен на эти инструменты явно.\n"
         "       'Инструменты (из роли/интеграций)' — рекомендации на основе роли/API-ключей.\n"
         "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
-        "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
+        "⚠️ ЖЁСТКАЯ ПРОВЕРКА ПЕРЕД ДЕЛЕГИРОВАНИЕМ:\n"
+        "   У агента ДОЛЖЕН БЫТЬ инструмент для задачи. Смотри строчку «Инструменты».\n"
+        "   НЕТ ИНСТРУМЕНТА → агент не сможет выполнить. НЕ ДЕЛЕГИРУЙ.\n"
+        "   Пример: задача «найди контакты» требует web_search или save_email_contact.\n"
+        "   Если их нет в инструментах агента — выбери self или другого агента.\n"
         "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?, почему?, зачем?, когда?, где?, кто?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
         "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
         "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
@@ -13393,11 +13431,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "⚠️ СТРАТЕГИЧЕСКИЕ ДИРЕКТИВЫ ('пробуйте', 'попробуй', 'протестируй', 'работайте с', 'смените аудиторию', 'измени подход', 'начни с', 'займись') + тема (аудитория/рынок/контент/email) — это ЗАДАЧА для агента, НЕ разговор. Делегируй агенту с нужным инструментом. НО: если сообщение — вопрос (см. правило выше) — делегировать НЕЛЬЗЯ.\n"
         "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
         "director_message — твоё обращение к агенту. Пиши как руководитель коллеге: естественно, с контекстом, объясни ПОЧЕМУ этот агент. 1-3 предложения.\n"
-        "Паттерн: '[Имя], [контекст выбора] → [действие]. [Что жду в результате].'\n"
-        "Хорошо ✅: 'Хьюго, ты у нас с email работаешь — проверь входящие через check_emails, особенно ответы на последнюю кампанию. Нужны контакты кто заинтересовался.'\n"
-        "Хорошо ✅: 'Кристина, раз у тебя доступ к CRM — найди контакты из IT-сектора, кто не отвечал больше 2 недель. Сделай список для повторной рассылки.'\n"
+        "Паттерн: '[Имя], [специализация/инструменты агента] → [действие]. [Что жду в результате].'\n"
+        "Хорошо ✅: '[Имя], у тебя есть [инструмент] — [контекст: что уже сделано]. [конкретное действие]. Жду: [результат].'\n"
+        "Хорошо ✅: '[Имя], ты [специализация] — [контекст и действие]. [ожидаемый результат].'\n"
+        "Хорошо ✅: '[Имя], [контекст выбора] → [действие]. [Что жду в результате].'\n"
         "Плохо ❌: сухо 'Найди контакты' без объяснения почему этот агент.\n"
         "Плохо ❌: многострочное описание с техническими деталями.\n"
+        "Плохо ❌: безличное 'Агент, проверь почту' без специализации и инструмента.\n"
         "ВАЖНО: инструмент бери из карточки агента (раздел «Инструменты»), а не придумывай. director_message должен точно отражать аудиторию/сферу из цели пользователя.\n"
         "ВАЖНО: Пользователь ВИДИТ director_message. Пиши для человека, не для API. Добавь естественности.\n"
         + _dir_lang_line +
@@ -13646,6 +13686,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 logger.info("[DIRECTOR] Agent %s lacks comm tools for task, ASI handles self",
                             _ag_check.get('name'))
                 return None  # ASI сделает сам через process_request
+
+        # B.1 — Пост-генерационная валидация: есть ли у агента инструмент для задачи
+        if _agent_caps_cache and not _validate_tool_match(
+            _ag_check.get('name', ''),
+            (decision.get('agent_task') or user_message),
+            _agent_caps_cache
+        ):
+            logger.info("[DIRECTOR] Agent %s lacks required tool for task «%s», ASI handles self",
+                        _ag_check.get('name'), (decision.get('agent_task') or user_message)[:60])
+            return None  # ASI сделает сам через process_request
 
     # ── delegate: один агент на запрос ──────────────────────────────────
     _agent_ctx_parts = []

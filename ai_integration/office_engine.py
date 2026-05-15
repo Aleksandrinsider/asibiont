@@ -941,6 +941,7 @@ class OfficeEngine:
                             stdout,
                             user.id,
                             agent.gender or '',
+                            personality=agent.personality or '',
                         )
                     if report:
                         loop = asyncio.get_running_loop()
@@ -1222,9 +1223,12 @@ class OfficeEngine:
                 break
 
     async def _format_agent_report(self, agent_name: str, agent_spec: str, stdout: str,
-                                      user_db_id: int = 0, agent_gender: str = '') -> str:
+                                      user_db_id: int = 0, agent_gender: str = '',
+                                      personality: str = '') -> str:
         """Превращает сырой stdout скрипта в человеческую живую реплику агента.
         Как в арене: code_output → AI → чистое сообщение без логов и трейсбэков.
+        
+        personality — свободный текст из поля UserAgent, задаётся владельцем агента.
         """
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
         import aiohttp
@@ -1275,14 +1279,41 @@ class OfficeEngine:
         else:
             _clean_budget = clean[:4000]
 
+        # C.1 — Personality агента (если задана владельцем)
+        _personality = (personality or '').strip()
+        _personality_block = (
+            f"\nТвой стиль общения (задан владельцем): {_personality}\n"
+            if _personality else ''
+        )
+
+        # C.2 + D.1 — Микро-история + Critic чеклист
+        _micro_story_structure = (
+            "Построй ответ по схеме:\n"
+            "1. Что проверял (1 фраза)\n"
+            "2. Что конкретно нашёл (1-2 факта с цифрами/именами, если есть)\n"
+            "3. Что с этим делать / твоя рекомендация\n"
+        )
+        _report_critic = (
+            "\nПРОВЕРЬ ПЕРЕД ОТВЕТОМ:\n"
+            "- Нет шаблонных фраз (Отлично/Конечно/Хорошо)?\n"
+            "- Нет нумерованных списков и заголовков?\n"
+            "- Есть конкретика: цифры, имена, факты?\n"
+            "- Звучит как живой человек, а не бот?\n"
+            "- Если советую — говорю ЧТО КОНКРЕТНО делать?"
+        )
+
         prompt = (
             f"Ты — {agent_name}, {agent_spec}. Ты только что {_did_word} мониторинг "
             f"и {_pol_word} следующие данные:\n\n"
             f"{_clean_budget}\n\n"
             f"{_gender_hint}\n"
-            "Напиши одно короткое сообщение (2-3 предложения) в чат пользователю — как живой человек в мессенджере.\n"
-            "Что интересного нашёл/нашла, что важно, если нужно — одно действие. Без технических деталей, без логов, без списков.\n"
-            f"Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом.{_ctx_block}"
+            f"{_personality_block}"
+            f"{_micro_story_structure}\n"
+            f"Напиши одно короткое сообщение (2-3 предложения) в чат пользователю — как живой человек коллеге.\n"
+            "Без логов, без списков. Только суть, интересные факты, конкретика.\n"
+            f"Если данных нет или ничего интересного — напиши одно предложение об этом."
+            f"{_ctx_block}"
+            f"{_report_critic}"
         )
         try:
             for _att_r in range(2):

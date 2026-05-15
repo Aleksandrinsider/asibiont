@@ -27,6 +27,64 @@ from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, encrypt_token, decry
 
 logger = logging.getLogger(__name__)
 
+# ── Реферальная ссылка: паттерн для поиска и автозамены ──
+_REFERRAL_LINK_RE = re.compile(
+    r"t\.me/asibiont_bot\?start=ref(\d+)",
+    re.IGNORECASE,
+)
+
+def _fix_referral_links_in_content(content: str, user) -> str:
+    """Проверяет и исправляет реферальные ссылки в контенте агентов.
+    
+    Если AI-агент сгенерировал пост с чужой реферальной ссылкой
+    (например t.me/asibiont_bot?start=ref{чужой_id}), заменяет на
+    правильную ссылку пользователя.
+    
+    Args:
+        content: Текст контента (пост, статья, TG-сообщение)
+        user: Объект User (должен иметь telegram_id)
+    
+    Returns:
+        str: Исправленный контент
+    """
+    if not content or not isinstance(content, str):
+        return content
+    
+    _user_tid = str(getattr(user, 'telegram_id', ''))
+    if not _user_tid:
+        return content
+    
+    _matches = list(_REFERRAL_LINK_RE.finditer(content))
+    if not _matches:
+        return content
+    
+    _correct_link = f"t.me/asibiont_bot?start=ref{_user_tid}"
+    _fixed = content
+    _fixes_made = 0
+    
+    for _m in _matches:
+        _found_tid = _m.group(1)
+        if _found_tid != _user_tid:
+            _old = _m.group(0)
+            # Сохраняем оригинальный протокол (https:// или нет)
+            _prefix = ''
+            _start = _m.start()
+            if _start >= 8 and content[_start-8:_start].lower() == 'https://':
+                _prefix = 'https://'
+            _replacement = f"{_prefix}{_correct_link}"
+            _fixed = _fixed.replace(_old, _replacement)
+            _fixes_made += 1
+            logger.warning(
+                "[REFERRAL_FIX] Found wrong ref link: %s (user_id=%s, found=%s) → fixed",
+                _old, _user_tid, _found_tid,
+            )
+    
+    if _fixes_made:
+        logger.info("[REFERRAL_FIX] Fixed %d referral link(s) in content for user %s", _fixes_made, _user_tid)
+    
+    return _fixed
+
+
 _VISUAL_PROMPT_MARKER_RE = re.compile(
     r'(?im)\s*["\'«»„“”\(\[]?\s*(иллюстрация|изображение|illustration|image)\s*[:\-—]\s*'
 )
@@ -9707,6 +9765,9 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if not content:
             return "Текст поста не может быть пустым после очистки."
 
+        # ── Валидация реферальных ссылок: AI-агенты иногда подставляют чужие ссылки ──
+        content = _fix_referral_links_in_content(content, user)
+
         # Дедупликация: не создаём почти одинаковые посты в коротком окне,
         # если агент вызвал create_post дважды в одном пайплайне.
         try:
@@ -10501,6 +10562,16 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
                 if _k in content_data and isinstance(content_data[_k], str):
                     content_data[_k] = sanitize_token_hallucinations(content_data[_k])
                     content_data[_k] = _strip_post_visual_prompt(content_data[_k])
+
+        # ── Валидация реферальных ссылок: AI-агенты иногда подставляют чужие ссылки ──
+        if isinstance(content, str):
+            content = _fix_referral_links_in_content(content, user)
+        if isinstance(content_data, str):
+            content_data = _fix_referral_links_in_content(content_data, user)
+        elif isinstance(content_data, dict):
+            for _k_ref in ('text', 'title', 'body', 'cta'):
+                if _k_ref in content_data and isinstance(content_data[_k_ref], str):
+                    content_data[_k_ref] = _fix_referral_links_in_content(content_data[_k_ref], user)
 
         # ── GUARD: не публиковать внутренние отчёты в публичный канал ──
         _tg_lower = (content if isinstance(content, str) else str(content)).lower()
@@ -14647,7 +14718,9 @@ async def send_outreach_email(
                         f"Такие адреса обычно не читаются лично. Лучше найти более подходящий контакт."
                     )
 
-        # ── GUARD: плейсхолдеры в теле письма ──
+        # ── GUARD + AUTO-FIX: плейсхолдеры в теле письма ──
+        # Вместо жёсткого return ИСПРАВЛЯЕМ: удаляем плейсхолдеры [вставьте...] из subject и body.
+        # Это предотвращает сгорание токенов и позволяет письму уйти.
         _body_to_check_oe = (body or '') + ' ' + (subject or '')
         if _body_to_check_oe:
             import re as _re_ph_oe
@@ -14658,10 +14731,25 @@ async def send_outreach_email(
             )
             _ph_m_oe = _PH_RE_OE.search(_body_to_check_oe)
             if _ph_m_oe:
-                return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_oe.group()}». "
-                        f"Замени на реальные данные или убери. Нельзя отправлять шаблон клиенту.")
+                # Удаляем плейсхолдеры из body
+                _old_body = body or ''
+                body = _PH_RE_OE.sub('', _old_body).strip()
+                # Удаляем плейсхолдеры из subject
+                if subject:
+                    subject = _PH_RE_OE.sub('', subject).strip()
+                logger.info(
+                    '[EMAIL_AUTOFIX] Удалён плейсхолдер «%s» из письма для %s',
+                    _ph_m_oe.group(), recipient_email,
+                )
+                # Если после удаления body/subject стали пустыми — сообщаем агенту
+                if not body or not subject:
+                    return (f"⛔ После удаления плейсхолдера «{_ph_m_oe.group()}» "
+                            f"{'тело' if not body else 'тема'} письма стало пустым. "
+                            f"Напиши конкретный текст для отправки.")
 
-        # ── GUARD: персонализация по имени проверяется только если имя передано явно ──
+        # ── GUARD + AUTO-FIX: персонализация по имени ──
+        # Если в body нет имени получателя и нет приветствия — АВТОМАТИЧЕСКИ добавляем
+        # приветствие в начало body. Это предотвращает сгорание токенов.
         _rname_send = (recipient_name or '').strip()
         if _rname_send and body:
             _first_name_oe = _rname_send.split()[0]
@@ -14669,7 +14757,6 @@ async def send_outreach_email(
             # Проверяем точное вхождение имени (Latin или Cyrillic как дано)
             _name_found = _first_name_oe.lower() in _body_lower_oe
             # Если не найдено — проверяем наличие стандартного приветствия (Dear/Hi/Здравствуй/Добрый)
-            # Это защита от ложных срабатываний когда AI правильно обращается иначе
             if not _name_found:
                 import re as _re_greet
                 _HAS_GREETING = bool(_re_greet.search(
@@ -14677,16 +14764,18 @@ async def send_outreach_email(
                     _body_lower_oe, _re_greet.IGNORECASE
                 ))
                 if not _HAS_GREETING:
-                    # Определяем язык письма по наличию кириллицы
+                    # Определяем язык письма
                     import re as _re_lang
                     _is_russian = bool(_re_lang.search(r'[а-яёА-ЯЁ]', body or ''))
-                    _greeting_hint = (
-                        f"Здравствуйте, {_first_name_oe}!" if _is_russian
-                        else f"Hi {_first_name_oe},"
+                    _greeting_add = (
+                        f"Здравствуйте, {_first_name_oe}!\n\n" if _is_russian
+                        else f"Hi {_first_name_oe},\n\n"
                     )
-                    return (f"⛔ ИСПРАВЬ параметр body и повтори вызов send_outreach_email: "
-                            f"добавь '{_greeting_hint}' в самое начало тела письма. "
-                            f"Остальной текст письма оставь как есть. Имя обязательно для персонализации.")
+                    body = _greeting_add + body
+                    logger.info(
+                        '[EMAIL_AUTOFIX] Добавлено приветствие для %s в письмо %s',
+                        _first_name_oe, recipient_email,
+                    )
 
         # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
         # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"
@@ -15022,39 +15111,39 @@ async def send_outreach_email(
                     user_id, _subj_fixed, _body_fixed,
                 )
 
-        # ── GUARD: запрещённые слова в теме письма ──
+        # ── GUARD + AUTO-FIX: запрещённые слова в теме письма ──
+        # Вместо жёсткого return УДАЛЯЕМ запрещённые слова из subject.
         # DeepSeek регулярно игнорирует инструкции и ставит "тестирование", "AI employee" и т.п.
-        # Проверяем программно и отклоняем.
         if subject:
             import re as _re_subj
             _subj_lower = subject.lower()
             _BANNED_SUBJECT_PATTERNS = [
-                r'\bтест\w*',            # тест, тестирование, тестовый
-                r'\btest\w*',             # test, testing
-                r'\bai.?employee\b',      # AI employee, AI-employee
-                r'\bai.?сотрудни\w*',     # AI-сотрудник, AI сотрудников
-                r'\basi\s*biont\b',       # ASI Biont
-                r'\bплатформ\w*',         # платформа, платформы
-                r'\bпредложение о сотрудничестве\b',
-                r'\bcooperation\s+offer\b',
-                r'\bbusiness\s+opportunity\b',
-                r'\bpartnership\s+opportunity\b',
-                r'\bсотрудничество\b',    # слишком generic
+                (r'\bтест\w*', ''),
+                (r'\btest\w*', ''),
+                (r'\bai.?employee\b', 'AI'),
+                (r'\bai.?сотрудни\w*', 'AI'),
+                (r'\basi\s*biont\b', ''),
+                (r'\bплатформ\w*', ''),
+                (r'\bпредложение о сотрудничестве\b', ''),
+                (r'\bcooperation\s+offer\b', ''),
+                (r'\bbusiness\s+opportunity\b', ''),
+                (r'\bpartnership\s+opportunity\b', ''),
+                (r'\bсотрудничество\b', ''),
             ]
-            _banned_match = None
-            for _bp in _BANNED_SUBJECT_PATTERNS:
-                _m = _re_subj.search(_bp, _subj_lower)
-                if _m:
-                    _banned_match = _m.group()
-                    break
-            if _banned_match:
-                return (
-                    f"⛔ Тема письма содержит запрещённое слово/фразу: «{_banned_match}». "
-                    f"Текущая тема: «{subject}». "
-                    "ПЕРЕПИШИ тему: она должна быть конкретной, персонализированной под получателя, "
-                    "без слов 'тест', 'платформа', 'AI employee', 'ASI Biont', 'сотрудничество'. "
-                    "Хороший пример: «Вопрос по автоматизации {компания}» или «{имя}, идея для {проект}»."
+            _old_subject = subject
+            for _bp, _replacement in _BANNED_SUBJECT_PATTERNS:
+                subject = _re_subj.sub(_replacement, subject.strip()).strip()
+            if subject != _old_subject:
+                logger.info(
+                    '[EMAIL_AUTOFIX] Очищена тема письма для %s: «%s» → «%s»',
+                    recipient_email, _old_subject, subject,
                 )
+                # Если после очистки тема стала пустой — заменяем на generic
+                if not subject:
+                    _name_hint = (recipient_name or recipient_company or '').strip()
+                    if not _name_hint and recipient_email and '@' in recipient_email:
+                        _name_hint = recipient_email.split('@', 1)[0].replace('.', ' ').replace('_', ' ').title()
+                    subject = f"Вопрос по автоматизации, {_name_hint}" if _name_hint else "Короткий вопрос по теме"
 
         # ── GUARD: язык subject+body должен соответствовать языку контакта ──
         if subject and body:
@@ -15174,6 +15263,22 @@ async def send_outreach_email(
         _gmail_sender = (_gmail_oauth_token_data or {}).get('email', '').strip().lower()
         if _gmail_sender:
             campaign.sender_email = _gmail_sender
+
+        # ── Списываем токены после всех проверок, перед реальной отправкой ──
+        # Токены списываются здесь (а не в автономном агенте), чтобы все ~15 гардов
+        # валидации не сжигали токены впустую.
+        from token_service import spend_tokens, ACTION_COSTS
+        from config import FREE_ACCESS_MODE
+        if not FREE_ACCESS_MODE:
+            _token_result = spend_tokens(
+                user_id, 'send_outreach_email',
+                description=f'Отправка письма {recipient_email}',
+                session=session, auto_commit=False,
+            )
+            if not _token_result['success']:
+                logger.warning('[EMAIL_OUTREACH] Token spend failed for %s: %s',
+                               recipient_email, _token_result.get('error', ''))
+                return f" Ошибка: {_token_result.get('error', 'Недостаточно токенов. Пополни: /buy')}"
 
         _body_gmail_oa = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
         _ok_goa, _res_goa = await _send_via_gmail_api(

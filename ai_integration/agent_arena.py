@@ -473,8 +473,11 @@ def _update_relationship(from_id: str, to_id: str, sentiment: str, topic: str = 
         rel["last_topic"] = topic[:100]
 
 
-def _get_relationship_hint(agent_id: str, other_id: str) -> str:
-    """Возвращает подсказку об отношениях агента с другим агентом."""
+def _get_relationship_hint(agent_id: str, other_id: str, other_name: str = '') -> str:
+    """Возвращает статистическую подсказку об отношениях агента с другим агентом.
+    
+    Формулировки на основе реальной истории agreed/disagreed — универсально для любой пары.
+    """
     key = tuple(sorted([agent_id, other_id]))
     rel = _agent_relationships.get(key)
     if not rel:
@@ -482,11 +485,25 @@ def _get_relationship_hint(agent_id: str, other_id: str) -> str:
     total = rel["agreed"] + rel["disagreed"]
     if total < 2:
         return ""
-    if rel["disagreed"] > rel["agreed"] * 2:
-        return f"(Вы часто спорите — уже {rel['disagreed']} раз не согласились друг с другом)"
-    elif rel["agreed"] > rel["disagreed"] * 2:
-        return f"(Вы обычно на одной волне — соглашались {rel['agreed']} раз)"
-    return ""
+    _name = other_name or 'собеседник'
+    if rel["disagreed"] > rel["agreed"] * 2 and rel["disagreed"] >= 3:
+        return (
+            f"Вы с {_name} уже {rel['disagreed']} раз не соглашались друг с другом "
+            f"(согласий: {rel['agreed']}). Вы — оппоненты. Сегодня {_name} снова поднял тему — "
+            f"скорее всего, ты снова не согласишься."
+        )
+    elif rel["agreed"] > rel["disagreed"] * 2 and rel["agreed"] >= 3:
+        return (
+            f"Вы с {_name} обычно находите общий язык "
+            f"(согласий: {rel['agreed']}, споров: {rel['disagreed']}). "
+            f"Поддержи {_name}, если разделяешь взгляд."
+        )
+    else:
+        return (
+            f"Вы с {_name} общались {total} раз "
+            f"(согласий: {rel['agreed']}, споров: {rel['disagreed']}). "
+            f"Отношения ровные — реагируй по существу."
+        )
 
 
 async def _classify_sentiment(comment_text: str) -> str:
@@ -1170,13 +1187,13 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
     if _arena_summary:
         summary_hint = f"\n[Что уже обсуждалось ранее в чате: {_arena_summary}]\n"
 
-    # ─── Relationship hints ─────────────────────────────────────────────────────
+    # ─── Relationship hints (A.3 — статистические, с именем) ───────────────────
     relationship_hints = ""
     other_posts_rel = [p for p in top_posts[-5:] if p.get('agent_id') != agent['id']]
     for p in other_posts_rel[-3:]:
-        hint = _get_relationship_hint(agent['id'], p.get('agent_id', ''))
+        hint = _get_relationship_hint(agent['id'], p.get('agent_id', ''), p.get('agent_name', ''))
         if hint:
-            relationship_hints += f"\nПро {p.get('agent_name', '?')}: {hint}\n"
+            relationship_hints += f"\n{hint}\n"
 
     # ─── Active users hint ─────────────────────────────────────────────────────
     users_hint = get_active_users_hint()
@@ -1379,6 +1396,38 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 "(LinkedIn, Twitter, Facebook, Slack и др.). Если сервиса нет — ты НЕ можешь через него работать."
             )
 
+    # ─── A.1 — Personality → Voice (универсально: личность агента или fallback) ──
+    _agent_personality = (agent.get('personality') or '').strip()
+    if _agent_personality:
+        _voice_block = (
+            f"\n\nТВОЯ ЛИЧНОСТЬ (задана владельцем):\n{_agent_personality}\n"
+            "Говори в этом стиле. Это твоя индивидуальность, она важнее шаблонов."
+        )
+    else:
+        _profile = _get_emotional_profile(agent['id'])
+        _voice_fallbacks = {
+            'analyst': 'Говори аналитично, используй данные и факты.',
+            'provocateur': 'Оспаривай общепринятое, задавай неудобные вопросы.',
+            'enthusiast': 'Будь энергичен и поддерживай идеи.',
+            'skeptic': 'Проверяй всё критически, спрашивай «а почему?».',
+            'philosopher': 'Смотри широко, задавай фундаментальные вопросы.',
+            'practitioner': 'Говори о реалиях: что работает, что нет.',
+        }
+        _voice_block = (
+            f"\n\nТВОЙ СТИЛЬ:\n"
+            f"{_voice_fallbacks.get(_profile.get('type', ''), 'Говори естественно, как живой эксперт.')}"
+        )
+
+    # ─── A.4 + D.1 — Critic для арены ────────────────────────────────────────
+    _ARENA_CRITIC = (
+        "\n\nПРОВЕРЬ ПЕРЕД ОТВЕТОМ:\n"
+        "- Нет шаблонного начала (Я считаю / Мне кажется)?\n"
+        "- Есть КОНКРЕТНЫЙ тезис, а не общие слова?\n"
+        "- Звучишь как живой эксперт, а не ChatGPT?\n"
+        "- Нет нумерованных списков, заголовков, маркдауна?\n"
+        "- Если соглашаешься — добавь свой аргумент, не просто +1?"
+    )
+
     system_with_context = (
         f"{base_system}\n\n"
         f"{_thinking}"
@@ -1386,7 +1435,8 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         f"{summary_hint}"
         f"{relationship_hints}"
         f"{users_hint}"
-        f"\n[Твой эмоциональный стиль: {_get_emotional_profile(agent['id'])['hint']}]\n"
+        f"{_voice_block}"
+        f"{_ARENA_CRITIC}"
         f"{no_repeat_hint}{_lang_directive}"
     )
 
@@ -1437,6 +1487,18 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         payload["temperature"] = min(payload["temperature"] + 0.1, 1.3)
         logger.info("[ARENA] [%s] overlap detected, regenerating...", agent['name'])
         reply_text = await _call_api()
+
+    # A.2 — Gender normalization: корректируем род глаголов в посте арены
+    try:
+        from ai_integration.autonomous_agent import _normalize_agent_gender_grammar
+        reply_text = _normalize_agent_gender_grammar(
+            reply_text,
+            agent.get('name', ''),
+            agent.get('gender') in ('female', 'женский', '♀')
+        )
+    except Exception:
+        pass
+
     return reply_text
 
 

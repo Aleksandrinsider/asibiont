@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -332,6 +333,7 @@ class CircuitBreaker:
     """
     Circuit Breaker для ЛЮБОГО внешнего сервиса.
     Состояния: closed → open (после N ошибок) → half-open (после recovery_timeout)
+    Поддерживает DB-персистентность через circuit_breaker_state таблицу.
 
     Пример:
         cb = CircuitBreaker(failure_threshold=3, recovery_timeout=300)
@@ -345,6 +347,8 @@ class CircuitBreaker:
         self._services: dict[str, dict] = {}
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
+        self._db_session = None
+        self._db_user_id = 0
 
     def _get_svc(self, service_name: str) -> dict:
         if service_name not in self._services:
@@ -354,17 +358,110 @@ class CircuitBreaker:
                 'last_failure': 0,
                 'total_failures': 0,
                 'total_calls': 0,
+                'dirty': False,
             }
         return self._services[service_name]
 
+    def set_db_session(self, session, user_id: int = 0):
+        self._db_session = session
+        self._db_user_id = user_id
+
+    async def persist_to_db(self, session=None):
+        _sess = session or self._db_session
+        if _sess is None:
+            return
+        try:
+            from models import CircuitBreakerState as _CBS
+            _now = datetime.now(timezone.utc)
+            for svc_name, svc in self._services.items():
+                if not svc.get('dirty') and svc.get('_persisted'):
+                    continue
+                _row = _sess.query(_CBS).filter(
+                    _CBS.user_id == self._db_user_id,
+                    _CBS.key == f'cb:{svc_name}',
+                ).first()
+                _state_json = json.dumps({
+                    'state': svc['state'],
+                    'failures': svc['failures'],
+                    'last_failure': svc['last_failure'],
+                    'total_failures': svc['total_failures'],
+                    'total_calls': svc['total_calls'],
+                })
+                if _row:
+                    _row.fail_count = svc['failures']
+                    _row.last_fail_context = _state_json
+                    if svc['state'] == 'open':
+                        _row.cooldown_until = _now + timedelta(seconds=self.recovery_timeout)
+                    elif svc['state'] == 'closed':
+                        _row.cooldown_until = None
+                    _row.updated_at = _now
+                else:
+                    _cooldown = None
+                    if svc['state'] == 'open':
+                        _cooldown = _now + timedelta(seconds=self.recovery_timeout)
+                    _sess.add(_CBS(
+                        user_id=self._db_user_id,
+                        key=f'cb:{svc_name}',
+                        fail_count=svc['failures'],
+                        first_fail_at=_now if svc['failures'] > 0 else None,
+                        cooldown_until=_cooldown,
+                        last_fail_context=_state_json,
+                        created_at=_now,
+                        updated_at=_now,
+                    ))
+                svc['_persisted'] = True
+                svc['dirty'] = False
+            _sess.commit()
+            logger.debug("[CB] persisted %d service states to DB", len(self._services))
+        except Exception as _cb_persist_err:
+            logger.warning("[CB] persist_to_db failed: %s", _cb_persist_err)
+            try:
+                _sess.rollback()
+            except Exception:
+                pass
+
+    def load_from_db(self, session=None):
+        _sess = session or self._db_session
+        if _sess is None:
+            return
+        try:
+            from models import CircuitBreakerState as _CBS
+            _rows = _sess.query(_CBS).filter(
+                _CBS.user_id == self._db_user_id,
+                _CBS.key.like('cb:%'),
+            ).all()
+            _now_ts = time.time()
+            for _row in _rows:
+                _svc_name = _row.key[3:]
+                _failures = _row.fail_count or 0
+                try:
+                    _state_data = json.loads(_row.last_fail_context or '{}')
+                except (json.JSONDecodeError, TypeError):
+                    _state_data = {}
+                _saved_state = _state_data.get('state', 'closed')
+                _last_failure_ts = _state_data.get('last_failure', 0) or 0
+                _total_failures = _state_data.get('total_failures', _failures) or _failures
+                _total_calls = _state_data.get('total_calls', 0) or 0
+                if _saved_state == 'open' and _row.cooldown_until:
+                    if _now_ts > _row.cooldown_until.timestamp():
+                        _saved_state = 'half-open'
+                self._services[_svc_name] = {
+                    'state': _saved_state,
+                    'failures': _failures,
+                    'last_failure': _last_failure_ts,
+                    'total_failures': _total_failures,
+                    'total_calls': _total_calls,
+                    '_persisted': True,
+                    'dirty': False,
+                }
+            logger.info("[CB] loaded %d service states from DB", len(_rows))
+        except Exception as _cb_load_err:
+            logger.warning("[CB] load_from_db failed: %s", _cb_load_err)
+
     async def call(self, service_name: str, func, *args, **kwargs) -> Any:
-        """
-        Вызвать функцию с защитой Circuit Breaker.
-        Если сервис 'open' — выбрасывает CircuitBreakerOpen.
-        """
         svc = self._get_svc(service_name)
         svc['total_calls'] += 1
-
+        svc['dirty'] = True
         if svc['state'] == 'open':
             if time.time() - svc['last_failure'] > self.recovery_timeout:
                 svc['state'] = 'half-open'
@@ -375,7 +472,6 @@ class CircuitBreaker:
                     f"(failures: {svc['failures']}, remaining: "
                     f"{int(self.recovery_timeout - (time.time() - svc['last_failure']))}s)"
                 )
-
         try:
             result = await func(*args, **kwargs)
             if svc['state'] == 'half-open':
@@ -396,7 +492,6 @@ class CircuitBreaker:
             raise
 
     def health_report(self) -> str:
-        """Отчёт о состоянии всех сервисов."""
         if not self._services:
             return "No services registered."
         lines = ["Service Health:"]
