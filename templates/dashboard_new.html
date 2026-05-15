@@ -16719,8 +16719,74 @@ except Exception as e:
             }).catch(function(e){ console.error('Autopilot toggle error:', e); });
         }
 
-        var _currentAudioSource = null; // текущий AudioBufferSourceNode (Web Audio API)
         var _ttsAudioCtx = null; // AudioContext для воспроизведения TTS
+        var _ttsQueue = [];      // очередь текстов для последовательного озвучивания
+        var _ttsPlaying = false; // флаг: сейчас что-то играет
+        var _ttsCurrentSource = null; // текущий AudioBufferSourceNode
+
+        // Остановить всё — очистить очередь + остановить текущее воспроизведение
+        function _stopAllAudio() {
+            _ttsQueue = [];
+            _ttsPlaying = false;
+            if (_ttsCurrentSource) {
+                try { _ttsCurrentSource.stop(); } catch(_e) {}
+                _ttsCurrentSource = null;
+            }
+        }
+
+        // Обработать следующий элемент из очереди
+        function _processTtsQueue() {
+            if (_ttsPlaying || _ttsQueue.length === 0) return;
+            _ttsPlaying = true;
+            var _text = _ttsQueue.shift();
+
+            fetch('/api/tts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: _text})
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    console.error('[TTS] server error:', response.status);
+                    _fallbackSpeech(_text);
+                    _ttsPlaying = false;
+                    setTimeout(_processTtsQueue, 100);
+                    return null;
+                }
+                return response.arrayBuffer();
+            })
+            .then(function(buffer) {
+                if (!buffer) {
+                    _ttsPlaying = false;
+                    setTimeout(_processTtsQueue, 100);
+                    return null;
+                }
+                return _ttsAudioCtx.decodeAudioData(buffer);
+            })
+            .then(function(audioBuffer) {
+                if (!audioBuffer) {
+                    _ttsPlaying = false;
+                    setTimeout(_processTtsQueue, 100);
+                    return;
+                }
+                var source = _ttsAudioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(_ttsAudioCtx.destination);
+                source.onended = function() {
+                    _ttsCurrentSource = null;
+                    _ttsPlaying = false;
+                    _processTtsQueue(); // играем следующее
+                };
+                source.start(0);
+                _ttsCurrentSource = source;
+            })
+            .catch(function(err) {
+                console.error('[TTS] play error:', err);
+                _fallbackSpeech(_text);
+                _ttsPlaying = false;
+                setTimeout(_processTtsQueue, 100);
+            });
+        }
 
         // Fallback на speechSynthesis если AudioContext недоступен
         function _fallbackSpeech(text) {
@@ -16753,11 +16819,7 @@ except Exception as e:
                 _fallbackSpeech(text);
                 return;
             }
-            // Останавливаем предыдущее воспроизведение
-            if (_currentAudioSource) {
-                try { _currentAudioSource.stop(); } catch(e) {}
-                _currentAudioSource = null;
-            }
+
             var cleanText = text
                 .replace(/\*\*(.+?)\*\*/g, '$1')
                 .replace(/\*(.+?)\*/g, '$1')
@@ -16770,41 +16832,26 @@ except Exception as e:
                 .trim();
             if (!cleanText) return;
 
-            // Fetch audio via API → decode → play через Web Audio API
-            fetch('/api/tts', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: cleanText})
-            })
-            .then(function(response) {
-                if (!response.ok) {
-                    console.error('[TTS] server error:', response.status);
-                    _fallbackSpeech(cleanText);
-                    return null;
-                }
-                return response.arrayBuffer();
-            })
-            .then(function(buffer) {
-                if (!buffer) return null;
-                return _ttsAudioCtx.decodeAudioData(buffer);
-            })
-            .then(function(audioBuffer) {
-                if (!audioBuffer) return;
-                var source = _ttsAudioCtx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(_ttsAudioCtx.destination);
-                source.onended = function() {
-                    _currentAudioSource = null;
-                };
-                source.start(0);
-                _currentAudioSource = source;
-            })
-            .catch(function(err) {
-                console.error('[TTS] play error:', err);
-                _fallbackSpeech(cleanText);
-            });
+            // Добавляем в очередь — будет воспроизведено последовательно
+            _ttsQueue.push(cleanText);
+            _processTtsQueue();
         }
-
+        
+        // Озвучить последнее AI-сообщение в чате (при включении голоса)
+        function _speakLastAIMessage() {
+            var _chatEl = document.getElementById('chat-messages');
+            if (!_chatEl) return;
+            var _aiMsgs = _chatEl.querySelectorAll('.message.ai');
+            if (!_aiMsgs.length) return;
+            var _last = _aiMsgs[_aiMsgs.length - 1];
+            var _txtEl = _last.querySelector('.message-text');
+            if (!_txtEl) return;
+            var _txt = _txtEl.textContent || _txtEl.innerText || '';
+            if (_txt.trim()) {
+                _speakText(_txt.trim());
+            }
+        }
+        
         function toggleChatVoice() {
             var btn = document.getElementById('chat-tts-btn');
             if (!btn) return;
@@ -16835,6 +16882,8 @@ except Exception as e:
                         console.warn('[TTS] AudioContext resume failed:', e);
                     });
                 }
+                // Озвучиваем последнее AI-сообщение в чате
+                _speakLastAIMessage();
                 showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
             } else {
                 btn.dataset.active = '';
@@ -16846,11 +16895,8 @@ except Exception as e:
                 btn.onmouseout = function(){ if(!this.dataset.active){ this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';} };
                 window._chatVoiceEnabled = false;
                 localStorage.setItem('chatVoiceEnabled', 'false');
-                // Останавливаем воспроизведение
-                if (_currentAudioSource) {
-                    try { _currentAudioSource.stop(); } catch(e) {}
-                    _currentAudioSource = null;
-                }
+                // Останавливаем очередь и текущее воспроизведение
+                _stopAllAudio();
                 showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
             }
         }
@@ -16909,6 +16955,8 @@ except Exception as e:
                             console.warn('[TTS] gesture resume failed:', e);
                         });
                     }
+                    // Озвучиваем последнее AI-сообщение при первом жесте (если голос включён из localStorage)
+                    _speakLastAIMessage();
                 }
             }
             document.addEventListener('click', _reinitTtsOnGesture);
