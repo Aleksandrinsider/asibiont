@@ -16879,10 +16879,49 @@ except Exception as e:
             var saved = localStorage.getItem('chatVoiceEnabled');
             if (saved === 'true') {
                 window._chatVoiceEnabled = true;
-                // Создаём Audio ЭЛЕМЕНТ заранее (вне user gesture он не сможет play(),
-                // но для XHR-колбэков нам нужен существующий объект _ttsAudio)
+                // Создаём Audio элемент и пытаемся разблокировать autoplay
                 _ttsAudio = new Audio();
                 _ttsAudio.volume = 1.0;
+                // Попытка autoplay unlock: воспроизводим короткий silent WAV
+                try {
+                    var _sr = 16000;
+                    var _ns = Math.floor(_sr * 0.05);
+                    var _ds = _ns * 2;
+                    var _fs = 44 + _ds;
+                    var _wav = new Uint8Array(_fs);
+                    var _dv = new DataView(_wav.buffer);
+                    _dv.setUint32(0, 0x52494646, false);
+                    _dv.setUint32(4, _fs - 8, true);
+                    _dv.setUint32(8, 0x57415645, false);
+                    _dv.setUint32(12, 0x666D7420, false);
+                    _dv.setUint32(16, 16, true);
+                    _dv.setUint16(20, 1, true);
+                    _dv.setUint16(22, 1, true);
+                    _dv.setUint32(24, _sr, true);
+                    _dv.setUint32(28, _sr * 2, true);
+                    _dv.setUint16(32, 2, true);
+                    _dv.setUint16(34, 16, true);
+                    _dv.setUint32(36, 0x64617461, false);
+                    _dv.setUint32(40, _ds, true);
+                    var _silentBlob = new Blob([_wav.buffer], {type: 'audio/wav'});
+                    var _silentUrl = URL.createObjectURL(_silentBlob);
+                    var _oldSrc = _ttsAudio.src;
+                    _ttsAudio.src = _silentUrl;
+                    _ttsAudio.volume = 0.01;
+                    _ttsAudio.play().then(function() {
+                        _ttsAudio.pause();
+                        _ttsAudio.volume = 1.0;
+                        URL.revokeObjectURL(_silentUrl);
+                    }).catch(function(e) {
+                        console.warn('[TTS] autoplay unlock on page load failed:', e);
+                        _ttsAudio.volume = 1.0;
+                        URL.revokeObjectURL(_silentUrl);
+                        // Если unlock не удался — очищаем src, чтобы не мешать
+                        _ttsAudio.src = '';
+                    });
+                } catch(e) {
+                    console.warn('[TTS] autoplay unlock exception:', e);
+                }
                 var btn = document.getElementById('chat-tts-btn');
                 if (btn) {
                     btn.dataset.active = 'true';
@@ -16896,6 +16935,61 @@ except Exception as e:
             } else {
                 window._chatVoiceEnabled = false;
             }
+        })();
+
+        // Пересоздаём _ttsAudio при первом user gesture (клик), чтобы Chrome разрешил autoplay
+        (function() {
+            var _unlocked = false;
+            function _reinitTtsOnGesture() {
+                if (_unlocked) return;
+                _unlocked = true;
+                document.removeEventListener('click', _reinitTtsOnGesture);
+                document.removeEventListener('touchstart', _reinitTtsOnGesture);
+                if (window._chatVoiceEnabled) {
+                    // Пересоздаём Audio внутри user gesture
+                    _ttsAudio = new Audio();
+                    _ttsAudio.volume = 1.0;
+                    // Silent WAV unlock теперь точно сработает
+                    try {
+                        var _sr2 = 16000;
+                        var _ns2 = Math.floor(_sr2 * 0.05);
+                        var _ds2 = _ns2 * 2;
+                        var _fs2 = 44 + _ds2;
+                        var _wav2 = new Uint8Array(_fs2);
+                        var _dv2 = new DataView(_wav2.buffer);
+                        _dv2.setUint32(0, 0x52494646, false);
+                        _dv2.setUint32(4, _fs2 - 8, true);
+                        _dv2.setUint32(8, 0x57415645, false);
+                        _dv2.setUint32(12, 0x666D7420, false);
+                        _dv2.setUint32(16, 16, true);
+                        _dv2.setUint16(20, 1, true);
+                        _dv2.setUint16(22, 1, true);
+                        _dv2.setUint32(24, _sr2, true);
+                        _dv2.setUint32(28, _sr2 * 2, true);
+                        _dv2.setUint16(32, 2, true);
+                        _dv2.setUint16(34, 16, true);
+                        _dv2.setUint32(36, 0x64617461, false);
+                        _dv2.setUint32(40, _ds2, true);
+                        var _silentBlob2 = new Blob([_wav2.buffer], {type: 'audio/wav'});
+                        var _silentUrl2 = URL.createObjectURL(_silentBlob2);
+                        _ttsAudio.src = _silentUrl2;
+                        _ttsAudio.volume = 0.01;
+                        _ttsAudio.play().then(function() {
+                            _ttsAudio.pause();
+                            _ttsAudio.volume = 1.0;
+                            URL.revokeObjectURL(_silentUrl2);
+                        }).catch(function(e) {
+                            console.warn('[TTS] gesture unlock failed:', e);
+                            _ttsAudio.volume = 1.0;
+                            URL.revokeObjectURL(_silentUrl2);
+                        });
+                    } catch(e) {
+                        console.warn('[TTS] gesture unlock exception:', e);
+                    }
+                }
+            }
+            document.addEventListener('click', _reinitTtsOnGesture);
+            document.addEventListener('touchstart', _reinitTtsOnGesture);
         })();
 
         function loadAutopilotStatus() {
