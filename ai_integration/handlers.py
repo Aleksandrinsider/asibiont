@@ -15132,7 +15132,7 @@ async def send_outreach_email(
             ]
             _old_subject = subject
             for _bp, _replacement in _BANNED_SUBJECT_PATTERNS:
-                subject = _re_subj.sub(_replacement, subject.strip()).strip()
+                subject = _re_subj.sub(_bp, _replacement, subject.strip()).strip()
             if subject != _old_subject:
                 logger.info(
                     '[EMAIL_AUTOFIX] Очищена тема письма для %s: «%s» → «%s»',

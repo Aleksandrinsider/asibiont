@@ -743,7 +743,15 @@ class ReminderService:
             else:
                 logger.info(f"[DAILY REPORT] To user {user_id}: {report_text}")
         except Exception as e:
-            logging.error(f"Failed to send daily report to user {user_id}: {e}")    
+            _err_str = str(e).lower()
+            if 'chat not found' in _err_str or 'bot was blocked' in _err_str or 'user not found' in _err_str:
+                logging.warning(
+                    "[DAILY_REPORT] User %s недоступен (chat not found / bot blocked) — "
+                    "пропускаем daily report. При повторении проверьте, active ли пользователь",
+                    user_id,
+                )
+            else:
+                logging.error("Failed to send daily report to user %s: %s", user_id, e)
     def schedule_proactive_checks(self):
         """ОТКЛЮЧЕНО — проактивные сообщения переданы AnchorEngine.
         

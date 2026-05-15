@@ -589,14 +589,14 @@ async def collect_premium_insights(user_id: int, mode: str = 'collect', session:
 
         # Быстрые проверки (всегда актуальные)
         try:
-            quick_insights = await _check_deadlines_and_stuck_quick(user, session)
+            quick_insights = _check_deadlines_and_stuck_quick(user, session)
             all_insights.extend(quick_insights)
         except Exception as e:
             logger.warning(f"[PREMIUM_INSIGHTS] Error in quick checks: {e}")
 
         # Тяжёлые анализы (с кэшированием)
         try:
-            cached_insights = await _get_cached_heavy_insights(user_id, session)
+            cached_insights = _get_cached_heavy_insights(user_id, session)
             all_insights.extend(cached_insights)
         except Exception as e:
             logger.warning(f"[PREMIUM_INSIGHTS] Error in cached insights: {e}")
@@ -620,7 +620,7 @@ async def collect_premium_insights(user_id: int, mode: str = 'collect', session:
             # Режим сбора — только deadline/stuck инсайты (market/reverse/trends были удалены)
             heavy_insights = []
             try:
-                heavy_insights = _check_deadlines_and_stuck_quick(user_id, session)
+                heavy_insights = _check_deadlines_and_stuck_quick(user, session)
             except Exception as e:
                 logger.warning(f"[PREMIUM_INSIGHTS] Error collecting heavy insights: {e}")
 

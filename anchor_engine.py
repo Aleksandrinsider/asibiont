@@ -23982,7 +23982,7 @@ class AnchorEngine:
                                 recipient_email=_nc.email,
                                 recipient_name=(_nc.name or ''),
                                 recipient_company=(_nc.company or ''),
-                                recipient_context=(_nc.context or _nc.source or ''),
+                                recipient_context=(_nc.notes or _nc.source or ''),
                                 status='draft',
                             )
                             session.add(_draft_eo)
