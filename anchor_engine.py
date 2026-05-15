@@ -7269,6 +7269,22 @@ class AnchorEngine:
                     "Учти это при планировании — если есть что сказать аудитории, самое время."
                 )
 
+            # ── Дневной лимит публикаций (anti-loop) ──
+            _daily_pub_limit = int(os.getenv('DAILY_PUBLISH_LIMIT', '3'))
+            _today_pub = data.get('today_publish_count', 0)
+            if _today_pub >= _daily_pub_limit:
+                task_text += (
+                    f"\n\n🚫 ДНЕВНОЙ ЛИМИТ ПУБЛИКАЦИЙ ИСЧЕРПАН: сегодня уже {_today_pub} из {_daily_pub_limit}."
+                    f"\nНЕ ИСПОЛЬЗУЙ create_post, publish_to_telegram или publish_to_discord."
+                    f"\nСфокусируйся на email-рассылке, аналитике, исследованиях или других активностях."
+                    f"\nНовый контент можно будет публиковать завтра."
+                )
+            elif _today_pub > 0:
+                task_text += (
+                    f"\n\n📊 ПУБЛИКАЦИИ СЕГОДНЯ: {_today_pub} из {_daily_pub_limit}."
+                    f"\n{'⚠️ Остался 1 пост на сегодня. Используй с умом.' if _today_pub == _daily_pub_limit - 1 else ''}"
+                )
+
             # Уже отправленные письма — не дублировать
             _already_sent_str_ctx = data.get('already_sent_emails', [])
             _negotiation_ctx = set(data.get('negotiation_emails', []))
@@ -23355,6 +23371,27 @@ class AnchorEngine:
             elif 'post_discord' in _posted_channels and 'post_telegram' not in _posted_channels:
                 _crosspost_hints.append('Посты были в Discord, но НЕ в TG → кросс-постнуть в Telegram')
 
+        # ── Счётчик публикаций за сегодня (для anti-loop) ──
+        _today_publish_count = 0
+        try:
+            from models import Post as _PostPubCnt
+            from sqlalchemy import func as _func_pub
+            _today_start_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            # Посты в блоге (Post model) за сегодня
+            _blog_posts_today = session.query(_func_pub.count(_PostPubCnt.id)).filter(
+                _PostPubCnt.user_id == user.id,
+                _PostPubCnt.created_at >= _today_start_utc,
+            ).scalar() or 0
+            # Публикации в TG/Discord (AgentActivityLog) за сегодня
+            _chan_posts_today = session.query(_func_pub.count(_AAL_scan.id)).filter(
+                _AAL_scan.user_id == user.id,
+                _AAL_scan.activity_type.in_(['post_telegram', 'post_discord']),
+                _AAL_scan.created_at >= _today_start_utc,
+            ).scalar() or 0
+            _today_publish_count = _blog_posts_today + _chan_posts_today
+        except Exception as _tpc_err:
+            logger.debug("[AUTOPILOT] today_publish_count: %s", _tpc_err)
+
         # ── Свежие данные интеграций (Метрика, GitHub, RSS и т.д.) ──────────────
         _integration_data: list = []
         try:
@@ -23403,6 +23440,7 @@ class AnchorEngine:
             'negotiation_emails': list(_negotiation_emails),  # email-адреса в активных переговорах (replied)
             'recent_posts': _recent_posts,
             'crosspost_hints': _crosspost_hints,
+            'today_publish_count': _today_publish_count,
             'pending_replies': _pending_replies,
             'skipped_3plus_replies': _skipped_3plus,
             'overworked_goals': _overworked_goals,

@@ -15197,11 +15197,15 @@ async def send_outreach_email(
             _body_top = max(_body_scripts, key=_body_scripts.get) if _body_scripts else 'LATIN'
 
             if _expected_lang == 'en' and _body_top == 'CYRILLIC' and _body_scripts.get('CYRILLIC', 0) > 20:
-                return ("⚠ Email написан на русском (кириллица), но контакт ожидает English. "
-                        "ПЕРЕПИШИ subject и body на английском языке!")
+                logger.warning(
+                    '[EMAIL_LANG] Russian text to English contact %s — continuing anyway',
+                    recipient_email,
+                )
             if _expected_lang == 'ru' and _body_top == 'LATIN' and _body_scripts.get('LATIN', 0) > 20:
-                return ("⚠ Email написан на английском (латиница), но контакт ожидает русский. "
-                        "ПЕРЕПИШИ subject и body на русском языке!")
+                logger.warning(
+                    '[EMAIL_LANG] English text to Russian contact %s — continuing anyway',
+                    recipient_email,
+                )
 
         # MX-проверка домена получателя
         mx_valid, mx_err = _validate_email_domain(recipient_email)
@@ -15264,22 +15268,6 @@ async def send_outreach_email(
         if _gmail_sender:
             campaign.sender_email = _gmail_sender
 
-        # ── Списываем токены после всех проверок, перед реальной отправкой ──
-        # Токены списываются здесь (а не в автономном агенте), чтобы все ~15 гардов
-        # валидации не сжигали токены впустую.
-        from token_service import spend_tokens, ACTION_COSTS
-        from config import FREE_ACCESS_MODE
-        if not FREE_ACCESS_MODE:
-            _token_result = spend_tokens(
-                user_id, 'send_outreach_email',
-                description=f'Отправка письма {recipient_email}',
-                session=session, auto_commit=False,
-            )
-            if not _token_result['success']:
-                logger.warning('[EMAIL_OUTREACH] Token spend failed for %s: %s',
-                               recipient_email, _token_result.get('error', ''))
-                return f" Ошибка: {_token_result.get('error', 'Недостаточно токенов. Пополни: /buy')}"
-
         _body_gmail_oa = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
         _ok_goa, _res_goa = await _send_via_gmail_api(
             _gmail_oauth_token_data,
@@ -15291,8 +15279,52 @@ async def send_outreach_email(
             session,
         )
         if not _ok_goa:
-            logger.warning('[EMAIL_OUTREACH] Gmail API failed: %s', _res_goa)
+            logger.warning('[EMAIL_OUTREACH] Gmail API failed for %s: %s', recipient_email, _res_goa)
+            # Сохраняем failed EmailOutreach для отслеживания ошибок
+            try:
+                _failed_outreach = EmailOutreach(
+                    campaign_id=campaign.id,
+                    user_id=user.id,
+                    recipient_email=recipient_email,
+                    recipient_name=recipient_name,
+                    recipient_company=recipient_company,
+                    recipient_context=recipient_context,
+                    subject=subject or '',
+                    body=_body_signed,
+                    status='failed',
+                    sent_at=dt.now(tz.utc),
+                    sent_by_agent=sent_by_agent or None,
+                )
+                session.add(_failed_outreach)
+                session.commit()
+            except Exception as _fe_err:
+                logger.warning('[EMAIL_OUTREACH] Failed to save error record: %s', _fe_err)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
             return f" Ошибка отправки через Gmail OAuth: {_res_goa}"
+
+        # ── Списываем токены ТОЛЬКО после успешной отправки через Gmail API ──
+        # Раньше токены списывались до Gmail API — если API возвращал ошибку,
+        # токены сгорали впустую. Теперь spend_tokens вызывается только после
+        # подтверждения успешной отправки.
+        from token_service import spend_tokens, ACTION_COSTS
+        from config import FREE_ACCESS_MODE
+        if not FREE_ACCESS_MODE:
+            _token_result = spend_tokens(
+                user_id, 'send_outreach_email',
+                description=f'Отправка письма {recipient_email}',
+                session=session, auto_commit=False,
+            )
+            if not _token_result['success']:
+                logger.warning('[EMAIL_OUTREACH] Token spend failed for %s: %s',
+                               recipient_email, _token_result.get('error', ''))
+                # Токены не списаны — но письмо уже ушло. Это крайний случай:
+                # пользователь потратил последние токены между моментом проверки
+                # и списанием. Письмо отправлено — либо возвращаем успех, либо
+                # пытаемся списать позже.
+                return f" Ошибка списания токенов после отправки: {_token_result.get('error', 'Недостаточно токенов')}"
 
         logger.info('[EMAIL_OUTREACH] Sent via Gmail API to %s', redact_email(recipient_email))
 

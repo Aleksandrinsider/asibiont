@@ -423,6 +423,88 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
             session.close()
 
 
+def refund_tokens(user_id: int, action: str, description: str = '',
+                  session=None, cost: int = None) -> dict:
+    """
+    Возвращает токены пользователю (refund).
+    Используется когда токены были списаны, но действие не выполнено
+    (например, Gmail API вернул ошибку после списания).
+
+    Args:
+        cost: если None, возвращает стоимость по ACTION_COSTS[action]
+              если 0, возвращает последнюю потраченную сумму за это action (auto-detect)
+    Returns: {'success': True/False, 'balance': int, 'refunded': int}
+    """
+    import datetime as _dt_refund
+    cost_val = cost if cost is not None else ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+
+    close = False
+    if session is None:
+        session = Session()
+        close = True
+
+    try:
+        from models import TokenTransaction as _TT_refund
+
+        # Если cost=0 — определяем последнюю потраченную сумму
+        if cost_val == 0:
+            _last_tx = session.query(_TT_refund).filter_by(
+                user_id=user_id, action=action
+            ).order_by(_TT_refund.id.desc()).first()
+            if _last_tx and _last_tx.amount < 0:
+                cost_val = abs(_last_tx.amount)
+                logger.info(f"[REFUND] Auto-detected last spend for {action}: {cost_val}")
+            else:
+                cost_val = ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+
+        from sqlalchemy import text as sa_text
+        from config import LOCAL
+
+        if LOCAL:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return {'success': False, 'balance': 0, 'refunded': 0, 'error': 'User not found'}
+            user.token_balance = (user.token_balance or 0) + cost_val
+            new_balance = user.token_balance
+            db_user_id = user.id
+        else:
+            result = session.execute(
+                sa_text(
+                    "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amount "
+                    "WHERE telegram_id = :tid "
+                    "RETURNING id, token_balance"
+                ),
+                {'amount': cost_val, 'tid': user_id}
+            )
+            row = result.fetchone()
+            if not row:
+                return {'success': False, 'balance': 0, 'refunded': 0, 'error': 'User not found'}
+            db_user_id, new_balance = row
+
+        # Записываем транзакцию возврата
+        tx = _TT_refund(
+            user_id=db_user_id,
+            amount=cost_val,
+            action=f'refund_{action}',
+            description=f'Возврат {cost_val} токенов ({action}): {description or "отмена"}',
+            balance_after=new_balance
+        )
+        session.add(tx)
+        session.commit()
+
+        logger.info(f"[REFUND] User {user_id}: +{cost_val} (refund {action}) → баланс: {new_balance}")
+
+        return {'success': True, 'balance': new_balance, 'refunded': cost_val}
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"[REFUND] Error for user {user_id}, action {action}: {e}")
+        return {'success': False, 'balance': 0, 'refunded': 0, 'error': str(e)}
+    finally:
+        if close:
+            session.close()
+
+
 def grant_signup_tokens(user_id: int, session=None) -> dict:
     """Начисляет бесплатные токены при регистрации."""
     return add_tokens(user_id, FREE_TOKENS_ON_SIGNUP, reason='signup', session=session)

@@ -1462,6 +1462,46 @@ async def _get_quick_ai_session() -> aiohttp.ClientSession:
 _AGENT_ACTION_MEMORY: dict[str, dict] = {}
 _AGENT_ACTION_MEMORY_TTL: float = 86400.0  # 24h
 
+# ─── Daily Publish Limit (persistent across sessions) ─────────────────
+_DAILY_TOOL_COUNTER: dict[str, dict] = {}  # key: f"{user_id}|publish|YYYY-MM-DD"
+_PUBLISH_TOOLS = {'create_post', 'publish_to_telegram', 'publish_to_discord'}
+_DAILY_PUBLISH_LIMIT: int = int(os.getenv('DAILY_PUBLISH_LIMIT', '3'))  # макс публикаций в день
+
+
+def _check_daily_publish_limit(user_id: int, tool_name: str) -> tuple[bool, int]:
+    """Проверяет дневной лимит публикаций.
+
+    Все публикационные инструменты (create_post, publish_to_telegram,
+    publish_to_discord) считаются в одной группе — если создан пост,
+    лимит считается использованным независимо от канала.
+
+    Возвращает (is_blocked, current_count_today).
+    """
+    if tool_name not in _PUBLISH_TOOLS:
+        return (False, 0)
+
+    _today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    _key = f"{user_id}|publish|{_today}"
+    _now = time.time()
+
+    # Очистка записей старше 48ч
+    _stale = [k for k, v in _DAILY_TOOL_COUNTER.items()
+              if (_now - v.get('ts', 0)) > 172800]
+    for _sk in _stale:
+        _DAILY_TOOL_COUNTER.pop(_sk, None)
+
+    _entry = _DAILY_TOOL_COUNTER.get(_key, {'count': 0, 'ts': _now})
+    _count = _entry['count']
+
+    if _count >= _DAILY_PUBLISH_LIMIT:
+        return (True, _count)
+
+    # Инкремент
+    _entry['count'] = _count + 1
+    _entry['ts'] = _now
+    _DAILY_TOOL_COUNTER[_key] = _entry
+    return (False, _count)
+
 def _fingerprint_params(params: dict) -> str:
     """Создаёт компактный отпечаток параметров tool call для обнаружения повторов."""
     _key_fields = (
@@ -1505,7 +1545,11 @@ def _record_agent_action(agent_name: str, tool_name: str, params: dict, user_id:
 
 def _check_agent_loop_risk(agent_name: str, tool_name: str, params: dict, user_id: int, threshold: int = 3) -> tuple:
     """Проверяет, не зациклился ли агент на одном и том же tool call.
+    Два уровня детекции:
+      1. Точный отпечаток параметров (одинаковый контент)
+      2. Повтор инструмента по имени (разный контент, но тот же инструмент N+ раз)
     Возвращает (is_looping, warning_message)."""
+    # Уровень 1: точный отпечаток параметров
     _fp = _fingerprint_params(params)
     _key = f"{agent_name}|{tool_name}|{_fp}|{user_id}"
     _entry = _AGENT_ACTION_MEMORY.get(_key)
@@ -1517,6 +1561,32 @@ def _check_agent_loop_risk(agent_name: str, tool_name: str, params: dict, user_i
             f"Действие ЗАБЛОКИРОВАНО. Смени подход или остановись."
         )
         return (True, _msg)
+
+    # Уровень 2: повтор инструмента по имени (без учёта параметров)
+    # Ловит случай: create_post с разным текстом в каждом цикле
+    _PUBLISH_LOOP_TOOLS = {
+        'create_post', 'publish_to_telegram', 'publish_to_discord',
+        'web_search', 'send_outreach_email',
+    }
+    if tool_name in _PUBLISH_LOOP_TOOLS:
+        _name_key = f"{agent_name}|*|{tool_name}|{user_id}"
+        _name_entry = _AGENT_ACTION_MEMORY.get(_name_key)
+        _name_count = _name_entry['count'] if _name_entry else 0
+        # Для публикационных инструментов порог ниже (2 раза = уже подозрительно)
+        _name_threshold = 2 if tool_name in _PUBLISH_TOOLS else 3
+        if _name_count >= _name_threshold:
+            _msg = (
+                f"⚠️ ПОВТОР ИНСТРУМЕНТА: агент '{agent_name}' вызвал {tool_name} "
+                f"{_name_count} раз (с разным содержанием). "
+                f"Действие ЗАБЛОКИРОВАНО. Смени подход."
+            )
+            return (True, _msg)
+        # Записываем также и по name-key
+        if _name_key not in _AGENT_ACTION_MEMORY:
+            _AGENT_ACTION_MEMORY[_name_key] = {'count': 0, 'ts': time.time(), 'tool': tool_name}
+        _AGENT_ACTION_MEMORY[_name_key]['count'] += 1
+        _AGENT_ACTION_MEMORY[_name_key]['ts'] = time.time()
+
     return (False, '')
 
 
@@ -3683,6 +3753,27 @@ class HybridAutonomousAgent:
                             for _uk in _unknown:
                                 del params[_uk]
 
+                    # ── Pre-check для send_outreach_email ──
+                    # Быстрая проверка базовых условий ДО вызова хендлера.
+                    # Это экономит ~8 токенов и ~5с времени на каждый заведомо失败的 вызов.
+                    if tool_name == 'send_outreach_email':
+                        _rcpt = (params.get('recipient_email') or '').strip().lower()
+                        _skip_reason = None
+                        if not _rcpt or '@' not in _rcpt:
+                            _skip_reason = 'Некорректный email получателя'
+                        elif not params.get('subject') or not params.get('body'):
+                            _skip_reason = 'Отсутствует тема или тело письма'
+                        elif not params.get('campaign_id'):
+                            _skip_reason = 'Не указан ID кампании'
+                        if _skip_reason:
+                            results.append({
+                                "tool": tool_name, "success": False,
+                                "error": f"⛔ {_skip_reason} — исправь и повтори",
+                                "reason": reason
+                            })
+                            logger.info(f"[EXEC] {tool_name} PRE-CHECK FAIL: {_skip_reason}")
+                            continue
+
                     # Списываем токены за инструмент (если стоимость > 0)
                     # send_outreach_email / save_email_contact / add_email_leads управляют
                     # списанием токенов ВНУТРИ функции (после всех проверок, перед реальной отправкой).
@@ -4137,6 +4228,32 @@ class HybridAutonomousAgent:
                     "2) site:linkedin.com/in + имя + company\n"
                     "3) company domain + firstname.lastname@domain\n"
                     "Или используй find_relevant_contacts_for_task + save_email_contact."
+                )
+                return params
+
+            # Guard: блокируем web_search-запросы, нацеленные на гигантов (Fortune 500 / топ-10 выдачи)
+            _giant_keywords = (
+                'microsoft', 'google ', 'apple ', 'amazon', 'meta ', 'exxon', 'shell',
+                'bp ', 'chevron', 'toyota', 'walmart', 'jpmorgan', 'goldman sachs',
+                'mckinsey', 'bcg', 'pwc', 'delloitte', 'kpmg', 'forbes', 'techcrunch',
+                'bloomberg', 'reuters', 'cnn', 'bbc', 'new york times',
+            )
+            _giant_queries = (
+                'top ', 'leading ', 'крупнейш', 'fortune 500', 'forbes top',
+            )
+            if _looks_outreach and (any(gk in _q_l for gk in _giant_keywords) or any(gq in _q_l for gq in _giant_queries)):
+                params['__skip__'] = True
+                params['__block_error__'] = (
+                    "⛔ Этот web_search-запрос целится в компанию-гиганта (Fortune 500 / топ выдачи). "
+                    "Письма в такие компании НЕ ДОХОДЯТ — корп. политика блокирует cold email. "
+                    "Конверсия = 0%. Тратишь токены впустую.\n"
+                    "Сделай запрос по реалистичной цели:\n"
+                    "1) 'IT-компании [город] [сфера]'\n"
+                    "2) 'стартапы [сфера] 10-50 сотрудников'\n"
+                    "3) 'агентство [услуга] [город]'\n"
+                    "4) 'небольшие компании [отрасль] [регион]'\n"
+                    "5) site:habr.com или site:vc.ru + тема (авторы, не корпорации)\n"
+                    "Или используй find_relevant_contacts_for_task."
                 )
                 return params
 
@@ -5601,6 +5718,15 @@ class HybridAutonomousAgent:
                             if _q_kws is None:
                                 continue
                             _seen_research_kws.append(_q_kws)
+
+                    # Daily publish limit (persistent across sessions)
+                    if name in _PUBLISH_TOOLS:
+                        _is_over, _today_count = _check_daily_publish_limit(user_id, name)
+                        if _is_over:
+                            logger.warning(f"[DAILY_LIMIT] {name} — дневной лимит {_DAILY_PUBLISH_LIMIT} ({_today_count})")
+                            messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                                "content": json.dumps({"status": f"skipped: дневной лимит публикаций ({_DAILY_PUBLISH_LIMIT}) исчерпан. Лимит сбросится завтра."}, ensure_ascii=False)})
+                            continue
 
                     # Once-only
                     if name in once_only_tools:
@@ -9323,6 +9449,35 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  🔢 ПОРОГ ПОИСКА EMAIL: попробовал 2 разных способа — нет личного email?\n"
             "     → Используй корп. email (если цель B2B) ИЛИ переключись на другого человека/другую задачу.\n"
             "     Не трать 3й, 4й, 5й ход на поиск одного человека — это застой.\n"
+            "  🎯 ЦЕЛЕВОЙ ФИЛЬТР (КРИТИЧНО: не трать токены на гигантов):\n"
+            "     ⛔ НЕ пиши в Fortune 500 — Microsoft, Google, Apple, Amazon, Meta, ExxonMobil, Shell, BP, Toyota, Walmart,\n"
+            "        JPMorgan, Goldman Sachs, McKinsey, BCG, PwC, Deloitte, KPMG — у них корп. политика блокирует cold email.\n"
+            "        Конверсия в ответ от гиганта = 0.0%. Письмо в Microsoft = сожжённый токен.\n"
+            "     ⛔ НЕ пиши в крупные мировые СМИ — Forbes, TechCrunch, Bloomberg, Reuters, CNN, BBC, New York Times.\n"
+            "        В редакциях гигантов свой пул авторов, cold email не читают.\n"
+            "     ✅ ЦЕЛЬ: компании 10-500 сотрудников. Средний бизнес, стартапы на стадии роста, локальный бизнес.\n"
+            "        Именно такие компании реально читают cold email и могут ответить.\n"
+            "     🔍 КАК ОПРЕДЕЛИТЬ РАЗМЕР КОМПАНИИ по результатам поиска:\n"
+            "        — В названии есть 'Inc.' / 'Corp.' / 'PLC' / 'Group' / 'Holdings' + известный бренд → СКОРЕЕ ВСЕГО ГИГАНТ.\n"
+            "        — Упомянута в топ-10 Forbes/Financial Times/Reuters → гигант, пропусти.\n"
+            "        — Сайт крупного международного банка/нефтянки/консалтинга → гигант.\n"
+            "        — Штаб-квартира в нескольких странах, выручка >$1 млрд → гигант.\n"
+            "        — Неизвестная компания, региональный бизнес, IT-студия, локальный стартап → ЦЕЛЬ.\n"
+            "     🔍 КАК ИСКАТЬ РЕАЛИСТИЧНЫЕ ЦЕЛИ (вместо топ-10 выдачи):\n"
+            "        В запрос web_search ДОБАВЛЯЙ фильтры: 'site:linkedin.com/company малый бизнес',\n"
+            "        'региональные IT-компании [город]', 'стартапы [сфера] 10-50 сотрудников',\n"
+            "        'агентство [сфера] [город]', 'сервис [услуга] компания [город]',\n"
+            "        'разработчики [технология] [город]', 'IT-аутсорсинг [регион]',\n"
+            "        'небольшие компании [отрасль] [регион]'.\n"
+            "        НЕ пиши 'top [field] companies' — это гарантированно вернёт гигантов.\n"
+            "        НЕ пиши 'leading [field] startups' — лидирующие стартапы тоже гиганты (Stripe, SpaceX).\n"
+            "     🔍 АЛЬТЕРНАТИВЫ web_search для поиска реалистичных контактов:\n"
+            "        — GitHub: run_agent_action(search_github_users) — найди разработчиков по языку/локации.\n"
+            "        — Habr/VC/DTF: site:habr.com или site:vc.ru + тема — авторы статей, а не мегакорпорации.\n"
+            "        — LinkedIn (если интеграция): фильтр по размеру компании 11-200 сотрудников.\n"
+            "     💡 Если после поиска видишь в результатах Microsoft, Google, Exxon — ЭТО НЕ ТО.\n"
+            "        Не отправляй письма таким контактам. Измени запрос, добавь локальный/региональный фильтр.\n"
+            "        Лучше найти 1 реалистичную компанию и написать персонально, чем 10 гигантам и получить 0 ответов.\n"
             "  📢 ПУБЛИКАЦИИ — site-first режим (как раньше):\n"
             "     Для поста с публикацией используй create_post — он создаёт запись в блоге и делает кросс-пост в доступные каналы.\n"
             "     publish_to_telegram используй только когда явно нужно ТОЛЬКО в Telegram без блога.\n"
