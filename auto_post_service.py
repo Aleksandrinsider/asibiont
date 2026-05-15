@@ -236,8 +236,8 @@ async def generate_progress_post(user_id, session):
         if not profile:
             return None
 
-        # Timezone — prefer profile.timezone, fallback to user.timezone
-        _tz = profile.timezone or user.timezone or 'Europe/Moscow'
+        # Timezone — используем user.timezone (profile не имеет поля timezone)
+        _tz = user.timezone or 'Europe/Moscow'
         try:
             user_tz = pytz.timezone(_tz)
         except Exception:
@@ -926,8 +926,8 @@ async def check_and_create_posts():
                 if not profile:
                     continue
                 
-                # Используем profile.timezone (приоритет), затем user.timezone
-                _tz_str = profile.timezone or user.timezone or 'Europe/Moscow'
+                # Используем user.timezone (profile не имеет поля timezone)
+                _tz_str = user.timezone or 'Europe/Moscow'
                 try:
                     user_tz = pytz.timezone(_tz_str)
                 except Exception:

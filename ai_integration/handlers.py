@@ -21912,8 +21912,8 @@ async def ask_agent(agent_name: str, question: str, user_id: int = None) -> str:
 
             # Ищем агента по имени (case-insensitive) среди активных
             agents = session.query(UserAgent).filter(
-                UserAgent.user_id == user.id,
-                UserAgent.is_active == True
+                UserAgent.author_id == user.id,
+                UserAgent.status == 'active'
             ).all()
 
             target_agent = None

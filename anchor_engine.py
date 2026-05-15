@@ -6926,8 +6926,8 @@ class AnchorEngine:
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
-                        _s.execute(_del_text("SET LOCAL statement_timeout = 12000"))
-                        _s.execute(_del_text("SET LOCAL lock_timeout = 8000"))
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 30000"))
+                        _s.execute(_del_text("SET LOCAL lock_timeout = 20000"))
                         _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
                         _s.commit()
                         return True
