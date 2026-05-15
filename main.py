@@ -6466,10 +6466,8 @@ async def get_feed_handler(request):
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
 
-            # Типы событий для ленты (все что есть в хронологии, кроме постов)
-            _feed_report_types = _TIMELINE_VISIBLE_TYPES - {
-                'post_newsfeed', 'post_telegram', 'post_discord',
-            }
+            # Типы событий для ленты — только отчёты AI о дне пользователя
+            _feed_report_types = {'daily_report', 'coordinator_summary'}
 
             # Get agent activity log entries (reports, not posts)
             activities = session_db.query(AgentActivityLog).filter(
