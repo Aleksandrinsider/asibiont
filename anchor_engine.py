@@ -5774,12 +5774,14 @@ class AnchorEngine:
                     session.commit()
             except Exception as _inner_err:
                 # Rollback освобождает xact_lock автоматически
-                logger.error(f"[ANCHOR] User {user_id}: _process_user_inner error: {_inner_err}")
+                logger.error(f"[ANCHOR] User {user_id}: _process_user_inner error: {_inner_err}\n{traceback.format_exc()}")
                 try:
                     session.rollback()
                 except Exception:
                     pass
-                raise
+                # НЕ re-raise — rollback уже сделан, повторный raise вызовет
+                # каскад в outer except и может привести к InFailedSqlTransaction.
+                return
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")

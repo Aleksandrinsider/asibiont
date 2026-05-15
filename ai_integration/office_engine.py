@@ -1444,7 +1444,7 @@ class OfficeEngine:
         )
 
         # Загрузим недавнюю активность чтобы не дублировать
-        from models import Session as Db, AgentActivityLog
+        from models import Session as Db, AgentActivityLog, AnchorPriority as _AP
         s = Db()
         try:
             _now = datetime.now(timezone.utc)
