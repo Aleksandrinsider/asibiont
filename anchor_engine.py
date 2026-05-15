@@ -24512,27 +24512,50 @@ class AnchorEngine:
         if collab_tasks:
             signals.append(f'seeking_help:{",".join(t.title for t in collab_tasks[:3])}')
 
-        # 6. Контент из последнего диалога (интересные темы)
-        # Сначала ищем сообщения от пользователя (приоритет), затем любые сообщения
-        recent_interactions = session.query(Interaction).filter(
+        # 6. Активность в чатах с AI и агентами — конвертируем диалоги в сигналы для поста
+        # Собираем пары (user_message → ai_response) за последние 12ч
+        recent_chat = session.query(Interaction).filter(
             Interaction.user_id == user.id,
-            Interaction.message_type == 'user',
             Interaction.created_at >= now_utc - timedelta(hours=12)
-        ).order_by(Interaction.created_at.desc()).limit(5).all()
-        if recent_interactions:
-            topics = [i.content[:80] for i in recent_interactions if i.content]
-            if topics:
-                signals.append(f'recent_topics:{"||".join(topics[:3])}')
+        ).order_by(Interaction.created_at.desc()).limit(20).all()
+        if recent_chat:
+            # Разделяем на user и ai/agent сообщения
+            user_msgs = [i for i in recent_chat if i.message_type == 'user']
+            ai_msgs = [i for i in recent_chat if i.message_type in ('ai', 'agent_msg', 'assistant')]
+            
+            if user_msgs:
+                # Берём полные темы диалогов пользователя (до 200 символов каждое)
+                topics = [i.content[:200] for i in user_msgs[:5] if i.content]
+                if topics:
+                    signals.append(f'чат_темы:{"||".join(topics[:3])}')
+            
+            if ai_msgs and not user_msgs:
+                # Если только AI-сообщения — берём их как контекст
+                ai_topics = [i.content[:200] for i in ai_msgs[:5] if i.content]
+                if ai_topics:
+                    signals.append(f'чат_контекст:{"||".join(ai_topics[:3])}')
+            
+            # Добавляем метрику: сколько сообщений и с кем общался
+            total_chat = len(user_msgs) + len(ai_msgs)
+            agent_msgs = [i for i in recent_chat if i.message_type in ('agent_msg',)]
+            chat_summary_parts = []
+            if total_chat > 0:
+                chat_summary_parts.append(f'чатов_за_12ч:{total_chat}')
+            if len(agent_msgs) > 0:
+                chat_summary_parts.append(f'диалогов_с_агентами:{len(agent_msgs)}')
+            if chat_summary_parts:
+                signals.append(f'активность_в_чате:{" ".join(chat_summary_parts)}')
         else:
-            # Fallback: ищем любые недавние диалоги (включая AI) для контекста
+            # Fallback: ищем любые недавние диалоги за 24ч
             recent_any = session.query(Interaction).filter(
                 Interaction.user_id == user.id,
                 Interaction.created_at >= now_utc - timedelta(hours=24)
-            ).order_by(Interaction.created_at.desc()).limit(5).all()
+            ).order_by(Interaction.created_at.desc()).limit(10).all()
             if recent_any:
-                topics = [i.content[:80] for i in recent_any if i.content]
+                user_any = [i for i in recent_any if i.message_type == 'user']
+                topics = [i.content[:200] for i in (user_any or recent_any)[:5] if i.content]
                 if topics:
-                    signals.append(f'recent_context:{"||".join(topics[:3])}')
+                    signals.append(f'чат_контекст:{"||".join(topics[:3])}')
 
         # 7. Профиль: навыки/интересы (AI может сделать экспертный пост)
         if profile:
@@ -27775,10 +27798,16 @@ class AnchorEngine:
                 system_msg = (
                     "Ты — ghostwriter. Пишешь короткий личный итог дня от лица пользователя для его ленты дашборда.\n\n"
                     "ПРАВИЛА:\n"
-                    "1. Верни SKIP только если нет ни одной выполненной задачи И профиль пустой\n"
+                    "1. Верни SKIP только если нет вообще никаких данных: ни задач, ни целей, ни чатов, ни профиля.\n"
+                    "   Если есть хотя бы чат_темы или активность_в_чате — НЕ СКИПАЙ, а пиши пост.\n"
                     "2. Пиши от ПЕРВОГО лица, как запись в личном дневнике — коротко и по-человечески\n"
-                    "3. Основа поста — что РЕАЛЬНО сделано сегодня (completed_tasks из сигналов). "
-                    "Если задач нет — напиши о чём-то личном: настроение, наблюдение, мысль дня\n"
+                    "3. Основа поста:\n"
+                    "   — Если есть completed_tasks: напиши о выполненных задачах\n"
+                    "   — Если задач нет, но есть чат_темы: напиши о том, что сегодня обсуждал(а) с AI, "
+                    "какие мысли пришли, какие вопросы решал(а) через диалог с агентами\n"
+                    "   — Если есть активность_в_чате: обязательно упомяни, что вёл диалог с AI/агентами — "
+                    "это тоже продуктивная деятельность\n"
+                    "   — Если нет ничего: напиши о настроении, наблюдении, мыслях на основе профиля\n"
                     "4. Формат: 2-5 предложений, 150-400 символов. Сплошной текст без буллетов, "
                     "хештегов, эмодзи, заголовков и CTA\n"
                     "5. Стиль: живой разговорный, как сообщение другу. НЕ пресс-релиз, НЕ экспертная статья\n"
