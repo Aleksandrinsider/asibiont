@@ -1170,6 +1170,9 @@
                                 <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn" title="Голосовой ввод" data-i18n-title="voice-input">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3ZM3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5Z"/></svg>
                                 </button>
+                                <button id="chat-tts-btn" onclick="toggleChatVoice()" class="chat-action-btn" title="Озвучивание ответов AI" data-active="">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/><path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.707.706z"/><path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707z"/><path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>
+                                </button>
                                 <button onclick="document.getElementById('file-input').click()" class="chat-action-btn" title="Прикрепить файл" data-i18n-title="attach-file">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
                                 </button>
@@ -2171,6 +2174,11 @@
                 }
             } else {
                 messages.appendChild(messageDiv);
+            }
+
+            // TTS: озвучиваем AI-сообщение если включено
+            if (normalizedSender === 'ai' && text && !_prepend) {
+                _speakText(text);
             }
 
             if (!_prepend && !_opts.skipAutoScroll) {
@@ -16668,6 +16676,79 @@ except Exception as e:
                 }
             }).catch(function(e){ console.error('Autopilot toggle error:', e); });
         }
+
+        function toggleChatVoice() {
+            var btn = document.getElementById('chat-tts-btn');
+            if (!btn) return;
+            var isActive = btn.dataset.active === 'true';
+            var newVal = !isActive;
+            if (newVal) {
+                btn.dataset.active = 'true';
+                btn.style.background = '#068487';
+                btn.style.borderColor = '#068487';
+                var svg = btn.querySelector('svg');
+                if (svg) svg.setAttribute('fill', '#FFFFFF');
+                btn.onmouseover = null;
+                btn.onmouseout = null;
+                window._chatVoiceEnabled = true;
+                localStorage.setItem('chatVoiceEnabled', 'true');
+                showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
+            } else {
+                btn.dataset.active = '';
+                btn.style.background = '#FFFFFF';
+                btn.style.borderColor = '#D1D9E0';
+                var svg = btn.querySelector('svg');
+                if (svg) svg.setAttribute('fill', '#374151');
+                btn.onmouseover = function(){ if(!this.dataset.active){ this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';} };
+                btn.onmouseout = function(){ if(!this.dataset.active){ this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';} };
+                window._chatVoiceEnabled = false;
+                localStorage.setItem('chatVoiceEnabled', 'false');
+                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
+            }
+        }
+
+        function _speakText(text) {
+            if (!window._chatVoiceEnabled) return;
+            if (!window.speechSynthesis) return;
+            window.speechSynthesis.cancel();
+            var cleanText = text
+                .replace(/\*\*(.+?)\*\*/g, '$1')
+                .replace(/\*(.+?)\*/g, '$1')
+                .replace(/`{1,3}[^`]*`{1,3}/g, '')
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/^#{1,6}\s+/gm, '')
+                .replace(/[<>]/g, '')
+                .replace(/\n{2,}/g, '. ')
+                .replace(/\n/g, ' ')
+                .trim();
+            if (!cleanText) return;
+            var utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'ru-RU';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Restore chat voice state on page load
+        (function() {
+            var saved = localStorage.getItem('chatVoiceEnabled');
+            if (saved === 'true') {
+                window._chatVoiceEnabled = true;
+                var btn = document.getElementById('chat-tts-btn');
+                if (btn) {
+                    btn.dataset.active = 'true';
+                    btn.style.background = '#068487';
+                    btn.style.borderColor = '#068487';
+                    var svg = btn.querySelector('svg');
+                    if (svg) svg.setAttribute('fill', '#FFFFFF');
+                    btn.onmouseover = null;
+                    btn.onmouseout = null;
+                }
+            } else {
+                window._chatVoiceEnabled = false;
+            }
+        })();
 
         function loadAutopilotStatus() {
             fetch('/api/autopilot-status').then(function(r){ return r.json(); }).then(function(d){
