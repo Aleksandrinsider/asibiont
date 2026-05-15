@@ -16719,14 +16719,27 @@ except Exception as e:
             }).catch(function(e){ console.error('Autopilot toggle error:', e); });
         }
 
-        var _currentAudio = null; // текущий Audio элемент
+        var _currentAudioSource = null; // текущий AudioBufferSourceNode (Web Audio API)
+        var _ttsAudioCtx = null; // AudioContext для воспроизведения TTS
+
+        // Fallback на speechSynthesis если AudioContext недоступен
+        function _fallbackSpeech(text) {
+            if (window.speechSynthesis) {
+                try {
+                    var utter = new SpeechSynthesisUtterance(text);
+                    utter.lang = 'ru-RU';
+                    window.speechSynthesis.speak(utter);
+                } catch(e) {
+                    console.warn('[TTS] speechSynthesis fallback error:', e);
+                }
+            }
+        }
 
         function _speakText(text) {
             if (!window._chatVoiceEnabled) return;
-            // Guard: если _ttsAudio не создан (например, при восстановлении состояния после перезагрузки
-            // без полного цикла toggle), отключаем голос и выходим
-            if (!_ttsAudio) {
-                console.warn('[TTS] _ttsAudio not initialized, disabling voice');
+            // Guard: если AudioContext не создан — отключаем голос
+            if (!_ttsAudioCtx || _ttsAudioCtx.state === 'closed') {
+                console.warn('[TTS] AudioContext not available, disabling voice');
                 window._chatVoiceEnabled = false;
                 var _btn = document.getElementById('chat-tts-btn');
                 if (_btn) {
@@ -16737,12 +16750,13 @@ except Exception as e:
                     if (_svg) _svg.setAttribute('fill', '#374151');
                 }
                 localStorage.setItem('chatVoiceEnabled', 'false');
+                _fallbackSpeech(text);
                 return;
             }
             // Останавливаем предыдущее воспроизведение
-            if (_currentAudio) {
-                _currentAudio.pause();
-                _currentAudio = null;
+            if (_currentAudioSource) {
+                try { _currentAudioSource.stop(); } catch(e) {}
+                _currentAudioSource = null;
             }
             var cleanText = text
                 .replace(/\*\*(.+?)\*\*/g, '$1')
@@ -16756,42 +16770,39 @@ except Exception as e:
                 .trim();
             if (!cleanText) return;
 
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/tts', true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.responseType = 'blob';
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    var blob = xhr.response;
-                    var url = URL.createObjectURL(blob);
-                    // Используем заранее созданный Audio (создан в user gesture)
-                    _ttsAudio.src = url;
-                    _currentAudio = _ttsAudio;
-                    var cleanup = function() {
-                        URL.revokeObjectURL(url);
-                        _currentAudio = null;
-                    };
-                    _ttsAudio.onended = cleanup;
-                    _ttsAudio.onerror = cleanup;
-                    _ttsAudio.play().catch(function(err) {
-                        console.error('[TTS] play error:', err);
-                        cleanup();
-                        // Если autoplay заблокирован — пробуем speechSynthesis как fallback
-                        if (err.name === 'NotAllowedError' && window.speechSynthesis) {
-                            var utter = new SpeechSynthesisUtterance(cleanText);
-                            utter.lang = 'ru-RU';
-                            window.speechSynthesis.speak(utter);
-                            _currentAudio = null;
-                        }
-                    });
-                } else {
-                    console.error('[TTS] server error:', xhr.status);
+            // Fetch audio via API → decode → play через Web Audio API
+            fetch('/api/tts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: cleanText})
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    console.error('[TTS] server error:', response.status);
+                    _fallbackSpeech(cleanText);
+                    return null;
                 }
-            };
-            xhr.onerror = function() {
-                console.error('[TTS] network error');
-            };
-            xhr.send(JSON.stringify({text: cleanText}));
+                return response.arrayBuffer();
+            })
+            .then(function(buffer) {
+                if (!buffer) return null;
+                return _ttsAudioCtx.decodeAudioData(buffer);
+            })
+            .then(function(audioBuffer) {
+                if (!audioBuffer) return;
+                var source = _ttsAudioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(_ttsAudioCtx.destination);
+                source.onended = function() {
+                    _currentAudioSource = null;
+                };
+                source.start(0);
+                _currentAudioSource = source;
+            })
+            .catch(function(err) {
+                console.error('[TTS] play error:', err);
+                _fallbackSpeech(cleanText);
+            });
         }
 
         function toggleChatVoice() {
@@ -16809,50 +16820,20 @@ except Exception as e:
                 btn.onmouseout = null;
                 window._chatVoiceEnabled = true;
                 localStorage.setItem('chatVoiceEnabled', 'true');
-                // Создаём Audio ЭЛЕМЕНТ ВНУТРИ user gesture (клик) — это ключевое требование
-                // Chrome Autoplay Policy: Audio, созданный вне жеста, не имеет права на play().
-                // Создаём его здесь, чтобы последующие play() в XHR-колбэках работали.
-                _ttsAudio = new Audio();
-                _ttsAudio.volume = 1.0;
-                // Валидный минимальный WAV (RIFF/WAVE/PCM, 16kHz моно, ~0.1с тишины)
-                // Без корректного заголовка Chrome не декодирует файл и unlock не сработает
-                try {
-                    var _sr = 16000;
-                    var _ns = Math.floor(_sr * 0.1);
-                    var _ds = _ns * 2; // 16-bit
-                    var _fs = 44 + _ds;
-                    var _wav = new Uint8Array(_fs);
-                    var _dv = new DataView(_wav.buffer);
-                    _dv.setUint32(0, 0x52494646, false); // "RIFF"
-                    _dv.setUint32(4, _fs - 8, true);
-                    _dv.setUint32(8, 0x57415645, false); // "WAVE"
-                    _dv.setUint32(12, 0x666D7420, false); // "fmt "
-                    _dv.setUint32(16, 16, true);
-                    _dv.setUint16(20, 1, true); // PCM
-                    _dv.setUint16(22, 1, true); // mono
-                    _dv.setUint32(24, _sr, true);
-                    _dv.setUint32(28, _sr * 2, true);
-                    _dv.setUint16(32, 2, true);
-                    _dv.setUint16(34, 16, true);
-                    _dv.setUint32(36, 0x64617461, false); // "data"
-                    _dv.setUint32(40, _ds, true);
-                    // data уже заполнена нулями (тишина)
-                    var _silentBlob = new Blob([_wav.buffer], {type: 'audio/wav'});
-                    var _silentUrl = URL.createObjectURL(_silentBlob);
-                    _ttsAudio.src = _silentUrl;
-                    _ttsAudio.volume = 0.01;
-                    _ttsAudio.play().then(function() {
-                        _ttsAudio.pause();
-                        _ttsAudio.volume = 1.0;
-                        // НЕ очищаем src! Очистка src сбрасывает autoplay permission.
-                        URL.revokeObjectURL(_silentUrl);
-                    }).catch(function(e) {
-                        console.warn('[TTS] autoplay unlock failed:', e);
-                        _ttsAudio.volume = 1.0;
-                        URL.revokeObjectURL(_silentUrl);
+                // Создаём/resume AudioContext ВНУТРИ user gesture (клик)
+                // Chrome Autoplay Policy требует user gesture для AudioContext.resume(),
+                // но после resume все последующие decodeAudioData + start() работают без ограничений.
+                if (!_ttsAudioCtx || _ttsAudioCtx.state === 'closed') {
+                    try {
+                        _ttsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    } catch(e) {
+                        console.warn('[TTS] AudioContext creation failed:', e);
+                    }
+                }
+                if (_ttsAudioCtx && _ttsAudioCtx.state === 'suspended') {
+                    _ttsAudioCtx.resume().catch(function(e) {
+                        console.warn('[TTS] AudioContext resume failed:', e);
                     });
-                } catch(e) {
-                    console.warn('[TTS] autoplay unlock exception:', e);
                 }
                 showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
             } else {
@@ -16866,9 +16847,9 @@ except Exception as e:
                 window._chatVoiceEnabled = false;
                 localStorage.setItem('chatVoiceEnabled', 'false');
                 // Останавливаем воспроизведение
-                if (_currentAudio) {
-                    _currentAudio.pause();
-                    _currentAudio = null;
+                if (_currentAudioSource) {
+                    try { _currentAudioSource.stop(); } catch(e) {}
+                    _currentAudioSource = null;
                 }
                 showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
             }
@@ -16879,48 +16860,17 @@ except Exception as e:
             var saved = localStorage.getItem('chatVoiceEnabled');
             if (saved === 'true') {
                 window._chatVoiceEnabled = true;
-                // Создаём Audio элемент и пытаемся разблокировать autoplay
-                _ttsAudio = new Audio();
-                _ttsAudio.volume = 1.0;
-                // Попытка autoplay unlock: воспроизводим короткий silent WAV
+                // Пытаемся создать AudioContext (resume может не сработать без user gesture,
+                // но при первом клике gesture handler его разблокирует)
                 try {
-                    var _sr = 16000;
-                    var _ns = Math.floor(_sr * 0.05);
-                    var _ds = _ns * 2;
-                    var _fs = 44 + _ds;
-                    var _wav = new Uint8Array(_fs);
-                    var _dv = new DataView(_wav.buffer);
-                    _dv.setUint32(0, 0x52494646, false);
-                    _dv.setUint32(4, _fs - 8, true);
-                    _dv.setUint32(8, 0x57415645, false);
-                    _dv.setUint32(12, 0x666D7420, false);
-                    _dv.setUint32(16, 16, true);
-                    _dv.setUint16(20, 1, true);
-                    _dv.setUint16(22, 1, true);
-                    _dv.setUint32(24, _sr, true);
-                    _dv.setUint32(28, _sr * 2, true);
-                    _dv.setUint16(32, 2, true);
-                    _dv.setUint16(34, 16, true);
-                    _dv.setUint32(36, 0x64617461, false);
-                    _dv.setUint32(40, _ds, true);
-                    var _silentBlob = new Blob([_wav.buffer], {type: 'audio/wav'});
-                    var _silentUrl = URL.createObjectURL(_silentBlob);
-                    var _oldSrc = _ttsAudio.src;
-                    _ttsAudio.src = _silentUrl;
-                    _ttsAudio.volume = 0.01;
-                    _ttsAudio.play().then(function() {
-                        _ttsAudio.pause();
-                        _ttsAudio.volume = 1.0;
-                        URL.revokeObjectURL(_silentUrl);
-                    }).catch(function(e) {
-                        console.warn('[TTS] autoplay unlock on page load failed:', e);
-                        _ttsAudio.volume = 1.0;
-                        URL.revokeObjectURL(_silentUrl);
-                        // Если unlock не удался — очищаем src, чтобы не мешать
-                        _ttsAudio.src = '';
-                    });
+                    _ttsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    if (_ttsAudioCtx.state === 'suspended') {
+                        _ttsAudioCtx.resume().catch(function() {
+                            // resume без жеста обычно блокируется — это ожидаемо
+                        });
+                    }
                 } catch(e) {
-                    console.warn('[TTS] autoplay unlock exception:', e);
+                    console.warn('[TTS] AudioContext creation failed:', e);
                 }
                 var btn = document.getElementById('chat-tts-btn');
                 if (btn) {
@@ -16937,7 +16887,7 @@ except Exception as e:
             }
         })();
 
-        // Пересоздаём _ttsAudio при первом user gesture (клик), чтобы Chrome разрешил autoplay
+        // Resume/создаём AudioContext при первом user gesture (клик), чтобы Chrome разрешил аудио
         (function() {
             var _unlocked = false;
             function _reinitTtsOnGesture() {
@@ -16946,45 +16896,18 @@ except Exception as e:
                 document.removeEventListener('click', _reinitTtsOnGesture);
                 document.removeEventListener('touchstart', _reinitTtsOnGesture);
                 if (window._chatVoiceEnabled) {
-                    // Пересоздаём Audio внутри user gesture
-                    _ttsAudio = new Audio();
-                    _ttsAudio.volume = 1.0;
-                    // Silent WAV unlock теперь точно сработает
-                    try {
-                        var _sr2 = 16000;
-                        var _ns2 = Math.floor(_sr2 * 0.05);
-                        var _ds2 = _ns2 * 2;
-                        var _fs2 = 44 + _ds2;
-                        var _wav2 = new Uint8Array(_fs2);
-                        var _dv2 = new DataView(_wav2.buffer);
-                        _dv2.setUint32(0, 0x52494646, false);
-                        _dv2.setUint32(4, _fs2 - 8, true);
-                        _dv2.setUint32(8, 0x57415645, false);
-                        _dv2.setUint32(12, 0x666D7420, false);
-                        _dv2.setUint32(16, 16, true);
-                        _dv2.setUint16(20, 1, true);
-                        _dv2.setUint16(22, 1, true);
-                        _dv2.setUint32(24, _sr2, true);
-                        _dv2.setUint32(28, _sr2 * 2, true);
-                        _dv2.setUint16(32, 2, true);
-                        _dv2.setUint16(34, 16, true);
-                        _dv2.setUint32(36, 0x64617461, false);
-                        _dv2.setUint32(40, _ds2, true);
-                        var _silentBlob2 = new Blob([_wav2.buffer], {type: 'audio/wav'});
-                        var _silentUrl2 = URL.createObjectURL(_silentBlob2);
-                        _ttsAudio.src = _silentUrl2;
-                        _ttsAudio.volume = 0.01;
-                        _ttsAudio.play().then(function() {
-                            _ttsAudio.pause();
-                            _ttsAudio.volume = 1.0;
-                            URL.revokeObjectURL(_silentUrl2);
-                        }).catch(function(e) {
-                            console.warn('[TTS] gesture unlock failed:', e);
-                            _ttsAudio.volume = 1.0;
-                            URL.revokeObjectURL(_silentUrl2);
+                    // Создаём/resume AudioContext внутри user gesture
+                    if (!_ttsAudioCtx || _ttsAudioCtx.state === 'closed') {
+                        try {
+                            _ttsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        } catch(e) {
+                            console.warn('[TTS] AudioContext creation failed:', e);
+                        }
+                    }
+                    if (_ttsAudioCtx && _ttsAudioCtx.state === 'suspended') {
+                        _ttsAudioCtx.resume().catch(function(e) {
+                            console.warn('[TTS] gesture resume failed:', e);
                         });
-                    } catch(e) {
-                        console.warn('[TTS] gesture unlock exception:', e);
                     }
                 }
             }
