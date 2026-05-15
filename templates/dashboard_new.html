@@ -16758,6 +16758,26 @@ except Exception as e:
                 btn.onmouseout = null;
                 window._chatVoiceEnabled = true;
                 localStorage.setItem('chatVoiceEnabled', 'true');
+                // Разблокировка Audio в user gesture (Chrome Autoplay Policy)
+                // Первый play() должен быть в жесте пользователя, иначе
+                // последующие play() в XHR-колбэках будут заблокированы
+                try {
+                    var _silent = new Uint8Array(44);
+                    var _silentBlob = new Blob([_silent.buffer], {type: 'audio/wav'});
+                    var _silentUrl = URL.createObjectURL(_silentBlob);
+                    _ttsAudio.src = _silentUrl;
+                    _ttsAudio.volume = 0.01;
+                    _ttsAudio.play().then(function() {
+                        _ttsAudio.pause();
+                        _ttsAudio.volume = 1.0;
+                        _ttsAudio.src = '';
+                        URL.revokeObjectURL(_silentUrl);
+                    }).catch(function() {
+                        _ttsAudio.volume = 1.0;
+                        _ttsAudio.src = '';
+                        URL.revokeObjectURL(_silentUrl);
+                    });
+                } catch(e) {}
                 showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
             } else {
                 btn.dataset.active = '';
