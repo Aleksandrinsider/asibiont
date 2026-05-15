@@ -2176,8 +2176,8 @@
                 messages.appendChild(messageDiv);
             }
 
-            // TTS: озвучиваем AI-сообщение если включено
-            if (normalizedSender === 'ai' && text && !_prepend) {
+            // TTS: озвучиваем AI-сообщение если включено (не при загрузке истории)
+            if (normalizedSender === 'ai' && text && !_prepend && !window._isLoadingHistory) {
                 _speakText(text);
             }
 
@@ -2203,7 +2203,8 @@
                         messages.appendChild(welcomeMessage);
                     }
                     
-                    // Add history messages
+                    // Add history messages (флаг чтобы TTS не озвучивал старые сообщения)
+                    window._isLoadingHistory = true;
                     if (data.interactions) {
                         data.interactions.forEach((interaction, index) => {
                             // Mark ID as displayed BEFORE calling addMessage so that
@@ -2212,6 +2213,7 @@
                             addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
                         });
                     }
+                    window._isLoadingHistory = false;
                     
                     // Update lastMessageCount
                     lastMessageCount = data.interactions ? data.interactions.length : 0;
