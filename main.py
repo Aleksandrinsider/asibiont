@@ -2678,14 +2678,20 @@ async def tts_handler(request):
 
         import io
         import edge_tts
+        import asyncio
 
         buf = io.BytesIO()
         communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
-        await communicate.save(buf)
+        # Используем stream() вместо save(), так как save() в edge-tts 7.x
+        # принимает только str|os.PathLike, а не BytesIO
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
         buf.seek(0)
+        audio_data = buf.read()
 
         return web.Response(
-            body=buf.read(),
+            body=audio_data,
             content_type='audio/mpeg',
             headers={
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -2693,6 +2699,9 @@ async def tts_handler(request):
                 'Expires': '0'
             }
         )
+    except asyncio.TimeoutError:
+        logger.error("[TTS] Timeout while generating speech")
+        return web.json_response({'error': 'TTS timeout'}, status=504)
     except Exception as e:
         logger.error(f"[TTS] Error: {e}", exc_info=True)
         return web.json_response({'error': 'TTS failed'}, status=500)

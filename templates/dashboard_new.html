@@ -2162,7 +2162,7 @@
                     <div style="flex: 1; min-width: 0;">
                         ${normalizedSender === 'ai' ? `<div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:3px;">${escapeHtml(_senderName)}${_toAgentName && _toAgentName !== _senderName ? ' <span style="font-weight:400;color:#6C727F;">> ' + escapeHtml(_toAgentName) + '</span>' : ''}</div>` : ''}
                         <div class="message-text">${_toAgentName ? '<div class="delegation-label">Поручение агенту</div>' : ''}${processedText}</div>
-                        <div class="message-time">${dateString} ${timeString} ${saveBtn}</div>
+                        <div class="message-time">${dateString} ${timeString} ${saveBtn}${normalizedSender === 'ai' && text && window._chatVoiceEnabled ? `<a href="#" onclick="_speakText('${escapeHtml(text).replace(/'/g, "\\'")}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" title="${window._lang === 'en' ? 'Read aloud' : 'Озвучить'}">🔊</a>` : ''}</div>
                     </div>
                 </div>
             `;
