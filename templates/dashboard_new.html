@@ -2129,9 +2129,10 @@
             // Имя агента: из agentInfo (пер-сообщение), или глобальный (window._activeAgentData), или ASI
             const _resolvedAgent = agentInfo || null;  // не берём window._activeAgentData — ASI по умолчанию
             const _senderName = (_resolvedAgent && _resolvedAgent.name) || 'ASI Biont';
-            // Сохраняем gender для TTS (data-gender используется _speakLastAIMessage)
+            // Сохраняем gender и sender для TTS (data-gender и data-sender используются _speakLastAIMessage)
             if (normalizedSender === 'ai') {
                 messageDiv.dataset.gender = (_resolvedAgent && _resolvedAgent.gender) || 'female';
+                messageDiv.dataset.sender = _senderName;
             }
 
             // Prepare avatar HTML
@@ -2183,7 +2184,7 @@
             // TTS: озвучиваем AI-сообщение если включено (не при загрузке истории)
             if (normalizedSender === 'ai' && text && !_prepend && !window._isLoadingHistory) {
                 var _ttsGender = (_resolvedAgent && _resolvedAgent.gender) || 'female';
-                _speakText(text, _ttsGender);
+                _speakText(text, _ttsGender, _senderName);
             }
 
             if (!_prepend && !_opts.skipAutoScroll) {
@@ -16808,7 +16809,7 @@ except Exception as e:
             }
         }
 
-        function _speakText(text, gender) {
+        function _speakText(text, gender, senderName) {
             if (!window._chatVoiceEnabled) return;
             // Guard: если AudioContext не создан — отключаем голос
             if (!_ttsAudioCtx || _ttsAudioCtx.state === 'closed') {
@@ -16839,9 +16840,15 @@ except Exception as e:
                 .trim();
             if (!cleanText) return;
 
-            // Добавляем в очередь — будет воспроизведено последовательно
             // gender: 'male' → мужской голос, 'female' (по умолчанию) → женский
             if (typeof gender !== 'string') gender = 'female';
+
+            // Если есть имя отправителя — сначала озвучиваем "Сообщение от [имя]"
+            if (senderName && typeof senderName === 'string' && senderName.trim()) {
+                _ttsQueue.push({text: 'Сообщение от ' + senderName.trim(), voice: gender});
+            }
+
+            // Добавляем сам текст в очередь — будет воспроизведён после имени
             _ttsQueue.push({text: cleanText, voice: gender});
             _processTtsQueue();
         }
@@ -16857,9 +16864,10 @@ except Exception as e:
             if (!_txtEl) return;
             var _txt = _txtEl.textContent || _txtEl.innerText || '';
             if (_txt.trim()) {
-                // Читаем gender из data-gender на контейнере сообщения (устанавливается в addMessage)
+                // Читаем gender и sender из data-атрибутов (устанавливаются в addMessage)
                 var _gender = _last.dataset.gender || 'female';
-                _speakText(_txt.trim(), _gender);
+                var _sender = _last.dataset.sender || '';
+                _speakText(_txt.trim(), _gender, _sender);
             }
         }
         
