@@ -16694,6 +16694,19 @@ except Exception as e:
                 btn.onmouseout = null;
                 window._chatVoiceEnabled = true;
                 localStorage.setItem('chatVoiceEnabled', 'true');
+                // Прогрев speechSynthesis (Chrome требует первый speak() в обработчике клика)
+                try {
+                    if (window.speechSynthesis) {
+                        // Загружаем голоса (Chrome загружает их лениво)
+                        if (!_ttsVoice) _initTTS();
+                        // Прогревочный speak с правильным lang
+                        var _wu = new SpeechSynthesisUtterance('');
+                        _wu.lang = 'ru-RU';
+                        if (_ttsVoice) _wu.voice = _ttsVoice;
+                        window.speechSynthesis.speak(_wu);
+                        window.speechSynthesis.cancel();
+                    }
+                } catch(_e) {}
                 showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
             } else {
                 btn.dataset.active = '';
@@ -16708,6 +16721,66 @@ except Exception as e:
                 if (window.speechSynthesis) window.speechSynthesis.cancel();
                 showNotification(window._lang === 'en' ? 'Voice output disabled' : 'Озвучивание выключено', 'info');
             }
+        }
+
+        // Кеш для выбранного голоса TTS
+        var _ttsVoice = null;
+
+        // Инициализация TTS — загружает голоса и выбирает лучший русский
+        function _initTTS() {
+            if (!window.speechSynthesis) return;
+            var voices = window.speechSynthesis.getVoices();
+            if (!voices || voices.length === 0) return;
+
+            // Приоритет русских голосов (от лучшего к худшему)
+            var preferred = null;
+            var fallback = null;
+            for (var i = 0; i < voices.length; i++) {
+                var v = voices[i];
+                // Сохраняем первый нероботизированный русский голос
+                if (v.lang && (v.lang.startsWith('ru') || v.lang.startsWith('be') || v.lang.startsWith('uk'))) {
+                    if (!preferred || v.name.indexOf('Irina') !== -1 || v.name.indexOf('Pavel') !== -1 || v.name.indexOf('Svetlana') !== -1) {
+                        preferred = v;
+                    }
+                    if (!fallback) fallback = v;
+                }
+                // Запоминаем первый русский голос вообще
+                if (!fallback && v.lang && v.lang.startsWith('ru')) {
+                    fallback = v;
+                }
+            }
+            _ttsVoice = preferred || fallback || null;
+
+            // Если русских голосов нет — берём первый женский голос (обычно звучит естественнее)
+            if (!_ttsVoice) {
+                for (var i = 0; i < voices.length; i++) {
+                    var v = voices[i];
+                    if (v.name.indexOf('female') !== -1 || v.name.indexOf('Zira') !== -1 || v.name.indexOf('Hazel') !== -1) {
+                        _ttsVoice = v;
+                        break;
+                    }
+                }
+            }
+            // Если всё ещё нет — берём любой голос
+            if (!_ttsVoice && voices.length > 0) {
+                _ttsVoice = voices[0];
+            }
+        }
+
+        // Загружаем голоса при загрузке страницы (Chrome загружает голоса асинхронно)
+        if (window.speechSynthesis) {
+            // Немедленная попытка
+            if (window.speechSynthesis.getVoices().length > 0) {
+                _initTTS();
+            }
+            // Chrome загружает голоса асинхронно — ловим событие
+            window.speechSynthesis.onvoiceschanged = function() {
+                _initTTS();
+            };
+            // Дополнительная попытка через 500мс (для надёжности)
+            setTimeout(function() {
+                if (!_ttsVoice) _initTTS();
+            }, 500);
         }
 
         function _speakText(text) {
@@ -16727,8 +16800,14 @@ except Exception as e:
             if (!cleanText) return;
             var utterance = new SpeechSynthesisUtterance(cleanText);
             utterance.lang = 'ru-RU';
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
+            // Если нашли русский голос — используем его, иначе lang определяет синтезатор
+            if (_ttsVoice) {
+                utterance.voice = _ttsVoice;
+            }
+            // Более естественные параметры: чуть медленнее, с лёгкой модуляцией
+            utterance.rate = 0.9;
+            utterance.pitch = 1.05;
+            utterance.volume = 1.0;
             window.speechSynthesis.speak(utterance);
         }
 
