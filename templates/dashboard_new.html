@@ -2129,6 +2129,10 @@
             // Имя агента: из agentInfo (пер-сообщение), или глобальный (window._activeAgentData), или ASI
             const _resolvedAgent = agentInfo || null;  // не берём window._activeAgentData — ASI по умолчанию
             const _senderName = (_resolvedAgent && _resolvedAgent.name) || 'ASI Biont';
+            // Сохраняем gender для TTS (data-gender используется _speakLastAIMessage)
+            if (normalizedSender === 'ai') {
+                messageDiv.dataset.gender = (_resolvedAgent && _resolvedAgent.gender) || 'female';
+            }
 
             // Prepare avatar HTML
             let avatarHtml = '';
@@ -2178,7 +2182,8 @@
 
             // TTS: озвучиваем AI-сообщение если включено (не при загрузке истории)
             if (normalizedSender === 'ai' && text && !_prepend && !window._isLoadingHistory) {
-                _speakText(text);
+                var _ttsGender = (_resolvedAgent && _resolvedAgent.gender) || 'female';
+                _speakText(text, _ttsGender);
             }
 
             if (!_prepend && !_opts.skipAutoScroll) {
@@ -16738,17 +16743,19 @@ except Exception as e:
         function _processTtsQueue() {
             if (_ttsPlaying || _ttsQueue.length === 0) return;
             _ttsPlaying = true;
-            var _text = _ttsQueue.shift();
+            var _item = _ttsQueue.shift(); // {text, voice}
+            var _txt = _item.text;
+            var _voice = _item.voice || 'female';
 
             fetch('/api/tts', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: _text})
+                body: JSON.stringify({text: _txt, voice: _voice})
             })
             .then(function(response) {
                 if (!response.ok) {
                     console.error('[TTS] server error:', response.status);
-                    _fallbackSpeech(_text);
+                    _fallbackSpeech(_txt);
                     _ttsPlaying = false;
                     setTimeout(_processTtsQueue, 100);
                     return null;
@@ -16782,7 +16789,7 @@ except Exception as e:
             })
             .catch(function(err) {
                 console.error('[TTS] play error:', err);
-                _fallbackSpeech(_text);
+                _fallbackSpeech(_txt);
                 _ttsPlaying = false;
                 setTimeout(_processTtsQueue, 100);
             });
@@ -16801,7 +16808,7 @@ except Exception as e:
             }
         }
 
-        function _speakText(text) {
+        function _speakText(text, gender) {
             if (!window._chatVoiceEnabled) return;
             // Guard: если AudioContext не создан — отключаем голос
             if (!_ttsAudioCtx || _ttsAudioCtx.state === 'closed') {
@@ -16833,7 +16840,9 @@ except Exception as e:
             if (!cleanText) return;
 
             // Добавляем в очередь — будет воспроизведено последовательно
-            _ttsQueue.push(cleanText);
+            // gender: 'male' → мужской голос, 'female' (по умолчанию) → женский
+            if (typeof gender !== 'string') gender = 'female';
+            _ttsQueue.push({text: cleanText, voice: gender});
             _processTtsQueue();
         }
         
@@ -16848,7 +16857,9 @@ except Exception as e:
             if (!_txtEl) return;
             var _txt = _txtEl.textContent || _txtEl.innerText || '';
             if (_txt.trim()) {
-                _speakText(_txt.trim());
+                // Читаем gender из data-gender на контейнере сообщения (устанавливается в addMessage)
+                var _gender = _last.dataset.gender || 'female';
+                _speakText(_txt.trim(), _gender);
             }
         }
         

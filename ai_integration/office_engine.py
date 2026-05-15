@@ -133,7 +133,7 @@ def _save_office_anchor_sync(user_id: int, agent_name: str, text: str,
 
 # ── Сохранение сообщения агента в историю чата ──────────────────────────────
 
-def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar_url: str, text: str, internal: bool = False):
+def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar_url: str, text: str, internal: bool = False, gender: str = 'male'):
     """Сохраняет сообщение агента в Interaction.
     internal=True  → message_type='agent_report' (скрыто из чата, только для внутреннего контекста).
     internal=False → message_type='ai' (показывается в чате как реплика ASI).
@@ -150,6 +150,7 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
                 'id': agent_id,
                 # Никогда не сохраняем base64 data URI — только proxy URL или пусто
                 'avatar_url': (f'/api/arena/agent_avatar/{agent_id}' if agent_id and (not avatar_url or avatar_url.startswith('data:')) else (avatar_url or '')),
+                'gender': gender,
             },
             'text': text,
         }, ensure_ascii=False)
@@ -1066,6 +1067,7 @@ class OfficeEngine:
                         'specialization': a.specialization or '',
                         'description': (a.description or '')[:150],
                         'avatar_url': f'/api/arena/agent_avatar/{a.id}',  # никогда не base64
+                        'gender': getattr(a, 'gender', 'male'),
                     }
                     for a in _rows if a.id in _sub_ids
                 ]
@@ -1177,6 +1179,7 @@ class OfficeEngine:
                     target_agent.get('avatar_url', ''),
                     result[:800],
                     False,
+                    target_agent.get('gender', 'male'),
                 )
                 # Уведомление в Telegram
                 _tg_result = f"{target_agent['name']}:\n{result[:600]}"
@@ -2053,7 +2056,7 @@ class OfficeEngine:
                         if _agent_report_text.strip():
                             import json as _j_rep
                             _agent_report_json = _j_rep.dumps({
-                                '__agent': {'name': _agent_name_db, 'id': _agent_id},
+                                '__agent': {'name': _agent_name_db, 'id': _agent_id, 'gender': _agent_gender},
                                 'text': _agent_report_text.strip(),
                             }, ensure_ascii=False)
                             _save_interaction_for_director(user.telegram_id, _agent_report_json)

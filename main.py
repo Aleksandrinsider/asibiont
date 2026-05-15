@@ -2664,7 +2664,9 @@ async def transcribe_handler(request):
 async def tts_handler(request):
     """POST /api/tts — озвучивание текста через Edge-TTS (Microsoft Neural).
 
-    Принимает JSON: {"text": "..."}. Возвращает audio/mpeg.
+    Принимает JSON: {"text": "...", "voice": "male"|"female"}.
+    voice: 'male' → ru-RU-DmitryNeural, 'female' (или любой другой) → ru-RU-SvetlanaNeural.
+    Возвращает audio/mpeg.
     """
     try:
         user_id = await get_user_id_from_request(request)
@@ -2676,12 +2678,19 @@ async def tts_handler(request):
         if not text:
             return web.json_response({'error': 'text required'}, status=400)
 
+        voice = (data.get('voice') or '').strip().lower()
+        # Выбор голоса: male → Дмитрий, всё остальное → Светлана (female по умолчанию)
+        if voice == 'male':
+            voice_name = "ru-RU-DmitryNeural"
+        else:
+            voice_name = "ru-RU-SvetlanaNeural"
+
         import io
         import edge_tts
         import asyncio
 
         buf = io.BytesIO()
-        communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
+        communicate = edge_tts.Communicate(text, voice_name)
         # Используем stream() вместо save(), так как save() в edge-tts 7.x
         # принимает только str|os.PathLike, а не BytesIO
         async for chunk in communicate.stream():
