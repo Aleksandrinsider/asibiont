@@ -6455,13 +6455,11 @@ async def setup_advisor_handler(request):
 
 
 async def get_feed_handler(request):
-    """API endpoint to get agent activity reports for the feed (replaces old Post-based feed)"""
+    """API endpoint to get posts for the news feed (from Post table)"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id')
-        logger.info(f"Feed handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
         if not user_id:
-            logger.warning("No user_id in session for feed API")
             return web.json_response({'error': 'Not authenticated'}, status=401)
 
         session_db = Session()
@@ -6469,9 +6467,6 @@ async def get_feed_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
-
-            # Типы событий для ленты — только отчёты AI о дне пользователя
-            _feed_report_types = {'daily_report', 'coordinator_summary'}
 
             # Собираем ID пользователей: свои + избранные контакты
             _target_user_ids = {user.id}
@@ -6494,21 +6489,39 @@ async def get_feed_handler(request):
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-            # Get agent activity log entries (reports) — свои + избранных контактов
-            activities = session_db.query(AgentActivityLog).filter(
-                AgentActivityLog.user_id.in_(_target_user_ids),
-                AgentActivityLog.activity_type.in_(_feed_report_types),
-            ).order_by(AgentActivityLog.created_at.desc()).limit(50).all()
+            # Получаем посты из Post таблицы — свои + избранных контактов
+            posts = session_db.query(Post).filter(
+                Post.user_id.in_(_target_user_ids),
+            ).order_by(Post.created_at.desc()).limit(50).all()
 
-            logger.info(f"Feed: found {len(activities)} activities for user {user.id} (targets: {_target_user_ids})")
-
+            import base64
             data = []
-            for a in activities:
-                data.append(_aal_to_dict(a))
+            for p in posts:
+                post_dict = {
+                    'id': p.id,
+                    'user_id': p.user_id,
+                    'username': p.username,
+                    'content': p.content,
+                    'image_url': p.image_url,
+                    'image_mime': p.image_mime,
+                    'post_type': p.post_type,
+                    'created_at': (p.created_at.isoformat() + 'Z') if p.created_at else None,
+                }
+                # Конвертируем image_data (LargeBinary) в base64 для inline-отображения
+                if p.image_data:
+                    try:
+                        encoded = base64.b64encode(p.image_data).decode('ascii')
+                        post_dict['image_data_b64'] = encoded
+                    except Exception:
+                        post_dict['image_data_b64'] = None
+                else:
+                    post_dict['image_data_b64'] = None
+
+                data.append(post_dict)
 
             return web.json_response({
                 'success': True,
-                'activities': data,
+                'posts': data,
                 'count': len(data),
             })
 

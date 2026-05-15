@@ -11707,8 +11707,49 @@ except Exception as e:
         }
 
         let isLoadingFeed = false;
+        function createPostCard(post) {
+            const card = document.createElement('div');
+            card.style.cssText = 'padding:14px 18px;border-bottom:1px solid #F0F3F5;display:flex;flex-direction:column;gap:8px;';
+            
+            // Header: username + time
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+            const author = document.createElement('span');
+            author.style.cssText = 'font-size:13px;font-weight:600;color:#1F2328;';
+            author.textContent = post.username || 'User #' + post.user_id;
+            header.appendChild(author);
+            
+            const time = document.createElement('span');
+            time.style.cssText = 'font-size:11px;color:#9CA3AF;';
+            time.textContent = post.created_at ? new Date(post.created_at).toLocaleString(window._lang === 'en' ? 'en-US' : 'ru-RU', {
+                day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit',
+                timeZone: window.USER_TIMEZONE || 'UTC'
+            }) : '';
+            header.appendChild(time);
+            card.appendChild(header);
+            
+            // Content text
+            if (post.content) {
+                const contentEl = document.createElement('div');
+                contentEl.style.cssText = 'font-size:13px;color:#374151;line-height:1.5;white-space:pre-wrap;word-break:break-word;';
+                contentEl.textContent = post.content;
+                card.appendChild(contentEl);
+            }
+            
+            // Image (if image_data_b64 present)
+            if (post.image_data_b64) {
+                const img = document.createElement('img');
+                img.style.cssText = 'max-width:100%;max-height:300px;border-radius:6px;object-fit:cover;margin-top:4px;';
+                img.src = 'data:' + (post.image_mime || 'image/webp') + ';base64,' + post.image_data_b64;
+                img.loading = 'lazy';
+                card.appendChild(img);
+            }
+            
+            return card;
+        }
+
         async function loadFeed() {
-            if (isLoadingFeed) return; // Zaschita ot povtornoy zagruzki
+            if (isLoadingFeed) return;
             isLoadingFeed = true;
             try {
                 const response = await fetch('/api/feed?t=' + Date.now(), {
@@ -11724,21 +11765,20 @@ except Exception as e:
 
                 const feedContainer = document.getElementById('feed-posts');
                 
-                if (data.activities && data.activities.length > 0) {
+                if (data.posts && data.posts.length > 0) {
                     feedContainer.innerHTML = '';
                     
-                    // Otobrazhaem AgentActivityLog v lente
-                    data.activities.forEach((activity) => {
+                    data.posts.forEach((post) => {
                         try {
-                            const item = createTimelineItem(activity, false);
-                            feedContainer.appendChild(item);
+                            const card = createPostCard(post);
+                            feedContainer.appendChild(card);
                         } catch(e) {
-                            console.error('[FEED] Error rendering activity:', activity.id, e);
+                            console.error('[FEED] Error rendering post:', post.id, e);
                         }
                     });
                     
                 } else {
-                    // Pustaya lenta
+                    // Empty feed
                     feedContainer.innerHTML = `
                         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
                             <p style="margin: 0; font-size: 13px; color: #9CA3AF; max-width: 340px;">${t('feed-empty-desc')}</p>
@@ -16681,11 +16721,6 @@ except Exception as e:
 
         var _currentAudio = null; // текущий Audio элемент
 
-        // Создаём Audio-элемент заранее в контексте пользовательского жеста,
-        // чтобы обойти autoplay policy браузера
-        var _ttsAudio = new Audio();
-        _ttsAudio.volume = 1.0;
-
         function _speakText(text) {
             if (!window._chatVoiceEnabled) return;
             // Останавливаем предыдущее воспроизведение
@@ -16758,26 +16793,51 @@ except Exception as e:
                 btn.onmouseout = null;
                 window._chatVoiceEnabled = true;
                 localStorage.setItem('chatVoiceEnabled', 'true');
-                // Разблокировка Audio в user gesture (Chrome Autoplay Policy)
-                // Первый play() должен быть в жесте пользователя, иначе
-                // последующие play() в XHR-колбэках будут заблокированы
+                // Создаём Audio ЭЛЕМЕНТ ВНУТРИ user gesture (клик) — это ключевое требование
+                // Chrome Autoplay Policy: Audio, созданный вне жеста, не имеет права на play().
+                // Создаём его здесь, чтобы последующие play() в XHR-колбэках работали.
+                _ttsAudio = new Audio();
+                _ttsAudio.volume = 1.0;
+                // Валидный минимальный WAV (RIFF/WAVE/PCM, 16kHz моно, ~0.1с тишины)
+                // Без корректного заголовка Chrome не декодирует файл и unlock не сработает
                 try {
-                    var _silent = new Uint8Array(44);
-                    var _silentBlob = new Blob([_silent.buffer], {type: 'audio/wav'});
+                    var _sr = 16000;
+                    var _ns = Math.floor(_sr * 0.1);
+                    var _ds = _ns * 2; // 16-bit
+                    var _fs = 44 + _ds;
+                    var _wav = new Uint8Array(_fs);
+                    var _dv = new DataView(_wav.buffer);
+                    _dv.setUint32(0, 0x52494646, false); // "RIFF"
+                    _dv.setUint32(4, _fs - 8, true);
+                    _dv.setUint32(8, 0x57415645, false); // "WAVE"
+                    _dv.setUint32(12, 0x666D7420, false); // "fmt "
+                    _dv.setUint32(16, 16, true);
+                    _dv.setUint16(20, 1, true); // PCM
+                    _dv.setUint16(22, 1, true); // mono
+                    _dv.setUint32(24, _sr, true);
+                    _dv.setUint32(28, _sr * 2, true);
+                    _dv.setUint16(32, 2, true);
+                    _dv.setUint16(34, 16, true);
+                    _dv.setUint32(36, 0x64617461, false); // "data"
+                    _dv.setUint32(40, _ds, true);
+                    // data уже заполнена нулями (тишина)
+                    var _silentBlob = new Blob([_wav.buffer], {type: 'audio/wav'});
                     var _silentUrl = URL.createObjectURL(_silentBlob);
                     _ttsAudio.src = _silentUrl;
                     _ttsAudio.volume = 0.01;
                     _ttsAudio.play().then(function() {
                         _ttsAudio.pause();
                         _ttsAudio.volume = 1.0;
-                        _ttsAudio.src = '';
+                        // НЕ очищаем src! Очистка src сбрасывает autoplay permission.
                         URL.revokeObjectURL(_silentUrl);
-                    }).catch(function() {
+                    }).catch(function(e) {
+                        console.warn('[TTS] autoplay unlock failed:', e);
                         _ttsAudio.volume = 1.0;
-                        _ttsAudio.src = '';
                         URL.revokeObjectURL(_silentUrl);
                     });
-                } catch(e) {}
+                } catch(e) {
+                    console.warn('[TTS] autoplay unlock exception:', e);
+                }
                 showNotification(window._lang === 'en' ? 'Voice output enabled' : 'Озвучивание включено', 'info');
             } else {
                 btn.dataset.active = '';
