@@ -116,7 +116,7 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
     title_line = f"{name}, {job_title}" if job_title else name
     _job_line = ("\nДОЛЖНОСТЬ / РОЛЬ: " + job_title) if job_title else ""
 
-    overlay = f"""
+    overlay_agent_id = f"""
 ═══════════════════════════════════════════════════════
 РЕЖИМ АГЕНТА: {title_line}
 ═══════════════════════════════════════════════════════
@@ -128,14 +128,20 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
 {_job_line}
 """
 
+    overlay = overlay_agent_id  # будет расширяться ниже
+
     # Гендерная инструкция: только по явному полю gender из БД
     _gender_bd = (agent_data.get('gender') or '').strip().lower()
     _is_fem = _gender_bd in ('female', 'женский', 'жен')
-    if _is_fem:
-        overlay += (
-            "\nВАЖНО: Ты ЖЕНЩИНА. Используй женский род во всех формах: "
-            "сделала, нашла, подготовила, согласна, готова, проанализировала.\n"
-        )
+
+    # Удаляем из базового промпта жёсткую инструкцию "Ты МУЖСКОГО рода",
+    # чтобы она не конфликтовала с гендером агента (особенно для женских агентов).
+    import re as _re_gen
+    base_system_prompt = _re_gen.sub(
+        r'(?mi)^Ты\s+МУЖСКОГО\s+рода\s*[—\-].*?\n',
+        '',
+        base_system_prompt,
+    ).strip()
 
     # Обогащение personality: анализ стиля общения
     try:
@@ -265,7 +271,26 @@ def build_agent_system_prompt(agent_data: dict, base_system_prompt: str) -> str:
                 base_system_prompt,
             )
 
-    combined = overlay + "\n" + base_system_prompt
+    # ── Гендерная инструкция в КОНЦЕ промпта (после base) ──
+    # Размещаем ПОСЛЕ base_system_prompt, чтобы переопределить
+    # мужскую инструкцию из базового промпта (recency bias).
+    if _is_fem:
+        overlay += (
+            "\n\nВАЖНО: Ты ЖЕНЩИНА. Используй женский род во всех формах: "
+            "сделала, нашла, подготовила, согласна, готова, проанализировала. "
+            "НИКОГДА не пиши 'сделал', 'нашёл', 'согласен', 'готов' и т.п."
+        )
+    else:
+        overlay += (
+            "\n\nВАЖНО: Ты МУЖЧИНА. Используй мужской род во всех формах: "
+            "сделал, нашёл, подготовил, согласен, готов, проанализировал. "
+            "НИКОГДА не пиши 'сделала', 'нашла', 'согласна', 'готова' и т.п."
+        )
+
+    # base_system_prompt теперь БЕЗ строки "Ты МУЖСКОГО рода" (удалено выше).
+    # Ставим overlay ПОСЛЕ base_prompt — чтобы гендерная инструкция была
+    # последней и имела приоритет (recency bias у LLM).
+    combined = base_system_prompt + "\n" + overlay
 
     # Краткое напоминание в КОНЦЕ промпта — чтобы AI не «забыл» личность после длинного контекста
     svc_hint = f" Подключённый сервис: {service_label} — приоритизируй его возможности в ответах." if service_label else ""
