@@ -2662,7 +2662,7 @@ async def transcribe_handler(request):
 
 
 async def tts_handler(request):
-    """POST /api/tts — озвучивание текста через Google TTS (gTTS).
+    """POST /api/tts — озвучивание текста через Edge-TTS (Microsoft Neural).
 
     Принимает JSON: {"text": "..."}. Возвращает audio/mpeg.
     """
@@ -2677,20 +2677,15 @@ async def tts_handler(request):
             return web.json_response({'error': 'text required'}, status=400)
 
         import io
-        from gtts import gTTS
+        import edge_tts
 
-        def _synthesize(text):
-            buf = io.BytesIO()
-            tts = gTTS(text, lang='ru', slow=False)
-            tts.write_to_fp(buf)
-            buf.seek(0)
-            return buf
-
-        loop = asyncio.get_event_loop()
-        mp3_buf = await loop.run_in_executor(None, _synthesize, text)
+        buf = io.BytesIO()
+        communicate = edge_tts.Communicate(text, "ru-RU-SvetlanaNeural")
+        await communicate.save(buf)
+        buf.seek(0)
 
         return web.Response(
-            body=mp3_buf.read(),
+            body=buf.read(),
             content_type='audio/mpeg',
             headers={
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
