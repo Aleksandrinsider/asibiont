@@ -6469,13 +6469,34 @@ async def get_feed_handler(request):
             # Типы событий для ленты — только отчёты AI о дне пользователя
             _feed_report_types = {'daily_report', 'coordinator_summary'}
 
-            # Get agent activity log entries (reports, not posts)
+            # Собираем ID пользователей: свои + избранные контакты
+            _target_user_ids = {user.id}
+
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and profile.favorite_contacts:
+                try:
+                    favorite_data = json.loads(profile.favorite_contacts)
+                    for item in favorite_data:
+                        if isinstance(item, int):
+                            _target_user_ids.add(item)
+                        elif isinstance(item, str):
+                            clean = item.strip().replace('@', '').lower()
+                            if clean:
+                                _fu = session_db.query(User).filter(
+                                    func.lower(User.username) == clean
+                                ).first()
+                                if _fu:
+                                    _target_user_ids.add(_fu.id)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # Get agent activity log entries (reports) — свои + избранных контактов
             activities = session_db.query(AgentActivityLog).filter(
-                AgentActivityLog.user_id == user.id,
+                AgentActivityLog.user_id.in_(_target_user_ids),
                 AgentActivityLog.activity_type.in_(_feed_report_types),
             ).order_by(AgentActivityLog.created_at.desc()).limit(50).all()
 
-            logger.info(f"Feed: found {len(activities)} activities for user {user.id}")
+            logger.info(f"Feed: found {len(activities)} activities for user {user.id} (targets: {_target_user_ids})")
 
             data = []
             for a in activities:
