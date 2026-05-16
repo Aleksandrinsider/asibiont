@@ -1490,11 +1490,15 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     # A.2 — Gender normalization: корректируем род глаголов в посте арены
     try:
-        from ai_integration.autonomous_agent import _normalize_agent_gender_grammar
+        from ai_integration.autonomous_agent import (_normalize_agent_gender_grammar,
+                                                      _detect_agent_is_female)
+        _ag_gender = agent.get('gender', '')
+        _ag_name = agent.get('name', '')
+        _is_fem = _detect_agent_is_female(name=_ag_name, explicit_gender=_ag_gender)
         reply_text = _normalize_agent_gender_grammar(
             reply_text,
-            agent.get('name', ''),
-            agent.get('gender') in ('female', 'женский', '♀')
+            _ag_name,
+            is_female=_is_fem,
         )
     except Exception:
         pass
