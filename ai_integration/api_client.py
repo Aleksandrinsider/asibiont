@@ -201,6 +201,11 @@ def _robust_parse_deepseek_json(content: str) -> dict:
         json.JSONDecodeError: если ни одна стратегия не сработала.
     """
     _txt = content.strip()
+    
+    # 0. Если нет ни одной '{' — это не JSON, сразу возвращаем пустой dict
+    #    (DeepSeek иногда возвращает только ```json без содержимого)
+    if '{' not in _txt:
+        return {}
 
     # 1. Прямой парсинг
     if _txt.startswith('{'):
@@ -252,9 +257,9 @@ def _robust_parse_deepseek_json(content: str) -> dict:
             _subject, _body = _subject_raw, _body_raw
         return {'subject': _subject.strip(), 'body': _body.strip()}
 
-    raise json.JSONDecodeError(
-        f"Could not parse JSON from response: {content[:200]}...", content, 0
-    )
+    # Ничего не нашли — возвращаем пустой dict вместо исключения
+    # (глушит шумные логи когда DeepSeek возвращает ```json без содержимого)
+    return {}
 
 
 # ============================================================================
