@@ -73,6 +73,9 @@ class User(Base):
     discord_server_name = Column(String(255))  # Discord server name (fetched from webhook)
     discord_guild_id = Column(String(64))  # Discord guild ID (for link)
     discord_channel_id = Column(String(64))  # Discord channel ID (for link)
+    vk_token = Column(String(500))  # VK API access token for posting to VK community/page
+    vk_owner_id = Column(String(64))  # VK owner_id (negative for groups, e.g., -123456789) — legacy single
+    vk_group_name = Column(String(255))  # VK group/page name (fetched from API) — legacy single
     token_balance = Column(Integer, default=0)  # Баланс токенов (1 токен = 1 рубль)
     tokens_spent = Column(Integer, default=0)  # Всего потрачено токенов
     language = Column(String(5), default='ru')  # User language: 'ru' or 'en'

@@ -2323,8 +2323,6 @@ async def dashboard_handler(request):
             'vk_token': user.vk_token if user and hasattr(user, 'vk_token') else None,
             'vk_owner_id': user.vk_owner_id if user and hasattr(user, 'vk_owner_id') else None,
             'vk_group_name': user.vk_group_name if user and hasattr(user, 'vk_group_name') else None,
-            'vk_targets': json.loads(user.vk_targets) if user and hasattr(user, 'vk_targets') and user.vk_targets else None,
-            'vk_targets': json.loads(user.vk_targets) if user and hasattr(user, 'vk_targets') and user.vk_targets else None,
             'interactions': interactions,
             'partners': partners,
             'delegating_to_me': delegating_to_me,
@@ -10467,40 +10465,34 @@ async def api_profile_handler(request):
                         user.discord_channel_id = None
 
                 if 'vk_token' in data:
-                    user.vk_token = data['vk_token'].strip() if data['vk_token'] and data['vk_token'].strip() else None
-                if 'vk_owner_id' in data:
-                    user.vk_owner_id = data['vk_owner_id'].strip() if data['vk_owner_id'] and data['vk_owner_id'].strip() else None
-                    # Legacy: fetch single group name for backward compat
-                    if user.vk_token and user.vk_owner_id:
+                    _vk_token_val = data['vk_token'].strip() if data['vk_token'] and data['vk_token'].strip() else None
+                    user.vk_token = _vk_token_val
+                    if _vk_token_val:
+                        # Auto-resolve group info from VK API (works with group tokens via groups.getById)
                         try:
-                            import aiohttp as _aiohttp_vk
-                            _vk_url = f'https://api.vk.com/method/groups.getById?group_id={user.vk_owner_id}&access_token={user.vk_token}&v=5.131'
-                            async with _safe_http() as _vk_sess:
-                                async with _vk_sess.get(_vk_url, timeout=aiohttp.ClientTimeout(total=8)) as _vk_resp:
-                                    if _vk_resp.status == 200:
-                                        _vk_data = await _vk_resp.json()
-                                        if 'response' in _vk_data and len(_vk_data['response']) > 0:
-                                            user.vk_group_name = _vk_data['response'][0].get('name', 'VK')
-                                        elif 'error' in _vk_data:
-                                            logger.warning(f"[VK] API error fetching group name: {_vk_data['error'].get('error_msg', '')}")
-                                            user.vk_group_name = 'VK'
+                            import aiohttp as _aiohttp_vk2
+                            _vk_url2 = f'https://api.vk.com/method/groups.getById?access_token={_vk_token_val}&v=5.131'
+                            async with _safe_http() as _vk_sess2:
+                                async with _vk_sess2.get(_vk_url2, timeout=aiohttp.ClientTimeout(total=8)) as _vk_resp2:
+                                    if _vk_resp2.status == 200:
+                                        _vk_data2 = await _vk_resp2.json()
+                                        if 'response' in _vk_data2 and len(_vk_data2['response']) > 0:
+                                            _g2 = _vk_data2['response'][0]
+                                            user.vk_owner_id = str(-_g2.get('id', 0))
+                                            user.vk_group_name = _g2.get('name', 'VK')[:255]
+                                        elif 'error' in _vk_data2:
+                                            logger.warning(f"[VK] API error: {_vk_data2['error'].get('error_msg', '')}")
+                                            user.vk_owner_id = None
+                                            user.vk_group_name = None
                                     else:
-                                        user.vk_group_name = 'VK'
-                        except Exception as _vk_e:
-                            logger.warning(f"[VK] Failed to fetch group name: {_vk_e}")
-                            user.vk_group_name = 'VK'
+                                        user.vk_owner_id = None
+                                        user.vk_group_name = None
+                        except Exception as _vk_e2:
+                            logger.warning(f"[VK] Failed to fetch group info: {_vk_e2}")
+                            user.vk_owner_id = None
+                            user.vk_group_name = None
                     else:
-                        user.vk_group_name = None
-                # vk_targets — JSON array of selected communities
-                if 'vk_targets' in data:
-                    _vt = data['vk_targets']
-                    if isinstance(_vt, list) and len(_vt) > 0:
-                        user.vk_targets = json.dumps(_vt, ensure_ascii=False)
-                        # Sync first target as legacy vk_owner_id/vk_group_name
-                        user.vk_owner_id = str(_vt[0].get('owner_id', ''))
-                        user.vk_group_name = _vt[0].get('name', 'VK')
-                    elif _vt is None or (isinstance(_vt, list) and len(_vt) == 0):
-                        user.vk_targets = None
+                        # Token cleared — clear all VK data
                         user.vk_owner_id = None
                         user.vk_group_name = None
 
@@ -10619,7 +10611,6 @@ async def api_profile_handler(request):
             'first_name': user.first_name,
             'telegram_id': user.telegram_id,
             'token_balance': user.token_balance or 0,
-            'vk_targets': json.loads(user.vk_targets) if user.vk_targets else None,
             'referral_balance': user.referral_balance,
             'timezone': user.timezone or 'UTC',
             'telegram_linked': user.telegram_id > 0,
@@ -10676,78 +10667,6 @@ async def api_profile_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
-
-
-async def api_vk_groups_handler(request):
-    """Получить список сообществ VK по токену. POST: {vk_token: '...'} → [{owner_id, name, photo}]
-    
-    Поддерживает:
-    - Пользовательские токены (Standalone app) — через groups.get
-    - Групповые токены (ключ доступа сообщества) — через groups.getById
-    """
-    try:
-        session = await get_session(request)
-        user_id = session.get('user_id') if session else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
-        data = await request.json()
-        vk_token = (data.get('vk_token') or '').strip()
-        if not vk_token:
-            return web.json_response({'error': 'vk_token required'}, status=400)
-        import aiohttp as _aiohttp_vkg
-
-        async def _vk_api_call(method: str, params: dict) -> dict:
-            """Helper: call VK API method with token."""
-            _qs = '&'.join(f'{k}={v}' for k, v in params.items())
-            _url = f'https://api.vk.com/method/{method}?{_qs}&access_token={vk_token}&v=5.131'
-            async with _safe_http() as _s:
-                async with _s.get(_url, timeout=aiohttp.ClientTimeout(total=10)) as _r:
-                    if _r.status != 200:
-                        return {'error': {'error_msg': 'VK API request failed'}}
-                    return await _r.json()
-
-        # First try: user token — list all admin communities
-        _vk_data = await _vk_api_call('groups.get', {'extended': '1', 'filter': 'admin'})
-
-        # If "group auth" error — this is a group token, use groups.getById instead
-        if 'error' in _vk_data:
-            _err_code = _vk_data['error'].get('error_code', 0)
-            _err_msg = _vk_data['error'].get('error_msg', '')
-            if _err_code == 15 or 'group authorization failed' in _err_msg.lower():
-                # Group token — get the single community this token belongs to
-                logger.info("[VK GROUPS] Group token detected, using groups.getById")
-                _vk_data2 = await _vk_api_call('groups.getById', {})
-                if 'error' in _vk_data2:
-                    _err2 = _vk_data2['error'].get('error_msg', 'Unknown VK API error')
-                    return web.json_response({'error': _err2}, status=400)
-                _items = _vk_data2.get('response', [])
-                _result = []
-                for _g in _items:
-                    _result.append({
-                        'owner_id': -_g.get('id', 0),
-                        'name': _g.get('name', ''),
-                        'photo': _g.get('photo_50', '') or _g.get('photo_100', '') or '',
-                        'screen_name': _g.get('screen_name', ''),
-                    })
-                return web.json_response({'groups': _result})
-            else:
-                # Some other error
-                return web.json_response({'error': _err_msg}, status=400)
-
-        # User token — return list of admin communities
-        _groups = _vk_data.get('response', {}).get('items', [])
-        _result = []
-        for _g in _groups:
-            _result.append({
-                'owner_id': -_g.get('id', 0),  # groups have negative owner_id
-                'name': _g.get('name', ''),
-                'photo': _g.get('photo_50', '') or _g.get('photo_100', '') or '',
-                'screen_name': _g.get('screen_name', ''),
-            })
-        return web.json_response({'groups': _result})
-    except Exception as e:
-        logger.error(f"[VK GROUPS] Error: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
 
 
 async def api_agent_team_pulse_handler(request):
@@ -14690,7 +14609,6 @@ app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
-app.router.add_post('/api/vk/groups', api_vk_groups_handler)
 app.router.add_get('/api/agent_team_pulse', api_agent_team_pulse_handler)
 app.router.add_post('/api/office/run_once', api_office_run_once_handler)
 app.router.add_post('/api/set_language', api_set_language_handler)

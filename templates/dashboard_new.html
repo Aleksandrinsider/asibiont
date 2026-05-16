@@ -1800,26 +1800,15 @@
                         <div style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA;">&#8212;</div>
                         {% endif %}
                         <div style="margin-top: 8px;">
-                            <div style="margin-bottom: 6px;">
+                            <div style="margin-bottom: 4px;">
                                 <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="vk-token-label">VK токен</label>
-                                <div style="display: flex; gap: 6px;">
-                                    <input type="text" id="quick-vk-token" placeholder="vk1.a.xxxxx..." style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" value="{{ vk_token or '' }}" />
-                                    <button type="button" onclick="loadVKGroups()" style="padding: 6px 12px; background: #068487; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; white-space: nowrap;" data-i18n="vk-load-groups">Загрузить сообщества</button>
-                                </div>
+                                <input type="text" id="quick-vk-token" placeholder="vk1.a.xxxxx..." style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" value="{{ vk_token or '' }}" />
                             </div>
-                            <div id="vk-groups-container" style="display: {% if vk_targets %}block{% else %}none{% endif %};">
-                                <div id="vk-groups-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #D1D9E0; border-radius: 6px; padding: 6px 8px; background: #FAFBFC;">
-                                {% if vk_targets %}
-                                    {% for g in vk_targets %}
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: #374151; cursor: pointer;">
-                                        <input type="checkbox" class="vk-group-checkbox" value="{{ g.owner_id }}" checked data-name="{{ g.name }}" /> {{ g.name }}
-                                    </label>
-                                    {% endfor %}
-                                {% endif %}
-                                </div>
+                            <div style="font-size: 11px; color: #6C727F; line-height: 1.4; margin-top: 2px;">
+                                <span data-i18n="vk-token-hint">Как получить токен:</span>
+                                <a href="https://vk.com/apps?act=manage" target="_blank" style="color: #068487;">vk.com/apps</a>
+                                <span data-i18n="vk-token-hint2">→ Создать приложение (Standalone) → Получить токен с доступом к стене.<br>Либо использовать ключ доступа сообщества (с правами на публикацию).</span>
                             </div>
-                            <div id="vk-no-groups" style="display: none; margin-top: 6px; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; color: #6C727F; background: #F6F8FA; text-align: center;" data-i18n="vk-no-groups">Нет доступных сообществ</div>
-                            <div id="vk-loading" style="display: none; margin-top: 6px; padding: 8px; text-align: center; font-size: 12px; color: #6C727F;">Загрузка...</div>
                         </div>
                     </div>
                 </div>
@@ -14329,7 +14318,7 @@ except Exception as e:
                 const res = await fetch('/api/profile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ vk_token: '', vk_owner_id: '', vk_targets: null }),
+                    body: JSON.stringify({ vk_token: '' }),
                     credentials: 'include'
                 });
                 if (res.ok) {
@@ -14470,56 +14459,6 @@ except Exception as e:
             }
         }
 
-        async function loadVKGroups() {
-            const token = document.getElementById('quick-vk-token')?.value?.trim();
-            if (!token) {
-                showNotification('Введите VK токен', 'error');
-                return;
-            }
-            const container = document.getElementById('vk-groups-container');
-            const listEl = document.getElementById('vk-groups-list');
-            const noGroups = document.getElementById('vk-no-groups');
-            const loading = document.getElementById('vk-loading');
-            loading.style.display = 'block';
-            container.style.display = 'none';
-            noGroups.style.display = 'none';
-            try {
-                const resp = await fetch('/api/vk/groups', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ vk_token: token }),
-                    credentials: 'include'
-                });
-                const data = await resp.json();
-                loading.style.display = 'none';
-                if (!resp.ok) {
-                    showNotification(data.error || 'Ошибка загрузки сообществ', 'error');
-                    return;
-                }
-                // Get currently saved targets for pre-checking
-                const savedTargets = new Set();
-                document.querySelectorAll('.vk-group-checkbox:checked').forEach(function(cb) {
-                    savedTargets.add(cb.value);
-                });
-                if (!data.groups || data.groups.length === 0) {
-                    noGroups.style.display = 'block';
-                    return;
-                }
-                let html = '';
-                data.groups.forEach(function(g) {
-                    const checked = savedTargets.has(String(g.owner_id)) ? 'checked' : '';
-                    html += '<label style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: #374151; cursor: pointer;">'
-                        + '<input type="checkbox" class="vk-group-checkbox" value="' + g.owner_id + '" ' + checked + ' data-name="' + g.name.replace(/"/g, '"') + '" /> '
-                        + g.name + '</label>';
-                });
-                listEl.innerHTML = html;
-                container.style.display = 'block';
-            } catch (e) {
-                loading.style.display = 'none';
-                showNotification('Ошибка сети: ' + e.message, 'error');
-            }
-        }
-
         async function submitQuickProfile() {
             const firstName = document.getElementById('quick-first-name').value.trim();
             const gender = document.getElementById('quick-gender')?.value || '';
@@ -14531,14 +14470,6 @@ except Exception as e:
             const interests = document.getElementById('quick-interests').value.trim();
             const skills = document.getElementById('quick-skills').value.trim();
             const vkToken = document.getElementById('quick-vk-token')?.value?.trim() || '';
-            // Collect selected VK communities from checkboxes
-            const vkTargets = [];
-            document.querySelectorAll('.vk-group-checkbox:checked').forEach(function(cb) {
-                vkTargets.push({
-                    owner_id: parseInt(cb.value),
-                    name: cb.getAttribute('data-name') || 'VK'
-                });
-            });
             const goals = document.getElementById('quick-goals').value.trim();
             const websiteVal = document.getElementById('quick-website')?.value?.trim() || '';
             const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
@@ -14587,7 +14518,6 @@ except Exception as e:
                 profileData.telegram_channel = telegramChannel;
                 profileData.discord_webhook = discordWebhook;
                 profileData.vk_token = vkToken;
-                profileData.vk_targets = vkTargets.length > 0 ? vkTargets : null;
                 profileData.email = emailVal;
                 profileData.phone = phoneVal;
 

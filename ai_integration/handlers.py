@@ -19211,62 +19211,51 @@ async def publish_to_vk(
             )
 
         vk_token = user.vk_token
+        owner_id = user.vk_owner_id if hasattr(user, 'vk_owner_id') else None
+        name = getattr(user, 'vk_group_name', 'VK') or 'VK'
 
-        # Determine targets: use vk_targets if available, else fall back to legacy vk_owner_id
-        targets = []
-        if hasattr(user, 'vk_targets') and user.vk_targets:
-            try:
-                targets = json.loads(user.vk_targets) if isinstance(user.vk_targets, str) else user.vk_targets
-            except Exception:
-                targets = []
-        if not targets and hasattr(user, 'vk_owner_id') and user.vk_owner_id:
-            targets = [{'owner_id': user.vk_owner_id, 'name': getattr(user, 'vk_group_name', 'VK')}]
-
-        if not targets:
-            return "Нет выбранных сообществ VK для публикации.\nВыберите сообщества в настройках профиля."
+        if not owner_id:
+            return (
+                "VK сообщество не настроено.\n"
+                "Добавьте VK токен в настройках профиля — группа определится автоматически."
+            )
 
         import urllib.parse
         import aiohttp as _aiohttp
-        results = []
-        for tgt in targets:
-            owner_id = tgt.get('owner_id', '')
-            name = tgt.get('name', 'VK')
-            try:
-                url = (
-                    f"https://api.vk.com/method/wall.post?"
-                    f"owner_id={owner_id}&message={urllib.parse.quote(content)}"
-                    f"&access_token={vk_token}&v=5.199"
-                )
-                if image_url:
-                    url += f"&attachments={urllib.parse.quote(image_url)}"
+        try:
+            url = (
+                f"https://api.vk.com/method/wall.post?"
+                f"owner_id={owner_id}&message={urllib.parse.quote(content)}"
+                f"&access_token={vk_token}&v=5.199"
+            )
+            if image_url:
+                url += f"&attachments={urllib.parse.quote(image_url)}"
 
-                async with _safe_http() as http:
-                    async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
-                        data = await resp.json()
+            async with _safe_http() as http:
+                async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
+                    data = await resp.json()
 
-                if 'error' in data:
-                    err_msg = data['error'].get('error_msg', str(data['error']))
-                    results.append(f"{name}: ошибка {err_msg}")
-                    logger.warning(f"[VK] Error publishing to {name} (owner_id={owner_id}): {err_msg}")
-                else:
-                    post_id = data.get('response', {}).get('post_id', '?')
-                    results.append(f"{name}: пост #{post_id}")
-                    try:
-                        from models import AgentActivityLog
-                        log = AgentActivityLog(
-                            user_id=user.id, activity_type='post_vk',
-                            title=content[:80], content=content,
-                            target=f'VK {name} ({owner_id})', status='published',
-                        )
-                        session.add(log)
-                        session.commit()
-                    except Exception as _le:
-                        logger.warning(f"[VK] log: {_le}")
-            except Exception as tgt_err:
-                logger.error(f"[VK] Exception publishing to {name}: {tgt_err}")
-                results.append(f"{name}: ошибка {str(tgt_err)}")
-
-        return "Результаты публикации VK:\n" + "\n".join(results)
+            if 'error' in data:
+                err_msg = data['error'].get('error_msg', str(data['error']))
+                logger.warning(f"[VK] Error publishing to {name} (owner_id={owner_id}): {err_msg}")
+                return f"Ошибка публикации: {err_msg}"
+            else:
+                post_id = data.get('response', {}).get('post_id', '?')
+                try:
+                    from models import AgentActivityLog
+                    log = AgentActivityLog(
+                        user_id=user.id, activity_type='post_vk',
+                        title=content[:80], content=content,
+                        target=f'VK {name} ({owner_id})', status='published',
+                    )
+                    session.add(log)
+                    session.commit()
+                except Exception as _le:
+                    logger.warning(f"[VK] log: {_le}")
+                return f"Опубликовано в VK ({name}): пост #{post_id}"
+        except Exception as tgt_err:
+            logger.error(f"[VK] Exception publishing to {name}: {tgt_err}")
+            return f"Ошибка публикации в VK: {str(tgt_err)}"
     except Exception as e:
         logger.error(f"[PUBLISH_VK] Error: {e}", exc_info=True)
         return f"Ошибка публикации в VK: {str(e)}"
