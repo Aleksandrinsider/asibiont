@@ -21267,7 +21267,8 @@ async def execute_code(code: str, timeout: int = 10, user_id: int = None) -> str
     timeout = min(max(int(timeout or 10), 1), 30)
 
     # Wrapper запрещает опасные импорты и блокирует сеть/файловую систему
-    safe_wrapper = '''
+    # Плейсхолдер __CODE_ESCAPED__ заменяется на код, экранированный для встраивания в """..."""
+    safe_wrapper_template = '''
 import sys
 import signal
 
@@ -21296,9 +21297,15 @@ builtins.__import__ = _safe_import
 for _b in ('open', 'compile', 'eval', 'exec', '__import__'):
     pass  # exec ниже делаем через restricted namespace
 
-_CODE = """ + repr(code) + """
+_CODE = """__CODE_ESCAPED__"""
 exec(_CODE, {'__builtins__': builtins, '__name__': '__sandbox__'})
 '''
+
+    # Экранируем код для безопасного встраивания в """...""" строку:
+    # - удваиваем обратные слеши
+    # - экранируем тройные кавычки
+    _escaped_code = code.replace('\\', '\\\\').replace('"""', '\\"\\"\\"')
+    safe_wrapper = safe_wrapper_template.replace('__CODE_ESCAPED__', _escaped_code)
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -21320,7 +21327,9 @@ exec(_CODE, {'__builtins__': builtins, '__name__': '__sandbox__'})
         if proc.returncode != 0 and 'IndentationError: unexpected indent' in err:
             _retry_code = '\n'.join([ln.lstrip() for ln in code.splitlines()]).strip()
             if _retry_code and _retry_code != code:
-                _retry_wrapper = safe_wrapper.replace(repr(code), repr(_retry_code), 1)
+                # Перестраиваем safe_wrapper с retry-кодом через плейсхолдер __CODE_ESCAPED__
+                _retry_escaped = _retry_code.replace('\\', '\\\\').replace('"""', '\\"\\"\\"')
+                _retry_wrapper = safe_wrapper_template.replace('__CODE_ESCAPED__', _retry_escaped)
                 _proc2 = await asyncio.create_subprocess_exec(
                     sys.executable, '-c', _retry_wrapper,
                     stdout=asyncio.subprocess.PIPE,

@@ -115,7 +115,7 @@ def _detect_agent_is_female(name: str = '', explicit_gender: str = '') -> bool:
     # Name-based fallback: русские женские имена оканчиваются на а/я
     if name:
         _name_clean = name.strip()
-        if _name_clean and _name_clean[-1] in 'аяАЯ' and _name_clean[-2:].lower() not in ('ша', 'жа'):
+        if _name_clean and _name_clean[-1] in 'аяАЯaA' and _name_clean[-2:].lower() not in ('ша', 'жа'):
             return True
     return False
 
@@ -6940,9 +6940,9 @@ class AnchorEngine:
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
-                        _s.execute(_del_text("SET LOCAL statement_timeout = 60000"))
-                        _s.execute(_del_text("SET LOCAL lock_timeout = 30000"))
-                        _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 10000"))
+                        _s.execute(_del_text("SET LOCAL lock_timeout = 3000"))
+                        _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid AND delivered_at IS NULL"), {'aid': _aid})
                         _s.commit()
                         return True
                     except Exception:
@@ -9248,7 +9248,7 @@ class AnchorEngine:
                         except Exception:
                             pass
 
-                        _coord_is_fem = _detect_agent_is_female(_chosen_name) if _chosen_name else False
+                        _coord_is_fem = _detect_agent_is_female(_chosen_name, explicit_gender=agent_data.get('gender', '')) if _chosen_name else False
                         _coord_zac_ex = 'зациклилась' if _coord_is_fem else 'зациклился'
                         _coord_zac_3p = 'зациклена' if _coord_is_fem else 'зациклен'
                         # Gender list for other agents (used in coord prompt)
@@ -10318,7 +10318,7 @@ class AnchorEngine:
                         except Exception:
                             pass
                         if _ack_ok:
-                            _is_ack_fem = _detect_agent_is_female(_chosen_name)
+                            _is_ack_fem = _detect_agent_is_female(_chosen_name, explicit_gender=agent_data.get('gender', ''))
                             _ack_role = (agent_data.get('job_title') or agent_data.get('specialization') or 'специалист')[:60]
                             # Вырезаем имя агента из начала coord_text — иначе AI пишет "Кристина, привет!" себе
                             import re as _re_ack_strip
@@ -10414,7 +10414,7 @@ class AnchorEngine:
                                         try:
                                             _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
                                             if not _skip_ack_cap:
-                                                _is_fem_ack = _detect_agent_is_female(_chosen_name)
+                                                _is_fem_ack = _detect_agent_is_female(_chosen_name, explicit_gender=agent_data.get('gender', ''))
                                                 _ack_text = _sanitize_proactive_text(_ack_text, is_fem=_is_fem_ack)
                                                 _ack_sv.add(Interaction(
                                                     user_id=user.id,
@@ -11248,7 +11248,7 @@ class AnchorEngine:
                         try:
                             _cleaned_result = _sanitize_proactive_text(
                                 _cleaned_result,
-                                is_fem=_detect_agent_is_female(_chosen_name),
+                                is_fem=_detect_agent_is_female(_chosen_name, explicit_gender=agent_data.get('gender', '')),
                             )
                         except Exception:
                             pass
@@ -11281,7 +11281,7 @@ class AnchorEngine:
                             flags=re.IGNORECASE,
                         )
                         # Sanitize tool names from user-facing text
-                        _is_fem_agent = _detect_agent_is_female(_chosen_name)
+                        _is_fem_agent = _detect_agent_is_female(_chosen_name, explicit_gender=agent_data.get('gender', ''))
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result, is_fem=_is_fem_agent)
 
                         # ── HALLUCINATION GUARD: агент ЗАЯВЛЯЕТ действие, но инструмент НЕ вызван ──
