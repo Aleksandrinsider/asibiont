@@ -19203,66 +19203,70 @@ async def publish_to_vk(
 
         content = _strip_post_visual_prompt(content)
 
-        vk_token, vk_owner_id = None, None
-        try:
-            from models import UserAgent as _UA_vk
-            for _ag in session.query(_UA_vk).filter(
-                _UA_vk.author_id == user.id, _UA_vk.status != 'disabled',
-                _UA_vk.user_api_keys.isnot(None),
-            ).all():
-                _env = {}
-                for _ln in (_ag.user_api_keys or '').splitlines():
-                    _ln = _ln.strip()
-                    if '=' in _ln and not _ln.startswith('#'):
-                        _k, _, _v = _ln.partition('=')
-                        _env[_k.strip().upper()] = _v.strip()
-                if _env.get('VK_TOKEN'):
-                    vk_token = _env['VK_TOKEN']
-                    vk_owner_id = _env.get('VK_OWNER_ID', '')
-                    break
-        except Exception as _e:
-            logger.debug(f"[VK] agent lookup: {_e}")
-
-        if not vk_token:
+        if not hasattr(user, 'vk_token') or not user.vk_token:
             return (
                 "VK_TOKEN не настроен.\n"
-                "Добавьте в настройках агента (API-ключи):\n"
-                "VK_TOKEN=ваш_токен\n"
-                "VK_OWNER_ID=id_страницы_или_группы\n"
+                "Добавьте VK токен и ID сообщества в настройках профиля.\n"
                 "Получить: vk.com/dev → Мои приложения → Standalone → Получить токен"
             )
 
+        vk_token = user.vk_token
+
+        # Determine targets: use vk_targets if available, else fall back to legacy vk_owner_id
+        targets = []
+        if hasattr(user, 'vk_targets') and user.vk_targets:
+            try:
+                targets = json.loads(user.vk_targets) if isinstance(user.vk_targets, str) else user.vk_targets
+            except Exception:
+                targets = []
+        if not targets and hasattr(user, 'vk_owner_id') and user.vk_owner_id:
+            targets = [{'owner_id': user.vk_owner_id, 'name': getattr(user, 'vk_group_name', 'VK')}]
+
+        if not targets:
+            return "Нет выбранных сообществ VK для публикации.\nВыберите сообщества в настройках профиля."
+
         import urllib.parse
         import aiohttp as _aiohttp
-        url = (
-            f"https://api.vk.com/method/wall.post?"
-            f"owner_id={vk_owner_id}&message={urllib.parse.quote(content)}"
-            f"&access_token={vk_token}&v=5.199"
-        )
-        if image_url:
-            url += f"&attachments={urllib.parse.quote(image_url)}"
+        results = []
+        for tgt in targets:
+            owner_id = tgt.get('owner_id', '')
+            name = tgt.get('name', 'VK')
+            try:
+                url = (
+                    f"https://api.vk.com/method/wall.post?"
+                    f"owner_id={owner_id}&message={urllib.parse.quote(content)}"
+                    f"&access_token={vk_token}&v=5.199"
+                )
+                if image_url:
+                    url += f"&attachments={urllib.parse.quote(image_url)}"
 
-        async with _safe_http() as http:
-            async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
-                data = await resp.json()
+                async with _safe_http() as http:
+                    async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
+                        data = await resp.json()
 
-        if 'error' in data:
-            return f"Ошибка VK: {data['error'].get('error_msg', str(data['error']))}"
+                if 'error' in data:
+                    err_msg = data['error'].get('error_msg', str(data['error']))
+                    results.append(f"{name}: ошибка {err_msg}")
+                    logger.warning(f"[VK] Error publishing to {name} (owner_id={owner_id}): {err_msg}")
+                else:
+                    post_id = data.get('response', {}).get('post_id', '?')
+                    results.append(f"{name}: пост #{post_id}")
+                    try:
+                        from models import AgentActivityLog
+                        log = AgentActivityLog(
+                            user_id=user.id, activity_type='post_vk',
+                            title=content[:80], content=content,
+                            target=f'VK {name} ({owner_id})', status='published',
+                        )
+                        session.add(log)
+                        session.commit()
+                    except Exception as _le:
+                        logger.warning(f"[VK] log: {_le}")
+            except Exception as tgt_err:
+                logger.error(f"[VK] Exception publishing to {name}: {tgt_err}")
+                results.append(f"{name}: ошибка {str(tgt_err)}")
 
-        post_id = data.get('response', {}).get('post_id', '?')
-        try:
-            from models import AgentActivityLog
-            log = AgentActivityLog(
-                user_id=user.id, activity_type='post_vk',
-                title=content[:80], content=content,
-                target=f'VK {vk_owner_id}', status='published',
-            )
-            session.add(log)
-            session.commit()
-        except Exception as _le:
-            logger.warning(f"[VK] log: {_le}")
-
-        return f"Пост #{post_id} опубликован в ВКонтакте"
+        return "Результаты публикации VK:\n" + "\n".join(results)
     except Exception as e:
         logger.error(f"[PUBLISH_VK] Error: {e}", exc_info=True)
         return f"Ошибка публикации в VK: {str(e)}"

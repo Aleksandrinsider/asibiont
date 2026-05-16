@@ -796,6 +796,69 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         except Exception as dc_err:
             logger.warning(f"[DISCORD] Failed to send post for user {user_id}: {dc_err}")
 
+        # === Публикация в ВКонтакте (если настроен VK токен) ===
+        try:
+            if not user.vk_token:
+                pass  # No token, skip VK entirely
+            else:
+                # Determine targets: use vk_targets if available, else fall back to legacy vk_owner_id
+                import json as _json
+                _vk_targets_list = []
+                if hasattr(user, 'vk_targets') and user.vk_targets:
+                    try:
+                        _vk_targets_list = _json.loads(user.vk_targets) if isinstance(user.vk_targets, str) else user.vk_targets
+                    except Exception:
+                        _vk_targets_list = []
+                if not _vk_targets_list and hasattr(user, 'vk_owner_id') and user.vk_owner_id:
+                    _vk_targets_list = [{'owner_id': user.vk_owner_id, 'name': getattr(user, 'vk_group_name', 'VK')}]
+
+                if _vk_targets_list:
+                    import urllib.parse as _vk_url_parse
+                    _vk_message = content
+                    for _tgt in _vk_targets_list:
+                        _owner_id = _tgt.get('owner_id', '')
+                        _name = _tgt.get('name', 'VK')
+                        try:
+                            _vk_url = (
+                                f"https://api.vk.com/method/wall.post?"
+                                f"owner_id={_owner_id}&message={_vk_url_parse.quote(_vk_message)}"
+                                f"&access_token={user.vk_token}&v=5.199"
+                            )
+                            if image_url:
+                                _vk_url += f"&attachments={_vk_url_parse.quote(image_url)}"
+                            async with _safe_http() as _vk_http:
+                                async with _vk_http.get(_vk_url, timeout=aiohttp.ClientTimeout(total=15)) as _vk_resp:
+                                    _vk_data = await _vk_resp.json()
+                            if 'error' not in _vk_data:
+                                _vk_post_id = _vk_data.get('response', {}).get('post_id', '?')
+                                logger.info(f"[AUTO_POST VK] Published to {_name} for user {user_id}, post_id={_vk_post_id}")
+                                try:
+                                    from models import AgentActivityLog
+                                    _vk_log = AgentActivityLog(
+                                        user_id=user.id,
+                                        activity_type='post_vk',
+                                        title=_vk_message,
+                                        content=_vk_message,
+                                        target=f'VK {_name} ({_owner_id})',
+                                        status='published',
+                                        ref_id=post.id,
+                                    )
+                                    session.add(_vk_log)
+                                    session.commit()
+                                except Exception as _vke:
+                                    logger.warning(f"[AUTO_POST VK] Failed to log activity: {_vke}")
+                                    try:
+                                        session.rollback()
+                                    except Exception:
+                                        pass
+                            else:
+                                _vk_err = _vk_data['error'].get('error_msg', str(_vk_data['error']))
+                                logger.warning(f"[AUTO_POST VK] API error for {_name}: {_vk_err}")
+                        except Exception as _tgt_err:
+                            logger.warning(f"[AUTO_POST VK] Failed to publish to {_name} for user {user_id}: {_tgt_err}")
+        except Exception as _vk_err:
+            logger.warning(f"[AUTO_POST VK] Failed to publish for user {user_id}: {_vk_err}")
+
         # Notify user about created post — через AI агент для единого стиля
         if notify:
             try:

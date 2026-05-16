@@ -2320,6 +2320,11 @@ async def dashboard_handler(request):
             'discord_server_name': user.discord_server_name if user and hasattr(user, 'discord_server_name') else None,
             'discord_guild_id': user.discord_guild_id if user and hasattr(user, 'discord_guild_id') else None,
             'discord_channel_id': user.discord_channel_id if user and hasattr(user, 'discord_channel_id') else None,
+            'vk_token': user.vk_token if user and hasattr(user, 'vk_token') else None,
+            'vk_owner_id': user.vk_owner_id if user and hasattr(user, 'vk_owner_id') else None,
+            'vk_group_name': user.vk_group_name if user and hasattr(user, 'vk_group_name') else None,
+            'vk_targets': json.loads(user.vk_targets) if user and hasattr(user, 'vk_targets') and user.vk_targets else None,
+            'vk_targets': json.loads(user.vk_targets) if user and hasattr(user, 'vk_targets') and user.vk_targets else None,
             'interactions': interactions,
             'partners': partners,
             'delegating_to_me': delegating_to_me,
@@ -5620,6 +5625,9 @@ async def api_contact_profile_handler(request):
                     'discord_server_name': contact_user.discord_server_name if hasattr(contact_user, 'discord_server_name') and contact_user.discord_server_name else None,
                     'discord_guild_id': contact_user.discord_guild_id if hasattr(contact_user, 'discord_guild_id') and contact_user.discord_guild_id else None,
                     'discord_channel_id': contact_user.discord_channel_id if hasattr(contact_user, 'discord_channel_id') and contact_user.discord_channel_id else None,
+                    'vk_token': contact_user.vk_token if hasattr(contact_user, 'vk_token') else None,
+                    'vk_owner_id': contact_user.vk_owner_id if hasattr(contact_user, 'vk_owner_id') else None,
+                    'vk_group_name': contact_user.vk_group_name if hasattr(contact_user, 'vk_group_name') else None,
                     'phone': contact_user.phone if hasattr(contact_user, 'phone') and contact_user.phone else None,
                     'platform': contact_user.platform if hasattr(contact_user, 'platform') else 'telegram',
                     'discord_id': str(contact_user.discord_id) if hasattr(contact_user, 'discord_id') and contact_user.discord_id else None
@@ -10458,6 +10466,44 @@ async def api_profile_handler(request):
                         user.discord_guild_id = None
                         user.discord_channel_id = None
 
+                if 'vk_token' in data:
+                    user.vk_token = data['vk_token'].strip() if data['vk_token'] and data['vk_token'].strip() else None
+                if 'vk_owner_id' in data:
+                    user.vk_owner_id = data['vk_owner_id'].strip() if data['vk_owner_id'] and data['vk_owner_id'].strip() else None
+                    # Legacy: fetch single group name for backward compat
+                    if user.vk_token and user.vk_owner_id:
+                        try:
+                            import aiohttp as _aiohttp_vk
+                            _vk_url = f'https://api.vk.com/method/groups.getById?group_id={user.vk_owner_id}&access_token={user.vk_token}&v=5.131'
+                            async with _safe_http() as _vk_sess:
+                                async with _vk_sess.get(_vk_url, timeout=aiohttp.ClientTimeout(total=8)) as _vk_resp:
+                                    if _vk_resp.status == 200:
+                                        _vk_data = await _vk_resp.json()
+                                        if 'response' in _vk_data and len(_vk_data['response']) > 0:
+                                            user.vk_group_name = _vk_data['response'][0].get('name', 'VK')
+                                        elif 'error' in _vk_data:
+                                            logger.warning(f"[VK] API error fetching group name: {_vk_data['error'].get('error_msg', '')}")
+                                            user.vk_group_name = 'VK'
+                                    else:
+                                        user.vk_group_name = 'VK'
+                        except Exception as _vk_e:
+                            logger.warning(f"[VK] Failed to fetch group name: {_vk_e}")
+                            user.vk_group_name = 'VK'
+                    else:
+                        user.vk_group_name = None
+                # vk_targets — JSON array of selected communities
+                if 'vk_targets' in data:
+                    _vt = data['vk_targets']
+                    if isinstance(_vt, list) and len(_vt) > 0:
+                        user.vk_targets = json.dumps(_vt, ensure_ascii=False)
+                        # Sync first target as legacy vk_owner_id/vk_group_name
+                        user.vk_owner_id = str(_vt[0].get('owner_id', ''))
+                        user.vk_group_name = _vt[0].get('name', 'VK')
+                    elif _vt is None or (isinstance(_vt, list) and len(_vt) == 0):
+                        user.vk_targets = None
+                        user.vk_owner_id = None
+                        user.vk_group_name = None
+
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")
 
@@ -10508,6 +10554,9 @@ async def api_profile_handler(request):
             'username': user.username,
             'telegram_channel': user.telegram_channel,
             'discord_webhook': user.discord_webhook if hasattr(user, 'discord_webhook') else None,
+            'vk_token': user.vk_token if hasattr(user, 'vk_token') else None,
+            'vk_owner_id': user.vk_owner_id if hasattr(user, 'vk_owner_id') else None,
+            'vk_group_name': user.vk_group_name if hasattr(user, 'vk_group_name') else None,
             'city': _pick_own('city'),
             'birthdate': profile.birthdate if profile else None,
             'zodiac_sign': profile.zodiac_sign if profile else None,
@@ -10570,6 +10619,7 @@ async def api_profile_handler(request):
             'first_name': user.first_name,
             'telegram_id': user.telegram_id,
             'token_balance': user.token_balance or 0,
+            'vk_targets': json.loads(user.vk_targets) if user.vk_targets else None,
             'referral_balance': user.referral_balance,
             'timezone': user.timezone or 'UTC',
             'telegram_linked': user.telegram_id > 0,
@@ -10577,6 +10627,9 @@ async def api_profile_handler(request):
             'discord_linked': bool(user.discord_id),
             'discord_username': ('@' + (user.discord_username or user.username or user.first_name or '')) if user.discord_id else '',
             'telegram_channel': user.telegram_channel or None,
+            'vk_token': user.vk_token if hasattr(user, 'vk_token') else None,
+            'vk_owner_id': user.vk_owner_id if hasattr(user, 'vk_owner_id') else None,
+            'vk_group_name': user.vk_group_name if hasattr(user, 'vk_group_name') else None,
             'discord_server_name': user.discord_server_name if hasattr(user, 'discord_server_name') else None,
             'discord_guild_id': str(user.discord_guild_id) if hasattr(user, 'discord_guild_id') and user.discord_guild_id else None,
             'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
@@ -10623,6 +10676,43 @@ async def api_profile_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
     finally:
         session_db.close()
+
+
+async def api_vk_groups_handler(request):
+    """Получить список сообществ VK по токену. POST: {vk_token: '...'} → [{owner_id, name, photo}]"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        data = await request.json()
+        vk_token = (data.get('vk_token') or '').strip()
+        if not vk_token:
+            return web.json_response({'error': 'vk_token required'}, status=400)
+        import aiohttp as _aiohttp_vkg
+        # Get list of communities managed by this user
+        _url = f'https://api.vk.com/method/groups.get?extended=1&filter=admin&access_token={vk_token}&v=5.131'
+        async with _safe_http() as _vkg_sess:
+            async with _vkg_sess.get(_url, timeout=aiohttp.ClientTimeout(total=10)) as _vkg_resp:
+                if _vkg_resp.status != 200:
+                    return web.json_response({'error': 'VK API request failed'}, status=502)
+                _vkg_data = await _vkg_resp.json()
+                if 'error' in _vkg_data:
+                    _err_msg = _vkg_data['error'].get('error_msg', 'Unknown VK API error')
+                    return web.json_response({'error': _err_msg}, status=400)
+                _groups = _vkg_data.get('response', {}).get('items', [])
+                _result = []
+                for _g in _groups:
+                    _result.append({
+                        'owner_id': -_g.get('id', 0),  # groups have negative owner_id
+                        'name': _g.get('name', ''),
+                        'photo': _g.get('photo_50', '') or _g.get('photo_100', '') or '',
+                        'screen_name': _g.get('screen_name', ''),
+                    })
+                return web.json_response({'groups': _result})
+    except Exception as e:
+        logger.error(f"[VK GROUPS] Error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
 
 
 async def api_agent_team_pulse_handler(request):
@@ -14565,6 +14655,7 @@ app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
+app.router.add_post('/api/vk/groups', api_vk_groups_handler)
 app.router.add_get('/api/agent_team_pulse', api_agent_team_pulse_handler)
 app.router.add_post('/api/office/run_once', api_office_run_once_handler)
 app.router.add_post('/api/set_language', api_set_language_handler)

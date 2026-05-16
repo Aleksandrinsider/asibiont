@@ -942,6 +942,7 @@
                             {% set channel_parts = [] %}
                             {% if telegram_channel %}{% set tg_clean = telegram_channel.replace('@', '') %}{% if channel_parts.append('<span data-i18n="tg-channel-label">Telegram:</span> <a href="https://t.me/' ~ tg_clean ~ '" target="_blank" style="color: #068487; text-decoration: none;">@' ~ tg_clean ~ '</a>') %}{% endif %}{% endif %}
                             {% if discord_webhook and discord_server_name %}{% if discord_guild_id and discord_channel_id %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <a href="https://discord.com/channels/' ~ discord_guild_id ~ '/' ~ discord_channel_id ~ '" target="_blank" style="color: #068487; text-decoration: none;">' ~ discord_server_name ~ '</a>') %}{% endif %}{% else %}{% if channel_parts.append('<span data-i18n="discord-channel-label">Discord:</span> <span style="color: #068487;">' ~ discord_server_name ~ '</span>') %}{% endif %}{% endif %}{% endif %}
+                            {% if vk_group_name %}{% if channel_parts.append('<span data-i18n="vk-channel-label">VK:</span> <span style="color: #068487;">' ~ vk_group_name ~ '</span>') %}{% endif %}{% endif %}
                             {% if channel_parts %}<p>{{ channel_parts | join(' &nbsp;|&nbsp; ') | safe }}</p>{% endif %}
 
                             <p style="margin: 0; margin-bottom: 4px;"><span data-i18n="referral-link">Реферальная ссылка:</span> 
@@ -1789,6 +1790,36 @@
                         <div style="margin-top: 8px;">
                             <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="discord-webhook">Webhook вашего канала для автопубликации постов</label>
                             <input type="text" id="quick-discord-webhook" placeholder="https://discord.com/api/webhooks/..." style="width: 100%; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" />
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">ВКонтакте</label>
+                        {% if vk_token %}
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #374151; background: #F6F8FA;">{{ vk_group_name or 'VK подключён' }}<a href="#" onclick="unlinkVK(); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;" data-i18n="unlink">отвязать</a></div>
+                        {% else %}
+                        <div style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA;">&#8212;</div>
+                        {% endif %}
+                        <div style="margin-top: 8px;">
+                            <div style="margin-bottom: 6px;">
+                                <label style="display: block; font-size: 12px; color: #6B7280; margin-bottom: 4px;" data-i18n="vk-token-label">VK токен</label>
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="text" id="quick-vk-token" placeholder="vk1.a.xxxxx..." style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit;" value="{{ vk_token or '' }}" />
+                                    <button type="button" onclick="loadVKGroups()" style="padding: 6px 12px; background: #068487; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; white-space: nowrap;" data-i18n="vk-load-groups">Загрузить сообщества</button>
+                                </div>
+                            </div>
+                            <div id="vk-groups-container" style="display: {% if vk_targets %}block{% else %}none{% endif %};">
+                                <div id="vk-groups-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #D1D9E0; border-radius: 6px; padding: 6px 8px; background: #FAFBFC;">
+                                {% if vk_targets %}
+                                    {% for g in vk_targets %}
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: #374151; cursor: pointer;">
+                                        <input type="checkbox" class="vk-group-checkbox" value="{{ g.owner_id }}" checked data-name="{{ g.name }}" /> {{ g.name }}
+                                    </label>
+                                    {% endfor %}
+                                {% endif %}
+                                </div>
+                            </div>
+                            <div id="vk-no-groups" style="display: none; margin-top: 6px; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; color: #6C727F; background: #F6F8FA; text-align: center;" data-i18n="vk-no-groups">Нет доступных сообществ</div>
+                            <div id="vk-loading" style="display: none; margin-top: 6px; padding: 8px; text-align: center; font-size: 12px; color: #6C727F;">Загрузка...</div>
                         </div>
                     </div>
                 </div>
@@ -3769,47 +3800,6 @@ try:
             print('- ' + name + ': ' + text[:100])
 except Exception as e:
     print('Ошибка Telegram: ' + str(e))`
-            },
-            vk: {
-                name: 'ВКонтакте',
-                fields: [
-                    {k:'VK_TOKEN', label:'Токен доступа VK (access_token)', ph:'vk1.a.xxxxx...', t:'text'},
-                    {k:'VK_OWNER_ID', label:'ID страницы/группы (для группы — отрицательный)', ph:'-123456789', t:'text'}
-                ],
-                hint: 'Токен: vk.com/dev > Мои приложения > Standalone > Получить токен (rights: wall, groups)',
-                code: `import urllib.request, urllib.parse, json, os
-TOKEN = os.environ.get('VK_TOKEN', '')
-OWNER_ID = os.environ.get('VK_OWNER_ID', '')
-ACTION = os.environ.get('AGENT_ACTION', '')
-try:
-    if ACTION == 'post_wall':
-        message = os.environ.get('AGENT_PARAM_MESSAGE', '')
-        url = 'https://api.vk.com/method/wall.post?owner_id=' + OWNER_ID + '&message=' + urllib.parse.quote(message) + '&access_token=' + TOKEN + '&v=5.131'
-        with urllib.request.urlopen(url, timeout=8) as r:
-            d = json.loads(r.read().decode())
-        if 'error' in d:
-            print('Ошибка VK: ' + d['error'].get('error_msg', str(d['error'])))
-        else:
-            post_id = d.get('response', {}).get('post_id', '?')
-            print('OK: пост #' + str(post_id) + ' опубликован на стене ' + OWNER_ID)
-    else:
-        url = 'https://api.vk.com/method/wall.get?owner_id=' + OWNER_ID + '&count=5&access_token=' + TOKEN + '&v=5.131'
-        with urllib.request.urlopen(url, timeout=8) as r:
-            d = json.loads(r.read().decode())
-        if 'error' in d:
-            print('Ошибка VK: ' + d['error'].get('error_msg', str(d['error'])))
-        else:
-            items = d.get('response', {}).get('items', [])
-            print('Последние посты (' + str(len(items)) + '):')
-            for post in items:
-                text = (post.get('text') or '(нет текста)')[:200]
-                likes = post.get('likes', {}).get('count', 0)
-                views = post.get('views', {}).get('count', 0)
-                print('---')
-                print(text)
-                print('Лайков: ' + str(likes) + '  Просмотров: ' + str(views))
-except Exception as e:
-    print('Ошибка VK: ' + str(e))`
             },
             wildberries: {
                 name: 'Wildberries',
@@ -8266,7 +8256,6 @@ except Exception as e:
                             <option value="openweather">Погода</option>
                             <option value="rss">RSS-лента новостей</option>
                             <option value="telegram_bot">Telegram Bot</option>
-                            <option value="vk">ВКонтакте</option>
                             <option value="wildberries">Wildberries</option>
                             <option value="ozon">Ozon</option>
                             <option value="avito">Авито</option>
@@ -14334,6 +14323,26 @@ except Exception as e:
             }
         }
 
+        async function unlinkVK() {
+            if (!confirm('Отвязать VK аккаунт?')) return;
+            try {
+                const res = await fetch('/api/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vk_token: '', vk_owner_id: '', vk_targets: null }),
+                    credentials: 'include'
+                });
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    const d = await res.json();
+                    alert(d.error || 'Ошибка');
+                }
+            } catch (e) {
+                alert('Ошибка сети');
+            }
+        }
+
         async function disconnectGmail() {
             if (!confirm(t('c-disconnect-gmail'))) return;
             try {
@@ -14461,6 +14470,56 @@ except Exception as e:
             }
         }
 
+        async function loadVKGroups() {
+            const token = document.getElementById('quick-vk-token')?.value?.trim();
+            if (!token) {
+                showNotification('Введите VK токен', 'error');
+                return;
+            }
+            const container = document.getElementById('vk-groups-container');
+            const listEl = document.getElementById('vk-groups-list');
+            const noGroups = document.getElementById('vk-no-groups');
+            const loading = document.getElementById('vk-loading');
+            loading.style.display = 'block';
+            container.style.display = 'none';
+            noGroups.style.display = 'none';
+            try {
+                const resp = await fetch('/api/vk/groups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vk_token: token }),
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+                loading.style.display = 'none';
+                if (!resp.ok) {
+                    showNotification(data.error || 'Ошибка загрузки сообществ', 'error');
+                    return;
+                }
+                // Get currently saved targets for pre-checking
+                const savedTargets = new Set();
+                document.querySelectorAll('.vk-group-checkbox:checked').forEach(function(cb) {
+                    savedTargets.add(cb.value);
+                });
+                if (!data.groups || data.groups.length === 0) {
+                    noGroups.style.display = 'block';
+                    return;
+                }
+                let html = '';
+                data.groups.forEach(function(g) {
+                    const checked = savedTargets.has(String(g.owner_id)) ? 'checked' : '';
+                    html += '<label style="display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: #374151; cursor: pointer;">'
+                        + '<input type="checkbox" class="vk-group-checkbox" value="' + g.owner_id + '" ' + checked + ' data-name="' + g.name.replace(/"/g, '"') + '" /> '
+                        + g.name + '</label>';
+                });
+                listEl.innerHTML = html;
+                container.style.display = 'block';
+            } catch (e) {
+                loading.style.display = 'none';
+                showNotification('Ошибка сети: ' + e.message, 'error');
+            }
+        }
+
         async function submitQuickProfile() {
             const firstName = document.getElementById('quick-first-name').value.trim();
             const gender = document.getElementById('quick-gender')?.value || '';
@@ -14471,6 +14530,15 @@ except Exception as e:
             const position = document.getElementById('quick-position').value.trim();
             const interests = document.getElementById('quick-interests').value.trim();
             const skills = document.getElementById('quick-skills').value.trim();
+            const vkToken = document.getElementById('quick-vk-token')?.value?.trim() || '';
+            // Collect selected VK communities from checkboxes
+            const vkTargets = [];
+            document.querySelectorAll('.vk-group-checkbox:checked').forEach(function(cb) {
+                vkTargets.push({
+                    owner_id: parseInt(cb.value),
+                    name: cb.getAttribute('data-name') || 'VK'
+                });
+            });
             const goals = document.getElementById('quick-goals').value.trim();
             const websiteVal = document.getElementById('quick-website')?.value?.trim() || '';
             const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
@@ -14518,6 +14586,8 @@ except Exception as e:
                 profileData.website = websiteVal;
                 profileData.telegram_channel = telegramChannel;
                 profileData.discord_webhook = discordWebhook;
+                profileData.vk_token = vkToken;
+                profileData.vk_targets = vkTargets.length > 0 ? vkTargets : null;
                 profileData.email = emailVal;
                 profileData.phone = phoneVal;
 
@@ -17719,7 +17789,7 @@ except Exception as e:
       'stat-posts':'Постов','stat-likes':'Лайков','stat-views':'Просмотров','stat-comments':'Комментариев',
       'stat-goals-done':'Целей достигнуто','stat-tasks-done':'Задач выполнено','stat-tasks-deleted':'Задач удалено','stat-activity-index':'Индекс активности',
       'stat-email-sent':'Email отправлено','stat-email-replied':'Email ответов','stat-email-conv':'Email конверсия','stat-email-campaigns':'Email кампаний',
-      'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram','stat-posts-discord':'Постов в Discord',
+      'stat-deleg-me':'Поручено мне','stat-deleg-by-me':'Поручено мной','stat-posts-feed':'Постов в ленту','stat-posts-tg':'Постов в Telegram','stat-posts-discord':'Постов в Discord','stat-posts-vk':'Постов в VK',
       'stat-tokens-today':'Токены сегодня','стат-content-camps':'Контент-кампаний','stat-content-camps':'Контент-кампаний','stat-deleg-camps':'Делег. кампаний',
       'stat-token-expenses':'Статистика расходов','tokcat-total':'Всего списано','tokcat-chat':'Диалоги','tokcat-proactive':'Проактив','tokcat-reminders':'Напоминания','tokcat-autoposts':'Автопосты','tokcat-research':'Исследования','tokcat-other':'Прочее','stat-no-token-data':'Расходов за 7 дней нет','stat-no-data':'Нет данных',
       'activity-onboarding-desc':'Здесь будут отображаться все действия агента: созданные задачи, достигнутые цели, отправленные посты. Напишите агенту — и активность появится здесь.',
@@ -17727,7 +17797,7 @@ except Exception as e:
       'camp-sending':'Отправляет','camp-wait-day':'Ждёт завтра','camp-no-leads':'Нет лидов','camp-searching':'Ищет контакты',
       'camp-pause-tip':'Поставить на паузу','camp-resume-tip':'Возобновить','camp-wait-tip':'Дневной лимит исчерпан, продолжит завтра',
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено','report-drafts':'Черновики',
-      'act-email':'Email','act-delegation':'Делегирование','act-agent-task':'Поручение агенту','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Аутрич-кампания','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента','agent-task-label':'Поручено агенту',
+      'act-email':'Email','act-delegation':'Делегирование','act-agent-task':'Поручение агенту','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-post-vk':'Пост в VK','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Аутрич-кампания','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента','agent-task-label':'Поручено агенту',
       'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
       'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Автопилот приостановлен','act-autopilot':'Автопилот','act-coordinator-summary':'Итог цикла','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов','agent-created-label':'Автозадача','autopilot-label':'Автопилот',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
@@ -17766,6 +17836,8 @@ except Exception as e:
       'gender-label':'Пол','gender-none':'Не указан','gender-female':'Женский','gender-male':'Мужской',
       'tg-channel':'@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)',
       'discord-webhook':'Webhook вашего канала для автопубликации постов',
+      'vk-token-label':'VK токен',
+      'vk-owner-label':'ID сообщества (с минусом)',
       'status':'Статус',
       'skip':'Пропустить',
       'thinking':'Думаю...','start-dialog':'Начните диалог с AI-ассистентом',
@@ -17787,7 +17859,7 @@ except Exception as e:
       'nothing-common':'Общего пока не найдено','blocked':'Заблокирован',
       'delegates-to-me':'Делегирует мне','i-delegate':'Делегирую я',
       'fav-contacts':'Избранных контактов:','delegated-to-me':'Делегировано мне','delegated-by-me':'Делегировано мной',
-      'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','active-tasks':'Активных задач:',
+      'tg-channel-label':'Telegram:','discord-channel-label':'Discord:','vk-channel-label':'VK:','active-tasks':'Активных задач:',
       'email-label':'Email','phone-label':'Телефон','field-private':'(не видно другим)','email-hint':'(вход + используется агентом)','phone-hint':'(используется агентом для задач)',
       'nothing-found':'Ничего не найдено','min-2-chars':'Введите минимум 2 символа для поиска',
       'total-users':'Всего пользователей','in-24h':'За 24 часа','active-subs':'Активных подписок',
@@ -18021,6 +18093,7 @@ except Exception as e:
       'unlink-telegram-confirm':'Unlink Telegram account?',
       'statistics':'Statistics','task-stats':'Task statistics:',
       'goal-progress-title':'Goal progress:','tasks-short':'Tasks:','deadline-short':'by',
+      'stat-posts-vk':'VK posts',
       'in-progress':'In progress:','overdue-stat':'Overdue:','completed-stat':'Completed:',
 
       'loading-contacts':'Loading contacts...','loading-tasks':'Loading tasks...',
@@ -18048,7 +18121,7 @@ except Exception as e:
       'camp-sending':'Sending','camp-wait-day':'Waiting tomorrow','camp-no-leads':'No leads','camp-searching':'Searching contacts',
       'camp-pause-tip':'Pause campaign','camp-resume-tip':'Resume campaign','camp-wait-tip':'Daily limit reached, will continue tomorrow',
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent','report-drafts':'Drafts',
-      'act-email':'Email','act-delegation':'Delegation','act-agent-task':'Agent task','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-content-campaign':'Content campaign','act-deleg-campaign':'Outreach campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline','act-integration':'Integration','act-run-action':'Agent action','agent-task-label':'Assigned to agent',
+      'act-email':'Email','act-delegation':'Delegation','act-agent-task':'Agent task','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-post-vk':'VK post','act-content-campaign':'Content campaign','act-deleg-campaign':'Outreach campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline','act-integration':'Integration','act-run-action':'Agent action','agent-task-label':'Assigned to agent',
       'act-task-added':'Task created','act-task-completed':'Task completed','act-goal-created':'Goal created','act-goal-updated':'Goal updated','act-goal-completed':'Goal achieved','act-goal-deleted':'Goal deleted','act-profile-updated':'Profile',
       'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked','act-autopilot':'Goal autopilot','act-coordinator-summary':'Coordinator summary','act-event-dispatch':'Agent reaction','act-chain-continue':'Agent chain','agent-created-label':'Created by agent','autopilot-label':'Autopilot',
       'cc-title':'Content campaign','cc-goal':'Goal:','cc-topics':'Topics:','cc-freq':'Frequency:','cc-last':'Last post:','cc-posts':'p.','cc-freq-daily':'Daily','cc-freq-weekly':'Weekly','cc-del-confirm':'Delete content campaign?','plat-feed':'Feed',
@@ -18087,6 +18160,9 @@ except Exception as e:
       'gender-label':'Gender','gender-none':'Not specified','gender-female':'Female','gender-male':'Male',
       'tg-channel':'Your channel @ for auto-publishing posts (bot @asibiont_bot must be channel admin)',
       'discord-webhook':'Your channel webhook for auto-publishing posts',
+      'vk-channel-label':'VK:',
+      'vk-token-label':'VK token',
+      'vk-owner-label':'Community ID (negative for groups)',
       'status':'Status',
       'skip':'Skip',
       'thinking':'Thinking...','start-dialog':'Start a conversation with the AI assistant',
