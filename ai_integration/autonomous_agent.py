@@ -1467,7 +1467,7 @@ _DAILY_TOOL_COUNTER: dict[str, dict] = {}  # key: f"{user_id}|publish|YYYY-MM-DD
 _PUBLISH_TOOLS = {'create_post', 'publish_to_telegram', 'publish_to_discord'}
 _DAILY_PUBLISH_LIMIT: int = int(os.getenv('DAILY_PUBLISH_LIMIT', '3'))  # макс публикаций в день
 _GITHUB_TOOLS = {'create_github_issue', 'close_github_issue'}
-_DAILY_GITHUB_ISSUE_LIMIT: int = int(os.getenv('DAILY_GITHUB_ISSUE_LIMIT', '5'))  # макс GitHub issues в день
+_DAILY_GITHUB_ISSUE_LIMIT: int = int(os.getenv('DAILY_GITHUB_ISSUE_LIMIT', '5'))  # макс GitHub issues в день (safety net)
 
 
 def _check_daily_publish_limit(user_id: int, tool_name: str) -> tuple[bool, int]:
@@ -5729,12 +5729,16 @@ class HybridAutonomousAgent:
                                 continue
                             _seen_research_kws.append(_q_kws)
 
-                    # Daily publish / github issue limit (persistent across sessions)
+                    # Daily tool limits (persistent across sessions)
                     if name in _PUBLISH_TOOLS or name in _GITHUB_TOOLS:
                         _is_over, _today_count = _check_daily_publish_limit(user_id, name)
                         if _is_over:
-                            _limit_name = 'публикаций' if name in _PUBLISH_TOOLS else 'GitHub issues'
-                            _limit_val = _DAILY_PUBLISH_LIMIT if name in _PUBLISH_TOOLS else _DAILY_GITHUB_ISSUE_LIMIT
+                            if name in _PUBLISH_TOOLS:
+                                _limit_name = 'публикаций'
+                                _limit_val = _DAILY_PUBLISH_LIMIT
+                            else:
+                                _limit_name = 'GitHub issues'
+                                _limit_val = _DAILY_GITHUB_ISSUE_LIMIT
                             logger.warning(f"[DAILY_LIMIT] {name} — дневной лимит {_limit_val} ({_today_count})")
                             messages.append({"role": "tool", "tool_call_id": tc_item['id'],
                                 "content": json.dumps({"status": f"skipped: дневной лимит {_limit_name} ({_limit_val}) исчерпан. Лимит сбросится завтра."}, ensure_ascii=False)})
@@ -10569,6 +10573,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
     _action_evidence: list[str] = []  # короткие доказательства из результатов инструментов
+    _github_issue_titles: list[str] = []  # заголовки созданных GitHub issues (anti-duplicate)
     _goal_progress_blocked = False  # True если update_goal_progress был отклонён guard'ом
     _save_note_count = 0  # ограничение: не более 1 save_note за цикл автопилота
     _email_ok_count = 0   # реально отправленные письма (без ⛔-блокировок)
@@ -11912,6 +11917,42 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
                     _tool_call_count += 1
                     continue
+
+                # ── SMART DEDUP: GitHub issues — проверка на похожие заголовки ──
+                if _tname == 'create_github_issue' and _github_issue_titles:
+                    _new_title = (_targs.get('title') or '').lower().strip()
+                    if _new_title:
+                        _new_kws = set(w for w in _new_title.split() if len(w) > 2)
+                        if _new_kws:
+                            _duplicate_found = False
+                            for _prev_title in _github_issue_titles:
+                                _prev_kws = set(w for w in _prev_title.split() if len(w) > 2)
+                                if _prev_kws and _new_kws & _prev_kws:
+                                    _overlap = len(_new_kws & _prev_kws) / max(len(_new_kws | _prev_kws), 1)
+                                    if _overlap > 0.55:
+                                        _duplicate_found = True
+                                        logger.warning(
+                                            "[DIRECTOR-EXEC] GitHub issue DUPLICATE: '%s' overlaps with '%s' (%.0f%%)",
+                                            _new_title[:60], _prev_title[:60], _overlap * 100,
+                                        )
+                                        break
+                            if _duplicate_found:
+                                _tc_result = json.dumps({
+                                    "error": (
+                                        f"⛔ ДУБЛЬ: ты уже создавал issue с похожей темой «{_prev_title}». "
+                                        f"Не создавай дубликат. Если это действительно другая задача — "
+                                        f"переформулируй заголовок чтобы различие было очевидным."
+                                    )
+                                }, ensure_ascii=False)
+                                _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                                _tool_call_count += 1
+                                continue
+
+                # ── SMART TRACK: запоминаем созданные GitHub issues ──
+                if _tname == 'create_github_issue':
+                    _new_title = (_targs.get('title') or '').strip()
+                    if _new_title:
+                        _github_issue_titles.append(_new_title.lower())
 
                 # Задачи создаваемые агентом помечаются source='agent'
                 if _tname == 'add_task' and agent.get('id'):
