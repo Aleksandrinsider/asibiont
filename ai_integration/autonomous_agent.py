@@ -12801,6 +12801,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         'set' if _early_text is not None else 'None',
     )
     
+    # ── Гендерная нормализация: выравниваем род глаголов под род агента ──
+    # Safety-net: LLM может выдать "сделал" для female-агента — исправляем
+    if _final_text and _final_text != _done_fb:
+        _final_text = _normalize_agent_gender_grammar(
+            _final_text,
+            agent.get('name', ''),
+            is_female=_is_fem,
+        )
+    
     # ── Капитализация первой буквы перед возвратом ──
     # LLM иногда генерирует ответ со строчной буквы — нормализуем
     if _final_text and len(_final_text) > 0 and _final_text[0].isalpha() and _final_text[0].islower():
