@@ -250,11 +250,6 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     # Calendars
     ("google_calendar не",
      "💡 Google Calendar не подключён. Google Cloud Console → Calendar API → добавь GOOGLE_CALENDAR_CREDENTIALS в настройки агента"),
-    # VK
-    ("vk_token не",
-     "💡 VK не подключён. vk.com/dev → Standalone app → добавь VK_TOKEN в настройки агента"),
-    ("vk_api_key не",
-     "💡 VK не подключён. vk.com/dev → Standalone app → добавь VK_TOKEN в настройки агента"),
     # YouTube
     ("youtube_api_key не",
      "💡 YouTube Data API не подключён. console.cloud.google.com → YouTube Data API v3 → добавь YOUTUBE_API_KEY в настройки агента"),
@@ -738,12 +733,6 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'keywords': ('hh.ru', 'headhunter', 'хх.ру'),
         'presence': ('hh.ru', 'hh_', 'headhunter', 'hh_query'),
         'setup': 'HH_QUERY/HH_AREA',
-    },
-    {
-        'label': 'VK',
-        'keywords': ('вконтакте', 'вк', 'vkontakte', 'vk'),
-        'presence': ('vk_token', 'vk_access_token', 'vkontakte'),
-        'setup': 'VK_ACCESS_TOKEN',
     },
     {
         'label': 'YouTube',

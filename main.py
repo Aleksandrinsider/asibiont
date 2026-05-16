@@ -2323,6 +2323,7 @@ async def dashboard_handler(request):
             'vk_token': user.vk_token if user and hasattr(user, 'vk_token') else None,
             'vk_owner_id': user.vk_owner_id if user and hasattr(user, 'vk_owner_id') else None,
             'vk_group_name': user.vk_group_name if user and hasattr(user, 'vk_group_name') else None,
+            'vk_club_url': (lambda _id: f"https://vk.com/club{abs(int(_id))}" if _id and str(_id).lstrip('-').isdigit() else None)(user.vk_owner_id if user and hasattr(user, 'vk_owner_id') else None),
             'interactions': interactions,
             'partners': partners,
             'delegating_to_me': delegating_to_me,
