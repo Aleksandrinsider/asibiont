@@ -1466,6 +1466,8 @@ _AGENT_ACTION_MEMORY_TTL: float = 86400.0  # 24h
 _DAILY_TOOL_COUNTER: dict[str, dict] = {}  # key: f"{user_id}|publish|YYYY-MM-DD"
 _PUBLISH_TOOLS = {'create_post', 'publish_to_telegram', 'publish_to_discord'}
 _DAILY_PUBLISH_LIMIT: int = int(os.getenv('DAILY_PUBLISH_LIMIT', '3'))  # макс публикаций в день
+_GITHUB_TOOLS = {'create_github_issue', 'close_github_issue'}
+_DAILY_GITHUB_ISSUE_LIMIT: int = int(os.getenv('DAILY_GITHUB_ISSUE_LIMIT', '5'))  # макс GitHub issues в день
 
 
 def _check_daily_publish_limit(user_id: int, tool_name: str) -> tuple[bool, int]:
@@ -1477,11 +1479,19 @@ def _check_daily_publish_limit(user_id: int, tool_name: str) -> tuple[bool, int]
 
     Возвращает (is_blocked, current_count_today).
     """
-    if tool_name not in _PUBLISH_TOOLS:
+    _group = None
+    _limit = 0
+    if tool_name in _PUBLISH_TOOLS:
+        _group = 'publish'
+        _limit = _DAILY_PUBLISH_LIMIT
+    elif tool_name in _GITHUB_TOOLS:
+        _group = 'github_issue'
+        _limit = _DAILY_GITHUB_ISSUE_LIMIT
+    else:
         return (False, 0)
 
     _today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    _key = f"{user_id}|publish|{_today}"
+    _key = f"{user_id}|{_group}|{_today}"
     _now = time.time()
 
     # Очистка записей старше 48ч
@@ -1493,7 +1503,7 @@ def _check_daily_publish_limit(user_id: int, tool_name: str) -> tuple[bool, int]
     _entry = _DAILY_TOOL_COUNTER.get(_key, {'count': 0, 'ts': _now})
     _count = _entry['count']
 
-    if _count >= _DAILY_PUBLISH_LIMIT:
+    if _count >= _limit:
         return (True, _count)
 
     # Инкремент
@@ -5453,7 +5463,7 @@ class HybridAutonomousAgent:
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз; start_email_campaign разрешён повторно
-            multi_limit_tools = {'add_task': 12, 'update_profile': 6, 'create_goal': 8, 'run_agent_action': 16, 'send_email': 12, 'delegate_task': 12, 'web_search': 5}  # мягкие лимиты per turn; web_search cap=5 экономит токены
+            multi_limit_tools = {'add_task': 12, 'update_profile': 6, 'create_goal': 8, 'run_agent_action': 16, 'send_email': 12, 'delegate_task': 12, 'web_search': 5, 'create_github_issue': 2, 'close_github_issue': 2}  # мягкие лимиты per turn; web_search cap=5 экономит токены
             used_once_only = set()
             multi_limit_counts = {}
 
@@ -5719,13 +5729,15 @@ class HybridAutonomousAgent:
                                 continue
                             _seen_research_kws.append(_q_kws)
 
-                    # Daily publish limit (persistent across sessions)
-                    if name in _PUBLISH_TOOLS:
+                    # Daily publish / github issue limit (persistent across sessions)
+                    if name in _PUBLISH_TOOLS or name in _GITHUB_TOOLS:
                         _is_over, _today_count = _check_daily_publish_limit(user_id, name)
                         if _is_over:
-                            logger.warning(f"[DAILY_LIMIT] {name} — дневной лимит {_DAILY_PUBLISH_LIMIT} ({_today_count})")
+                            _limit_name = 'публикаций' if name in _PUBLISH_TOOLS else 'GitHub issues'
+                            _limit_val = _DAILY_PUBLISH_LIMIT if name in _PUBLISH_TOOLS else _DAILY_GITHUB_ISSUE_LIMIT
+                            logger.warning(f"[DAILY_LIMIT] {name} — дневной лимит {_limit_val} ({_today_count})")
                             messages.append({"role": "tool", "tool_call_id": tc_item['id'],
-                                "content": json.dumps({"status": f"skipped: дневной лимит публикаций ({_DAILY_PUBLISH_LIMIT}) исчерпан. Лимит сбросится завтра."}, ensure_ascii=False)})
+                                "content": json.dumps({"status": f"skipped: дневной лимит {_limit_name} ({_limit_val}) исчерпан. Лимит сбросится завтра."}, ensure_ascii=False)})
                             continue
 
                     # Once-only
@@ -11650,9 +11662,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if _my_tools_safe:
                     _priority_order = [
                         'web_search', 'research_topic', 'run_agent_action',
-                        'create_github_issue',
                         'find_relevant_contacts_for_task', 'check_emails',
                         'send_outreach_email', 'start_email_campaign',
+                        'create_github_issue',
                     ]
                     for _pt in _priority_order:
                         if _pt in _my_tools_safe:
