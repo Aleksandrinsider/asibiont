@@ -6934,14 +6934,14 @@ class AnchorEngine:
             # Выполняем в executor чтобы не блокировать event loop (синхронный SQLAlchemy).
             _early_del_ok = False
             _anchor_id_del = anchor.id
-            for _del_attempt in range(3):
+            for _del_attempt in range(5):
                 def _mark_delivered_sync(_aid=_anchor_id_del):
                     from models import Session as _S_del
                     from sqlalchemy import text as _del_text
                     _s = _S_del()
                     try:
-                        _s.execute(_del_text("SET LOCAL statement_timeout = 30000"))
-                        _s.execute(_del_text("SET LOCAL lock_timeout = 20000"))
+                        _s.execute(_del_text("SET LOCAL statement_timeout = 60000"))
+                        _s.execute(_del_text("SET LOCAL lock_timeout = 30000"))
                         _s.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': _aid})
                         _s.commit()
                         return True
@@ -6954,15 +6954,16 @@ class AnchorEngine:
                     _early_del_ok = await asyncio.get_event_loop().run_in_executor(None, _mark_delivered_sync)
                     break
                 except Exception as _del_err:
-                    if _del_attempt < 2:
-                        _sleep_s = 1 + _del_attempt * 2  # 1s, 3s
-                        logger.debug("[DISPATCH] delivered_at retry %d/3 after %s (sleeping %ds)", _del_attempt + 1, str(_del_err)[:100], _sleep_s)
+                    if _del_attempt < 4:
+                        # Exponential backoff: 1s, 2s, 4s, 6s
+                        _sleep_s = 2 ** _del_attempt if _del_attempt < 3 else 6
+                        logger.debug("[DISPATCH] delivered_at retry %d/5 after %s (sleeping %ds)", _del_attempt + 1, str(_del_err)[:100], _sleep_s)
                         await asyncio.sleep(_sleep_s)
                     else:
-                        logger.warning("[DISPATCH] delivered_at failed after 3 attempts: %s — continuing anyway", str(_del_err)[:150])
+                        logger.warning("[DISPATCH] delivered_at failed after 5 attempts: %s — continuing anyway", str(_del_err)[:150])
             if not _early_del_ok:
                 # Lock contention: proceed anyway — coordinator will set delivered_at via session.commit()
-                logger.info("[DISPATCH] delivered_at lock failed — proceeding without early mark")
+                logger.info("[DISPATCH] delivered_at lock failed after 5 attempts — proceeding without early mark")
 
             # Используем только агентов с AgentSubscription — те что пользователь активировал в чате
             from models import AgentSubscription as _AS_ap

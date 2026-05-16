@@ -184,6 +184,79 @@ class RateLimiter:
         }
 
 
+def _robust_parse_deepseek_json(content: str) -> dict:
+    """Многоуровневый парсинг JSON из ответа DeepSeek.
+    
+    Стратегии (по порядку):
+    1. Прямой json.loads() — быстрый путь для чистого JSON.
+    2. Извлечение из markdown-блоков (```json ... ```).
+    3. Поиск первой { → последней } + json.loads().
+    4. JSONDecoder.raw_decode() — допускает мусор после валидного JSON.
+    5. Регулярные выражения для subject/body — последний шанс.
+    
+    Returns:
+        Распарсенный dict.
+    
+    Raises:
+        json.JSONDecodeError: если ни одна стратегия не сработала.
+    """
+    _txt = content.strip()
+
+    # 1. Прямой парсинг
+    if _txt.startswith('{'):
+        try:
+            return json.loads(_txt)
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Markdown-блоки
+    if '```' in _txt:
+        for _part in _txt.split('```'):
+            _part = _part.strip()
+            if _part.startswith('json'):
+                _part = _part[4:].strip()
+            if _part.startswith('{'):
+                try:
+                    return json.loads(_part)
+                except json.JSONDecodeError:
+                    pass
+
+    # 3. Первая { → последняя }
+    _start = _txt.find('{')
+    _end = _txt.rfind('}') + 1
+    if _start != -1 and _end > _start:
+        _candidate = _txt[_start:_end]
+        try:
+            return json.loads(_candidate)
+        except json.JSONDecodeError:
+            # 4. raw_decode — допускает мусор после JSON
+            try:
+                _decoder = json.JSONDecoder()
+                _obj, _idx = _decoder.raw_decode(_candidate)
+                if isinstance(_obj, dict):
+                    return _obj
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+    # 5. Регулярные выражения для subject/body (email compose fallback)
+    import re as _re
+    _sub_m = _re.search(r'"subject"\s*:\s*"([\s\S]*?)"\s*(?:,|\})', _txt)
+    _body_m = _re.search(r'"body"\s*:\s*"([\s\S]*?)"\s*(?:,|\})', _txt)
+    if _sub_m and _body_m:
+        _subject_raw = _sub_m.group(1)
+        _body_raw = _body_m.group(1)
+        try:
+            _subject = bytes(_subject_raw, 'utf-8').decode('unicode_escape')
+            _body = bytes(_body_raw, 'utf-8').decode('unicode_escape')
+        except Exception:
+            _subject, _body = _subject_raw, _body_raw
+        return {'subject': _subject.strip(), 'body': _body.strip()}
+
+    raise json.JSONDecodeError(
+        f"Could not parse JSON from response: {content[:200]}...", content, 0
+    )
+
+
 # ============================================================================
 # ЕДИНЫЙ API КЛИЕНТ
 # ============================================================================
@@ -1278,19 +1351,54 @@ class ExternalAPIClient:
                         _clr_err('deepseek')
                         
                         if parse_json:
+                            # Многоуровневый парсинг JSON с fallback-стратегиями
                             try:
-                                # Извлекаем JSON из ответа
-                                start = content.find('{')
-                                end = content.rfind('}') + 1
-                                if start != -1 and end > start:
-                                    return json.loads(content[start:end])
-                                else:
-                                    logger.warning("[DEEPSEEK] No JSON found in response")
-                                    return content
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"[DEEPSEEK] JSON parse error: {e}")
+                                _parsed = _robust_parse_deepseek_json(content)
+                                return _parsed
+                            except (json.JSONDecodeError, ValueError) as _json_err:
+                                logger.warning(
+                                    "[DEEPSEEK] JSON parse error: %s — retrying once with stricter prompt",
+                                    _json_err,
+                                )
+                                # Retry with lower temperature и strict prompt
+                                try:
+                                    _strict_sys = (
+                                        system_prompt
+                                        + "\n\n⚠️ PREVIOUS RESPONSE WAS NOT VALID JSON. "
+                                        "Return ONLY a valid JSON object. "
+                                        "No markdown, no code fences, no extra text."
+                                    )
+                                    _retry_sess = await self._get_session()
+                                    async with _retry_sess.post(
+                                        'https://api.deepseek.com/chat/completions',
+                                        headers={
+                                            'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                                            'Content-Type': 'application/json',
+                                        },
+                                        json={
+                                            "model": DEEPSEEK_MODEL,
+                                            "messages": [
+                                                {"role": "system", "content": _strict_sys},
+                                                {"role": "user", "content": prompt},
+                                            ],
+                                            "temperature": min(temperature, 0.3),
+                                            "max_tokens": max_tokens,
+                                        },
+                                        timeout=aiohttp.ClientTimeout(total=timeout, connect=5),
+                                    ) as _retry_resp:
+                                        if _retry_resp.status == 200:
+                                            _retry_data = await _retry_resp.json()
+                                            _retry_content = _retry_data["choices"][0]["message"]["content"].strip()
+                                            try:
+                                                return _robust_parse_deepseek_json(_retry_content)
+                                            except (json.JSONDecodeError, ValueError):
+                                                logger.warning("[DEEPSEEK] JSON parse retry also failed — returning raw content")
+                                                return _retry_content
+                                except Exception as _retry_err:
+                                    logger.warning("[DEEPSEEK] JSON parse retry exception: %s", _retry_err)
+                                # All retries failed — return original content as-is
                                 return content
-                        
+
                         return content
 
                     _body_ds = ''

@@ -239,8 +239,8 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
         session = Session()
         close = True
     
-    _max_retries = max(1, int(os.getenv('TOKEN_LOCK_RETRIES', '3')))
-    _lock_timeout_ms = max(200, int(os.getenv('TOKEN_LOCK_TIMEOUT_MS', '800')))
+    _max_retries = max(1, int(os.getenv('TOKEN_LOCK_RETRIES', '5')))
+    _lock_timeout_ms = max(200, int(os.getenv('TOKEN_LOCK_TIMEOUT_MS', '2000')))
 
     try:
         for _attempt in range(_max_retries):
@@ -265,10 +265,11 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
                     db_user_id = user.id
                     new_balance = user.token_balance
                 else:
-                    # Короткий lock_timeout: если строка заблокирована другой транзакцией,
-                    # не ждём долго — лучше короткий retry с backoff.
+                    # Exponential backoff: lock_timeout растёт с каждой попыткой,
+                    # чтобы транзакции естественно рассинхронизировались.
+                    _attempt_lock_ms = min(_lock_timeout_ms * (1 + _attempt), 8000)
                     try:
-                        session.execute(sa_text(f"SET LOCAL lock_timeout = '{_lock_timeout_ms}ms'"))
+                        session.execute(sa_text(f"SET LOCAL lock_timeout = '{_attempt_lock_ms}ms'"))
                     except Exception:
                         pass  # SQLite / старый PG — игнорируем
                     result = session.execute(
@@ -315,7 +316,8 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
             except Exception as e:
                 session.rollback()
                 if _is_transient_lock_error(e) and _attempt < (_max_retries - 1):
-                    _sleep_s = 0.05 * (_attempt + 1) + random.uniform(0.01, 0.06)
+                    # Exponential backoff с jitter — предотвращает thundering herd
+                    _sleep_s = min(0.1 * (2 ** _attempt), 3.0) + random.uniform(0.01, 0.15)
                     logger.info(
                         "[TOKEN] spend_tokens lock contention (attempt %d/%d), retry in %.2fs: %s",
                         _attempt + 1,
@@ -325,9 +327,10 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
                     )
                     time.sleep(_sleep_s)
                     continue
-                logger.warning(f"[TOKEN] spend_tokens skipped (lock contention or transient error): {e}")
+                logger.warning(f"[TOKEN] spend_tokens skipped after {_attempt + 1}/{_max_retries} attempts: {e}")
                 return {'success': False, 'balance': 0, 'spent': 0, 'error': str(e)}
 
+        logger.warning(f"[TOKEN] spend_tokens failed after {_max_retries} attempts — lock contention not resolved")
         return {'success': False, 'balance': 0, 'spent': 0, 'error': 'lock contention retries exceeded'}
     finally:
         if close:
@@ -350,8 +353,8 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
         session = Session()
         close = True
     
-    _max_retries = max(1, int(os.getenv('TOKEN_LOCK_RETRIES', '3')))
-    _lock_timeout_ms = max(200, int(os.getenv('TOKEN_LOCK_TIMEOUT_MS', '800')))
+    _max_retries = max(1, int(os.getenv('TOKEN_LOCK_RETRIES', '5')))
+    _lock_timeout_ms = max(200, int(os.getenv('TOKEN_LOCK_TIMEOUT_MS', '2000')))
 
     try:
         for _attempt in range(_max_retries):
@@ -369,8 +372,9 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
                     new_balance = user.token_balance
                     db_user_id = user.id
                 else:
+                    _attempt_lock_ms = min(_lock_timeout_ms * (1 + _attempt), 8000)
                     try:
-                        session.execute(sa_text(f"SET LOCAL lock_timeout = '{_lock_timeout_ms}ms'"))
+                        session.execute(sa_text(f"SET LOCAL lock_timeout = '{_attempt_lock_ms}ms'"))
                     except Exception:
                         pass
                     result = session.execute(
@@ -404,7 +408,8 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
             except Exception as e:
                 session.rollback()
                 if _is_transient_lock_error(e) and _attempt < (_max_retries - 1):
-                    _sleep_s = 0.05 * (_attempt + 1) + random.uniform(0.01, 0.06)
+                    # Exponential backoff с jitter — предотвращает thundering herd
+                    _sleep_s = min(0.1 * (2 ** _attempt), 3.0) + random.uniform(0.01, 0.15)
                     logger.info(
                         "[TOKEN] add_tokens lock contention (attempt %d/%d), retry in %.2fs: %s",
                         _attempt + 1,
@@ -414,9 +419,10 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
                     )
                     time.sleep(_sleep_s)
                     continue
-                logger.error(f"[TOKEN] add_tokens error: {e}")
+                logger.warning(f"[TOKEN] add_tokens error after {_attempt + 1}/{_max_retries} attempts: {e}")
                 return {'success': False, 'balance': 0, 'error': str(e)}
 
+        logger.warning(f"[TOKEN] add_tokens failed after {_max_retries} attempts — lock contention not resolved")
         return {'success': False, 'balance': 0, 'error': 'lock contention retries exceeded'}
     finally:
         if close:
