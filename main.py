@@ -10679,7 +10679,12 @@ async def api_profile_handler(request):
 
 
 async def api_vk_groups_handler(request):
-    """Получить список сообществ VK по токену. POST: {vk_token: '...'} → [{owner_id, name, photo}]"""
+    """Получить список сообществ VK по токену. POST: {vk_token: '...'} → [{owner_id, name, photo}]
+    
+    Поддерживает:
+    - Пользовательские токены (Standalone app) — через groups.get
+    - Групповые токены (ключ доступа сообщества) — через groups.getById
+    """
     try:
         session = await get_session(request)
         user_id = session.get('user_id') if session else None
@@ -10690,26 +10695,56 @@ async def api_vk_groups_handler(request):
         if not vk_token:
             return web.json_response({'error': 'vk_token required'}, status=400)
         import aiohttp as _aiohttp_vkg
-        # Get list of communities managed by this user
-        _url = f'https://api.vk.com/method/groups.get?extended=1&filter=admin&access_token={vk_token}&v=5.131'
-        async with _safe_http() as _vkg_sess:
-            async with _vkg_sess.get(_url, timeout=aiohttp.ClientTimeout(total=10)) as _vkg_resp:
-                if _vkg_resp.status != 200:
-                    return web.json_response({'error': 'VK API request failed'}, status=502)
-                _vkg_data = await _vkg_resp.json()
-                if 'error' in _vkg_data:
-                    _err_msg = _vkg_data['error'].get('error_msg', 'Unknown VK API error')
-                    return web.json_response({'error': _err_msg}, status=400)
-                _groups = _vkg_data.get('response', {}).get('items', [])
+
+        async def _vk_api_call(method: str, params: dict) -> dict:
+            """Helper: call VK API method with token."""
+            _qs = '&'.join(f'{k}={v}' for k, v in params.items())
+            _url = f'https://api.vk.com/method/{method}?{_qs}&access_token={vk_token}&v=5.131'
+            async with _safe_http() as _s:
+                async with _s.get(_url, timeout=aiohttp.ClientTimeout(total=10)) as _r:
+                    if _r.status != 200:
+                        return {'error': {'error_msg': 'VK API request failed'}}
+                    return await _r.json()
+
+        # First try: user token — list all admin communities
+        _vk_data = await _vk_api_call('groups.get', {'extended': '1', 'filter': 'admin'})
+
+        # If "group auth" error — this is a group token, use groups.getById instead
+        if 'error' in _vk_data:
+            _err_code = _vk_data['error'].get('error_code', 0)
+            _err_msg = _vk_data['error'].get('error_msg', '')
+            if _err_code == 15 or 'group authorization failed' in _err_msg.lower():
+                # Group token — get the single community this token belongs to
+                logger.info("[VK GROUPS] Group token detected, using groups.getById")
+                _vk_data2 = await _vk_api_call('groups.getById', {})
+                if 'error' in _vk_data2:
+                    _err2 = _vk_data2['error'].get('error_msg', 'Unknown VK API error')
+                    return web.json_response({'error': _err2}, status=400)
+                _items = _vk_data2.get('response', [])
                 _result = []
-                for _g in _groups:
+                for _g in _items:
                     _result.append({
-                        'owner_id': -_g.get('id', 0),  # groups have negative owner_id
+                        'owner_id': -_g.get('id', 0),
                         'name': _g.get('name', ''),
                         'photo': _g.get('photo_50', '') or _g.get('photo_100', '') or '',
                         'screen_name': _g.get('screen_name', ''),
                     })
                 return web.json_response({'groups': _result})
+            else:
+                # Some other error
+                return web.json_response({'error': _err_msg}, status=400)
+
+        # User token — return list of admin communities
+        _groups = _vk_data.get('response', {}).get('items', [])
+        _result = []
+        for _g in _groups:
+            _result.append({
+                'owner_id': -_g.get('id', 0),  # groups have negative owner_id
+                'name': _g.get('name', ''),
+                'photo': _g.get('photo_50', '') or _g.get('photo_100', '') or '',
+                'screen_name': _g.get('screen_name', ''),
+            })
+        return web.json_response({'groups': _result})
     except Exception as e:
         logger.error(f"[VK GROUPS] Error: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
