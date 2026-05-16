@@ -6659,7 +6659,7 @@ class AnchorEngine:
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             # Не даём email-тихому контуру съедать весь бюджет _process_user.
-            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '1000000'))
+            _EMAIL_SILENT_MAX_PER_CYCLE = int(os.getenv('ANCHOR_EMAIL_SILENT_MAX_PER_CYCLE', '10000'))
             # Fairness: если есть новые отправки/ответы/поиск лидов, ограничиваем follow-up до 1 за цикл,
             # чтобы follow-up не вытеснял первые письма.
             _prefer_new_flow = [
@@ -12768,7 +12768,7 @@ class AnchorEngine:
         email_campaigns = data.get('email_campaigns', [])
         failed_tools = data.get('failed_tools', {})
         _sent_today = data.get('emails_sent_today', 0)
-        _daily_limit = data.get('email_daily_limit', 1000000)
+        _daily_limit = data.get('email_daily_limit', 10000)
 
         has_unsent = len(unsent_from_data) > 0
         has_active_campaign = any('отправлено' in ec or 'active' in ec.lower() for ec in email_campaigns)
@@ -13352,7 +13352,7 @@ class AnchorEngine:
                 _known_dedup_str = '\n'.join(_kd_lines)
             _unsent_contacts_str = ''
             _coord_sent_today = data.get('emails_sent_today', 0)
-            _coord_daily_limit = data.get('email_daily_limit', 1000000)
+            _coord_daily_limit = data.get('email_daily_limit', 10000)
             _coord_email_limit_hit = _coord_sent_today >= _coord_daily_limit
 
             # ── ARCH FIX: есть активный email_outreach_send anchor → координатор НЕ отправляет ──
@@ -17852,7 +17852,7 @@ class AnchorEngine:
                         )
                         # Если email-лимит выбит — подсказываем переключиться
                         _email_limit_hit = (
-                            data.get('emails_sent_today', 0) >= data.get('email_daily_limit', 1000000)
+                            data.get('emails_sent_today', 0) >= data.get('email_daily_limit', 10000)
                         )
                         _email_limit_note = (
                             f"⛔ Дневной лимит email исчерпан ({data.get('emails_sent_today', 0)}/{data.get('email_daily_limit', 50)}). "
@@ -22975,7 +22975,7 @@ class AnchorEngine:
             EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
             EmailOutreach.sent_at >= _today_start,
         ).count()
-        _email_daily_limit = 1000000  # default: effectively unlimited
+        _email_daily_limit = 10000  # default: effectively unlimited
         if email_campaigns:
             _limits = [c.daily_limit for c in email_campaigns if c.daily_limit is not None and c.daily_limit > 0]
             if _limits:
@@ -24060,7 +24060,7 @@ class AnchorEngine:
                 and o.status in ('sent', 'delivered', 'opened', 'replied')
             )
 
-            remaining_daily = max(0, (campaign.daily_limit or 1000000) - sent_today)
+            remaining_daily = max(0, (campaign.daily_limit or 10000) - sent_today)
 
             # max_emails=0 означает безлимитную кампанию
             if campaign.max_emails and campaign.max_emails > 0:
@@ -26291,7 +26291,7 @@ class AnchorEngine:
                 # anchor_data может содержать старое имя пользователя вместо имени агента
                 if live_campaign.sender_name:
                     sender_name = live_campaign.sender_name
-                _daily_limit_safe = live_campaign.daily_limit or 1000000
+                _daily_limit_safe = live_campaign.daily_limit or 10000
                 # Не используем COUNT(*) по большой таблице: берём ограниченный срез по лимиту.
                 _sent_today_rows = session.query(EmailOutreach.id).filter(
                     EmailOutreach.campaign_id == campaign_id,

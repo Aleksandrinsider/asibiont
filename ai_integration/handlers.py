@@ -14107,7 +14107,7 @@ async def start_email_campaign(
     sender_email: str = None,
     tone: str = 'professional',
     max_emails: int = 0,
-    daily_limit: int = 1000000,
+    daily_limit: int = 10000,
     landing_url: str = None,
     user_id: int = None,
     sent_by_agent: str = None,

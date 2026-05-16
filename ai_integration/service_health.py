@@ -250,7 +250,7 @@ def _get_email_quota(user_id: int) -> Optional[dict]:
                 EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
             ).scalar() or 0
 
-            DAILY_LIMIT = 1000000
+            DAILY_LIMIT = 10000
             return {
                 'sent_today': sent_today,
                 'daily_limit': DAILY_LIMIT,
